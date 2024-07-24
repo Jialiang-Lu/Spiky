@@ -1,7 +1,7 @@
 classdef SpikeInfo < spiky.core.Metadata
 
     properties
-        Spikes (:, 1) spiky.core.Spikes
+        Spikes spiky.core.Spikes
         Options struct
     end
 
@@ -11,7 +11,7 @@ classdef SpikeInfo < spiky.core.Metadata
                 spikes (:, 1) spiky.core.Spikes = spiky.core.Spikes.empty
                 options struct = struct
             end
-            obj.Spikes = spikes(:);
+            obj.Spikes = spikes;
             obj.Options = options;
         end
     end

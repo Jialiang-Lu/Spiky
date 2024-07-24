@@ -1,10 +1,10 @@
 classdef EventsGroup < spiky.core.Metadata & spiky.core.MappableArray
     % EVENTSGROUP Class containing information of events and their synchronization
     
-    properties (SetAccess = {?spiky.core.Metadata, ?spiky.ephys.EventsGroup})
+    properties %(SetAccess = {?spiky.core.Metadata, ?spiky.ephys.EventsGroup})
         Name string
         Type spiky.ephys.ChannelType
-        Events (:, 1) spiky.ephys.RecEvent
+        Events spiky.ephys.RecEvent
         TsRange (1, 2) double
         Sync spiky.core.Sync
     end

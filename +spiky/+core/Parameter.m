@@ -44,9 +44,13 @@ classdef Parameter < spiky.core.MappableArray & spiky.core.Metadata
         function value = get(obj, time)
             % GET Get the value of the parameter at a specific time point
             %
-            %   time: time point(s)
+            %   time: time point(s), double or spiky.core.Events
             %
             %   value: value(s) of the parameter
+            arguments
+                obj spiky.core.Parameter
+                time % double or spiky.core.Events
+            end
             if isempty(obj.Time)
                 value = [];
             else
@@ -54,6 +58,44 @@ classdef Parameter < spiky.core.MappableArray & spiky.core.Metadata
                 [~, ~, idc] = periods.haveEvents(time);
                 value = obj.Values(idc).Data;
             end
+        end
+
+        function periods = getPeriods(obj, value)
+            % GETPERIODS Get the periods when the parameter has a specific value
+            %
+            %   value: value(s) or function handle
+            %
+            %   periods: periods when the parameter has the value
+            arguments
+                obj spiky.core.Parameter
+                value % value(s) or function handle
+            end
+            if isempty(obj.Time)
+                periods = spiky.core.Periods.empty;
+                return
+            end
+            if ~isa(value, "function_handle")
+                h = @(x) x==value;
+            else
+                h = value;
+            end
+            n = length(obj.Time);
+            idc = find(h(obj.Data));
+            if isempty(idc)
+                periods = spiky.core.Periods.empty;
+                return
+            end
+            idc1 = idc;
+            idc2 = idc+1;
+            idc2(idc2>n) = n;
+            t = [obj.Time(idc1) obj.Time(idc2)];
+            if idc(1)==1
+                t(1) = 0;
+            end
+            if idc(end)==n
+                t(end) = Inf;
+            end
+            periods = spiky.core.Periods(t);
         end
 
         function obj = syncTime(obj, func)

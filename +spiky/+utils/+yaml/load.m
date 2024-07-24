@@ -37,6 +37,7 @@ arguments
 end
 
 initSnakeYaml
+import spiky.utils.*
 import org.yaml.snakeyaml.*;
 try
     rootNode = Yaml().load(s);

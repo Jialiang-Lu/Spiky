@@ -1,7 +1,7 @@
 classdef RecEvent < spiky.core.Metadata & spiky.core.MappableArray
     % RECEVENT Class representing recorded TTL/network events
 
-    properties (SetAccess = {?spiky.core.Metadata, ?spiky.ephys.RecEvent})
+    properties %(SetAccess = {?spiky.core.Metadata, ?spiky.ephys.RecEvent})
         Time double
         Timestamp int64
         Type spiky.ephys.ChannelType

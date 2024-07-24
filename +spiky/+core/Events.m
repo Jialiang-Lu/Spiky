@@ -51,7 +51,7 @@ classdef Events < matlab.mixin.CustomDisplay
             %   offset: events is relative time to the beginning of the periods plus offset if 
             %       non-empty and absolute time otherwise
             %
-            %   events: events within periods, scalar if arraymode is false
+            %   events: events within periods, cell if arraymode is true
             %   idc: indices of events within periods, events.Time = obj.Time(idc), or cell of it
             %   idcPeriods: indices of periods for each event, or count of events within each 
             %       period when arraymode is true (similar to histcounts, but much slower so 
@@ -89,7 +89,7 @@ classdef Events < matlab.mixin.CustomDisplay
                 end
                 idcPeriods = cellfun(@length, s);
             end
-            events = spiky.core.Events(s);
+            events = s;
         end
 
         function s = sync(obj, obj2, name, varargin)
@@ -128,7 +128,8 @@ classdef Events < matlab.mixin.CustomDisplay
             else
                 ft = fittype(@(a, b, c, d, x) a.*x+b.*sign(x-c)+d);
                 [~, idx] = max(abs(d));
-                [f, gof] = fit(t1, t2, ft, "StartPoint", [1 diff(td(idx:idx+1))/2 mean(t1(idx:idx+1)) td(1)], ...
+                [f, gof] = fit(t1, t2, ft, "StartPoint", ...
+                    [1 diff(td(idx:idx+1))/2 mean(t1(idx:idx+1)) td(1)], ...
                     "TolFun", 1e-16, "MaxFunEvals", 10000, "MaxIter", 5000);
                 s = spiky.core.Sync(name, f, @(y) (y<=f.a*f.c-f.b+f.d).*(y-f.d+f.b)./f.a+...
                     (y>f.a*f.c-f.b+f.d).*(y-f.d-f.b)./f.a, f.a, f.d-f.b, gof);

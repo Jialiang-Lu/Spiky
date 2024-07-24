@@ -6,7 +6,8 @@ classdef Periods < matlab.mixin.CustomDisplay
     end
 
     properties (Dependent)
-        Length % Number of periods
+        Length
+        Duration
     end
 
     methods (Static)
@@ -32,13 +33,43 @@ classdef Periods < matlab.mixin.CustomDisplay
             [~, idc2] = sort(idc);
             idc2 = reshape(idc2, 2, []).';
             intervals = zeros([1, n*2-1]);
-            for k = 1:n
-                intervals(idc2(k, 1):idc2(k, 2)-1) = 1;
+            for ii = 1:n
+                intervals(idc2(ii, 1):idc2(ii, 2)-1) = 1;
             end
             intervals = spiky.core.TimeTable(intervals);
             idcOut = intervals.findPeriods;
             idcOut = idcOut.Time;
             periods = [edges(idcOut(:, 1))' edges(idcOut(:, 2)+1)'];
+            periods = spiky.core.Periods(periods);
+        end
+
+        function periods = intersect(varargin)
+            % INTERSECT Intersection of periods
+            if nargin==1
+                periods = varargin{1};
+                return
+            end
+            for ii = 1:nargin
+                if isa(varargin{ii}, "spiky.core.Periods")
+                    varargin{ii} = varargin{ii}.Time;
+                elseif size(varargin{ii}, 2)~=2
+                    error("Time must have two columns.")
+                elseif ~isnumeric(varargin{ii})
+                    error("Wrong input type %s.", class(varargin{ii}))
+                end
+            end
+            per = cell2mat(varargin');
+            per = per(diff(per, 1, 2)>0, :);
+            n = size(per, 1);
+            [edges, idc] = sort(reshape(per.', 1, []), "ascend");
+            [~, idc2] = sort(idc);
+            idc2 = reshape(idc2, 2, []).';
+            intervals = zeros([1, n*2-1]);
+            for ii = 1:n
+                intervals(idc2(ii, 1):idc2(ii, 2)-1) = 1;
+            end
+            idcOut = find(intervals==nargin);
+            periods = [edges(idcOut)' edges(idcOut+1)'];
             periods = spiky.core.Periods(periods);
         end
     end
@@ -61,6 +92,11 @@ classdef Periods < matlab.mixin.CustomDisplay
         function len = get.Length(obj)
             % Getter for Length property
             len = size(obj.Time, 1);
+        end
+
+        function dur = get.Duration(obj)
+            % Getter for Duration property
+            dur = diff(obj.Time, 1, 2);
         end
 
         function periods = unionWith(obj, periods)
@@ -155,7 +191,7 @@ classdef Periods < matlab.mixin.CustomDisplay
             %   offset: events is relative time to the beginning of the periods plus offset if 
             %       non-empty and absolute time otherwise
             %
-            %   events: events within periods, scalar if arraymode is false
+            %   events: events within periods, cell if arraymode is true
             %   idc: indices of events within periods, events.Time = obj.Time(idc), or cell of it
             %   idcPeriods: indices of periods for each event, or count of events within each 
             %       period when arraymode is true (similar to histcounts, but much slower so 

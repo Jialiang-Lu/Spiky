@@ -1,7 +1,7 @@
 classdef ChannelGroup < spiky.core.Metadata & spiky.core.MappableArray
     % CHANNELGROUP Class representing a group of channels
     
-    properties (SetAccess = {?spiky.core.Metadata, ?spiky.ephys.ChannelGroup})
+    properties %(SetAccess = {?spiky.core.Metadata, ?spiky.ephys.ChannelGroup})
         Name string
         NChannels (1, 1) double
         ChannelType (1, 1) spiky.ephys.ChannelType = spiky.ephys.ChannelType.Neural

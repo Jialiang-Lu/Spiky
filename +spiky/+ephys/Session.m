@@ -57,6 +57,11 @@ classdef Session < spiky.core.Metadata
             % GETSPIKES Get the spikes of the session.
             spikes = obj.loadData("spiky.ephys.SpikeInfo.mat");
         end
+
+        function minos = getMinos(obj)
+            % GETMINOS Get the minos of the session.
+            minos = obj.loadData("spiky.minos.MinosInfo.mat");
+        end
         
         function processRaw(obj, options)
             arguments

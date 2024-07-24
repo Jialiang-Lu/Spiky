@@ -1,8 +1,9 @@
 classdef MinosInfo < spiky.core.Metadata
 
     properties
-        Vars (:, 1) spiky.core.Parameter
-        Pars (:, 1) spiky.minos.Paradigm
+        Session spiky.ephys.Session
+        Vars spiky.core.Parameter
+        Paradigms spiky.minos.Paradigm
         Sync spiky.ephys.EventsGroup
         Eye spiky.minos.EyeData
         Player spiky.core.TimeTable
@@ -21,8 +22,8 @@ classdef MinosInfo < spiky.core.Metadata
             %
             %   obj: Minos info object
             arguments
-                fdir (1, 1) string {mustBeDir}
-                info spiky.minos.SessionInfo = []
+                fdir (1, 1) string {mustBeFolder}
+                info spiky.ephys.SessionInfo = spiky.ephys.SessionInfo.empty
             end
             if isempty(info)
                 error("Not implemented")
@@ -51,12 +52,13 @@ classdef MinosInfo < spiky.core.Metadata
             fiPars = fiPars([fiPars.IsDir] & [fiPars.Name]~="Assets");
             parNamesSpace = [fiPars.Name]';
             parNames = strrep(parNamesSpace, " ", "");
+            photodiode = info.EventsGroups.Adc.Events.Photodiode;
             for ii = length(parNames):-1:1
                 periods = spiky.core.Periods(parPeriods(...
                     parPeriodsNames==parNames(ii), :));
                 pars(ii, 1) = spiky.minos.Paradigm.load(...
                     fdir+filesep+parNamesSpace(ii), ...
-                    periods, sync.Inv);
+                    periods, sync.Inv, [photodiode.Time]');
             end
             player = spiky.minos.Data(fullfile(fdir, "Player.bin"));
             display = spiky.minos.Data(fullfile(fdir, "Display.bin"));
@@ -65,8 +67,9 @@ classdef MinosInfo < spiky.core.Metadata
             reward = spiky.minos.Data(fullfile(fdir, "Reward.bin"));
 
             obj = spiky.minos.MinosInfo();
+            obj.Session = info.Session;
             obj.Vars = log.getParameters(sync.Inv);
-            obj.Pars = pars;
+            obj.Paradigms = pars;
             obj.Sync = spiky.ephys.EventsGroup("Stim", ...
                 spiky.ephys.ChannelType.Stim, eventsSync, ...
                 double(log.Values{[1 end], 1})', sync);
@@ -86,6 +89,88 @@ classdef MinosInfo < spiky.core.Metadata
             obj.Reward = spiky.core.TimeTable(...
                 sync.Inv(double(reward.Values.Timestamp)/1e7), ...
                 reward.Values);
+        end
+    end
+
+    methods
+        function assets = getAssets(obj)
+            % GETASSETS Get the assets of the Minos info
+            %
+            %   assets: assets
+            fpthAssets = obj.Session.getFpth("spiky.minos.Asset.mat");
+            if exist(fpthAssets, "file")
+                assets = obj.Session.loadData("spiky.minos.Asset.mat");
+                return
+            end
+            fdir = obj.Session.getFdir("Minos", "Assets");
+            fi = spiky.core.FileInfo(fdir+"\**\*.meta");
+            n = height(fi);
+            for ii = n:-1:1
+                name = extractBefore(fi(ii).Name, strlength(fi(ii).Name)-4);
+                [~, name, ~] = fileparts(name);
+                path = extractBefore(fi(ii).Path, strlength(fi(ii).Path)-4);
+                c = fileread(fi(ii).Path);
+                idx1 = strfind(c, "guid")+6;
+                idx1 = idx1(1);
+                idx2 = strfind(c(idx1:end), newline)+idx1-2;
+                idx2 = idx2(1);
+                guid = string(c(idx1:idx2));
+                isDir = contains(c, "folderAsset: yes");
+                assets(ii, :) = spiky.minos.Asset(name, path, guid, isDir);
+            end
+            obj.Session.saveMetaData(assets);
+        end
+
+        function stimuli = loadStimuli(obj, name)
+            % LOADSTIMULI Load stimuli from name
+            %
+            %   name: name of the stimulus set
+            %
+            %   stimuli: stimuli
+            assets = obj.Session.loadData("spiky.minos.Asset.mat");
+            stimulusType = ["Subset", "GameObject", "Image", "Video"];
+            stimulusSource = ["Internal", "External"];
+            stimulusSourceType = ["Folder", "List"];
+            name = extractBefore(name, " ("|textBoundary("end"));
+            fpth = fullfile(obj.Session.Fdir, ...
+                "Minos\Assets\Resources\Stimuli\StimulusSets", name+".asset");
+            if ~exist(fpth, 'file')
+                error('File %s not found', fpth);
+            end
+            txt = readlines(fpth);
+            txt = strjoin(txt(4:end), newline);
+            asset = spiky.utils.yaml.load(txt);
+            asset = asset.MonoBehaviour;
+            asset.x_type = stimulusType(asset.x_type+1);
+            asset.x_source = stimulusSource(asset.x_source+1);
+            asset.x_setType = stimulusSourceType(asset.x_setType+1);
+            if strcmp(asset.x_source, "Internal") % internal
+                if strcmp(asset.x_type, "Image")
+                    ims = cell2mat(asset.x_images.value);
+                    guids = [ims.guid]';
+                    [~, idc] = ismember(guids, [assets.Guid]);
+                    for ii = length(idc):-1:1
+                        stimuli(ii, 1) = spiky.minos.Stimulus(...
+                            assets(idc(ii)).Name, "Image", ...
+                            assets(idc(ii)).Path, 1);
+                    end
+                else
+                    error('Not implemented');
+                end
+            else % external
+                paths = strsplit(asset.x_text, newline)';
+                if ~contains(paths(1), filesep)
+                    paths = asset.x_externalFolder+filesep+paths;
+                end
+                names = strings(size(paths));
+                for ii = length(paths):-1:1
+                    [~, names(ii), ~] = fileparts(paths(ii));
+                end
+                for ii = length(paths):-1:1
+                    stimuli(ii, 1) = spiky.minos.Stimulus(...
+                        names(ii), "Video", paths(ii), 1);
+                end
+            end
         end
     end
 end
