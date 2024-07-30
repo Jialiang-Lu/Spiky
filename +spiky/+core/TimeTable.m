@@ -1,9 +1,10 @@
-classdef TimeTable < matlab.mixin.indexing.RedefinesParen & ...
-    matlab.mixin.indexing.RedefinesBrace
+classdef TimeTable < spiky.core.Events & ...
+    matlab.mixin.indexing.RedefinesParen & ...
+    matlab.mixin.indexing.RedefinesBrace & ...
+    matlab.mixin.CustomDisplay
     % TIMETABLE Represents data indexed by time points in seconds
 
     properties
-        Time (:, 1) double
         Data (:, :)
     end
 
@@ -20,12 +21,14 @@ classdef TimeTable < matlab.mixin.indexing.RedefinesParen & ...
                 time = []
                 data = []
             end
-            if isempty(data) && ~isempty(time)
-                data = time;
+            if isempty(time) && ~isempty(data)
                 if isvector(data)
                     data = data(:);
                 end
                 time = 1:size(data, 1);
+            end
+            if isvector(data)
+                data = data(:);
             end
             obj.Time = time(:);
             obj.Data = data;
@@ -202,6 +205,21 @@ classdef TimeTable < matlab.mixin.indexing.RedefinesParen & ...
             end
             containedObj = obj.(indexOp(1));
             n = listLength(containedObj, indexOp(2:end), indexContext);
+        end
+
+        function footer = getFooter(obj)
+            % Override the getFooter method
+            n = min(height(obj), 10);
+            footer = strings(1, n);
+            for ii = 1:n
+                footer(ii) = sprintf("%10g:\t%s", obj.Time(ii), ...
+                    formattedDisplayText(obj.Data(ii, :)));
+            end
+            footer = " "+strjoin(footer);
+            if height(obj)>10
+                footer = footer+"   ..."+newline;
+            end
+            footer = char(footer);
         end
     end
 end

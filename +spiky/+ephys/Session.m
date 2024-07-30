@@ -13,10 +13,13 @@ classdef Session < spiky.core.Metadata
             % fdir: directory to all session datas (optional)
             
             arguments
-                name string
+                name string = ""
                 fdir string = ""
             end
             
+            if name==""
+                return
+            end
             obj.Name = name;
             if fdir==""
                 fdir = spiky.config.loadConfig("fdirData");
@@ -75,31 +78,30 @@ classdef Session < spiky.core.Metadata
                 options.configOnly (1, 1) logical = false
             end
             
-            import spiky.*
-
             %% Load configuration
-            if ~isa(options.channelConfig, "ephys.ChannelConfig")
-                configs = config.loadConfig("channelConfig");
+            if ~isa(options.channelConfig, "spiky.ephys.ChannelConfig")
+                configs = spiky.config.loadConfig("channelConfig");
                 if isnumeric(options.channelConfig)
-                    options.channelConfig = ephys.ChannelConfig.read(configs.(sprintf("v%d", options.channelConfig)));
+                    options.channelConfig = spiky.ephys.ChannelConfig.read(configs.(sprintf("v%d", ...
+                        options.channelConfig)));
                 elseif isstring(options.channelConfig)
-                    options.channelConfig = ephys.ChannelConfig.read(configs.(options.channelConfig));
+                    options.channelConfig = spiky.ephys.ChannelConfig.read(configs.(options.channelConfig));
                 else
                     names = fieldnames(configs);
-                    options.channelConfig = ephys.ChannelConfig.read(configs.(names{end}));
+                    options.channelConfig = spiky.ephys.ChannelConfig.read(configs.(names{end}));
                 end
             end
-            if ~isa(options.probe, "ephys.Probe")
-                options.probe = config.loadProbe(options.probe);
+            if ~isa(options.probe, "spiky.ephys.Probe")
+                options.probe = spiky.config.loadProbe(options.probe);
             end
 
             %% Detect type
-            fi = core.FileInfo(obj.getFdir("Raw", "**/*.continuous"));
+            fi = spiky.core.FileInfo(obj.getFdir("Raw", "**/*.continuous"));
             if ~isempty(fi)
                 % OpenEphys format
                 error("spiky:NotImplemented", "OpenEphys format not implemented yet!")
             end
-            fi = core.FileInfo(obj.getFdir("Raw", "**/settings.xml"));
+            fi = spiky.core.FileInfo(obj.getFdir("Raw", "**/settings.xml"));
             if ~isempty(fi)
                 % OpenEphys binary format
                 fdirOe = fi.Folder;
@@ -107,7 +109,7 @@ classdef Session < spiky.core.Metadata
                 copyfile(fi.Path, obj.getFpth("oe.xml"));
                 fdirRawCont = fullfile(fdirRaw, "continuous");
                 fdirRawEvents = fullfile(fdirRaw, "events");
-                fiCont = core.FileInfo(fdirRawCont);
+                fiCont = spiky.core.FileInfo(fdirRawCont);
                 oeStruct = readstruct(fullfile(fdirRaw, "structure.oebin"), "FileType", "json");
                 if any(startsWith([fiCont.Name], "Neuropix")) % Neuropixels
                     %% Info
@@ -139,10 +141,13 @@ classdef Session < spiky.core.Metadata
                     tsRanges = zeros(nProbes, 2, "int64");
                     tsRangesLfp = zeros(nProbes, 2, "int64");
                     for ii = 1:nProbes
-                        tsRanges(ii, :) = utils.npy.memmapNPY(fullfile(fdirsAp{ii}, "sample_numbers.npy")).Data.m([1 end]);
-                        tsRangesLfp(ii, :) = utils.npy.memmapNPY(fullfile(fdirsLfp{ii}, "sample_numbers.npy")).Data.m([1 end]);
+                        tsRanges(ii, :) = spiky.utils.npy.memmapNPY( ...
+                            fullfile(fdirsAp{ii}, "sample_numbers.npy")).Data.m([1 end]);
+                        tsRangesLfp(ii, :) = spiky.utils.npy.memmapNPY( ...
+                            fullfile(fdirsLfp{ii}, "sample_numbers.npy")).Data.m([1 end]);
                     end
-                    tsRangeDaq = utils.npy.memmapNPY(fullfile(fdirDaq, "sample_numbers.npy")).Data.m([1 end])';
+                    tsRangeDaq = spiky.utils.npy.memmapNPY(fullfile(fdirDaq, ...
+                        "sample_numbers.npy")).Data.m([1 end])';
                     fsLfp = options.fsLfp;
                     fsDaq = fsDaq1;
                     nSamples1 = double(diff(tsRanges, 1, 2)+1);
@@ -154,38 +159,38 @@ classdef Session < spiky.core.Metadata
                     nSampleDaq1 = double(tsRangeDaq(2)-tsRangeDaq(1)+1);
                     nChDaq = 8;
                     nChAll = nCh+nChDaq;
-                    channelGroupsAdc = ephys.ChannelGroup.createExtGroup(ephys.ChannelType.Adc, ...
+                    channelGroupsAdc = spiky.ephys.ChannelGroup.createExtGroup(spiky.ephys.ChannelType.Adc, ...
                         options.channelConfig.Adc, oeStruct.continuous(end).channels(1).bit_volts, 1000);
                     for ii = nProbes:-1:1
-                        channelGroups(ii, 1) = ephys.ChannelGroup(options.brainRegions(ii), nCh1, ...
-                            ephys.ChannelType.Neural, options.brainRegions(ii), options.probe(ii), ...
+                        channelGroups(ii, 1) = spiky.ephys.ChannelGroup(options.brainRegions(ii), nCh1, ...
+                            spiky.ephys.ChannelType.Neural, options.brainRegions(ii), options.probe(ii), ...
                             oeStruct.continuous(ii*2-1).channels(1).bit_volts, 0.001);
                     end
                     channelGroups(nProbes+1, 1) = channelGroupsAdc;
                     %% Sync
-                    events = ephys.RecEvent.load(fullfile(fdirRawEvents, fiCont(end).Name, "TTL"), ...
+                    events = spiky.ephys.RecEvent.load(fullfile(fdirRawEvents, fiCont(end).Name, "TTL"), ...
                         options.channelConfig.Dig, tsRangeDaq(1), fsDaq);
-                    eventsNet = ephys.RecEvent.load(fullfile(fdirRawEvents, "MessageCenter"), [], ...
+                    eventsNet = spiky.ephys.RecEvent.load(fullfile(fdirRawEvents, "MessageCenter"), [], ...
                         tsRangeDaq(1), fsDaq);
-                    eventsSync = events([events.ChannelName]=="sync");
+                    eventsSync = events([events.ChannelName]=="Sync");
                     eventsProbe = cell(nProbes, 1);
                     for ii = 1:nProbes
-                        eventsProbe{ii} = ephys.RecEvent.load(fdirsEvents(ii), ...
+                        eventsProbe{ii} = spiky.ephys.RecEvent.load(fdirsEvents(ii), ...
                             options.channelConfig.Dig, tsRanges(ii, 1), fs);
                     end
                     if nProbes>1
                         for ii = nProbes:-1:2
                             [sync2, eventsProbe2] = eventsProbe{1}.syncWith(eventsProbe{ii}, ...
                                 sprintf("probe1 to probe%d", ii));
-                            eventsGroups(ii, 1) = ephys.EventsGroup(sprintf("Probe%d", ii), ephys.ChannelType.Neural, ...
-                                eventsProbe2, tsRanges(ii, :), sync2);
+                            eventsGroups(ii, 1) = spiky.ephys.EventGroup(sprintf("Probe%d", ii), ...
+                                spiky.ephys.ChannelType.Neural, eventsProbe2, tsRanges(ii, :), sync2);
                         end
                     end
-                    eventsGroups(1, 1) = ephys.EventsGroup("Probe1", ephys.ChannelType.Neural, eventsProbe{1}, ...
-                        tsRanges(1, :));
+                    eventsGroups(1, 1) = spiky.ephys.EventGroup("Probe1", ...
+                        spiky.ephys.ChannelType.Neural, eventsProbe{1}, tsRanges(1, :));
                     sync2 = eventsProbe{1}.syncWith(eventsSync, "probe1 to adc");
-                    eventsGroups(nProbes+1, 1) = ephys.EventsGroup("Adc", ephys.ChannelType.Adc, events.syncTime(sync2.Inv), ...
-                        tsRangeDaq, sync2);
+                    eventsGroups(nProbes+1, 1) = spiky.ephys.EventGroup("Adc", ...
+                        spiky.ephys.ChannelType.Adc, events.syncTime(sync2.Inv), tsRangeDaq, sync2);
                     eventsSyncNet = eventsNet(contains([eventsNet.Message], ["Sync" "sync"]));
                     if eventsSyncNet(1).Message==eventsSyncNet(2).Message
                         eventsSyncNet = eventsSyncNet(1:2:end);
@@ -197,61 +202,64 @@ classdef Session < spiky.core.Metadata
                     eventsProbeSync = eventsProbe{1}(1:2:end);
                     eventsProbeSync = eventsProbeSync(idcNet+1);
                     sync2 = eventsProbeSync.syncWith(eventsSyncNet, "probe1 to net");
-                    eventsGroups(nProbes+2) = ephys.EventsGroup("Net", ephys.ChannelType.Net, eventsNet.syncTime(sync2.Inv), ...
+                    eventsGroups(nProbes+2) = spiky.ephys.EventGroup("Net", ...
+                        spiky.ephys.ChannelType.Net, eventsNet.syncTime(sync2.Inv), ...
                         tsRangeDaq, sync2);
                     %% Resample
-                    ratio = fsLfp1/fsLfp;
-                    [p, q] = rat(1/ratio);
-                    mf1 = memmapfile(fpthsLfp(1), Format={"int16", [nCh1 nSampleLfp1], "m"});
-                    tmp1 = resample(double(mf1.Data.m(1, :)), p, q);
-                    nSampleLfp = length(tmp1);
-                    data = zeros(nChAll, nSampleLfp, "int16");
-                    mem = memory;
-                    groupSize = floor(mem.MaxPossibleArrayBytes*0.2./nSampleLfp1/8);
-                    [nGroupPerProbe, groupSize] = spiky.utils.equalDiv(384, groupSize);
-                    %%
-                    for ii = 1:nProbes
-                        spiky.plot.timedWaitbar(0, "Resampling LFP");
-                        mf = memmapfile(fpthsLfp(ii), Format={"int16", [nCh1 nSamplesLfp1(ii)], "m"});
-                        if ii>1
-                            idcK = eventsGroups(ii).Sync.Fit((0:nSamplesLfp1(1)-1)./fsLfp1).*fsLfp1+1;
-                            idcK2 = round(idcK(1)-3):round(idcK(end)+3);
-                            idcK2(idcK2<=0) = [];
-                            idcK2(idcK2>nSamplesLfp1(ii)) = [];
-                            idcKOff = idcK-idcK2(1)+1; % make loaded data start from 1 for interpolation
-                        end
-                        for jj = 1:nGroupPerProbe
-                            idcCh = (1:groupSize)+(jj-1)*groupSize;
-                            idcInGroup = 385-idcCh;
-                            idcInOut = idcCh+(ii-1)*384;
-                            if ii==1
-                                tmp = double(mf.Data.m(idcInGroup, :))';
-                            else
-                                tmp = interp1(double(mf.Data.m(idcInGroup, idcK2)'), idcKOff, "linear", 0);
-                            end
-                            data(idcInOut, :) = int16(resample(tmp, p, q))';
-                            spiky.plot.timedWaitbar(((ii-1)*nGroupPerProbe+jj)/(nGroupPerProbe*nProbes));
-                        end
-                    end
-                    %%
-                    mf = memmapfile(fpthDaq, Format={"int16", [nChDaq nSampleDaq1], "m"});
-                    tmp = double(mf.Data.m)';
-                    tmp = medfilt1(tmp, ceil(fsDaq/fsLfp));
-                    idcK = eventsGroups("Adc").Sync.Fit((0:nSampleLfp-1)./fsLfp).*fsDaq+1;
-                    idcK2 = round(idcK(1)-3):round(idcK(end)+3);
-                    idcK2(idcK2<=0) = [];
-                    idcK2(idcK2>nSampleDaq1) = [];
-                    idcKOff = idcK-idcK2(1)+1; % make loaded data start from 1 for interpolation
-                    tmp = interp1(tmp, idcKOff, "linear", 0);
-                    data(end-nChDaq+1:end, :) = int16(tmp)';
-                    %%
                     fpthLfp = obj.getFpth("lfp");
-                    fid = fopen(fpthLfp, "w");
-                    fwrite(fid, data, "int16");
-                    fclose(fid);
+                    if ~options.configOnly
+                        ratio = fsLfp1/fsLfp;
+                        [p, q] = rat(1/ratio);
+                        mf1 = memmapfile(fpthsLfp(1), Format={"int16", [nCh1 nSampleLfp1], "m"});
+                        tmp1 = resample(double(mf1.Data.m(1, :)), p, q);
+                        nSampleLfp = length(tmp1);
+                        data = zeros(nChAll, nSampleLfp, "int16");
+                        mem = memory;
+                        groupSize = floor(mem.MaxPossibleArrayBytes*0.2./nSampleLfp1/8);
+                        [nGroupPerProbe, groupSize] = spiky.utils.equalDiv(384, groupSize);
+                        %%
+                        for ii = 1:nProbes
+                            spiky.plot.timedWaitbar(0, "Resampling LFP");
+                            mf = memmapfile(fpthsLfp(ii), Format={"int16", [nCh1 nSamplesLfp1(ii)], "m"});
+                            if ii>1
+                                idcK = eventsGroups(ii).Sync.Fit((0:nSamplesLfp1(1)-1)./fsLfp1).*fsLfp1+1;
+                                idcK2 = round(idcK(1)-3):round(idcK(end)+3);
+                                idcK2(idcK2<=0) = [];
+                                idcK2(idcK2>nSamplesLfp1(ii)) = [];
+                                idcKOff = idcK-idcK2(1)+1; % make loaded data start from 1 for interpolation
+                            end
+                            for jj = 1:nGroupPerProbe
+                                idcCh = (1:groupSize)+(jj-1)*groupSize;
+                                idcInGroup = channelGroups(ii).Probe.OeMap(idcCh);
+                                idcInOut = idcCh+(ii-1)*384;
+                                if ii==1
+                                    tmp = double(mf.Data.m(idcInGroup, :))';
+                                else
+                                    tmp = interp1(double(mf.Data.m(idcInGroup, idcK2)'), idcKOff, "linear", 0);
+                                end
+                                data(idcInOut, :) = int16(resample(tmp, p, q))';
+                                spiky.plot.timedWaitbar(((ii-1)*nGroupPerProbe+jj)/(nGroupPerProbe*nProbes));
+                            end
+                        end
+                        %%
+                        mf = memmapfile(fpthDaq, Format={"int16", [nChDaq nSampleDaq1], "m"});
+                        tmp = double(mf.Data.m)';
+                        tmp = medfilt1(tmp, ceil(fsDaq/fsLfp));
+                        idcK = eventsGroups("Adc").Sync.Fit((0:nSampleLfp-1)./fsLfp).*fsDaq+1;
+                        idcK2 = round(idcK(1)-3):round(idcK(end)+3);
+                        idcK2(idcK2<=0) = [];
+                        idcK2(idcK2>nSampleDaq1) = [];
+                        idcKOff = idcK-idcK2(1)+1; % make loaded data start from 1 for interpolation
+                        tmp = interp1(tmp, idcKOff, "linear", 0);
+                        data(end-nChDaq+1:end, :) = int16(tmp)';
+                        %%
+                        fid = fopen(fpthLfp, "w");
+                        fwrite(fid, data, "int16");
+                        fclose(fid);
+                    end
                     %% Save
-                    info = ephys.SessionInfo(obj.Name, obj.Fdir, nChAll, fs, fsLfp, nSample, nSampleLfp1, ...
-                        duration, "int16", fpthsAp, fpthLfp, channelGroups, eventsGroups, options);
+                    info = spiky.ephys.SessionInfo(obj, nChAll, fs, fsLfp, nSample, ...
+                        nSampleLfp1, duration, "int16", fpthsAp, fpthLfp, channelGroups, eventsGroups, options);
                     obj.saveMetaData(info);
                 else % Not neuropixels
                     error("Not implemented")
@@ -275,11 +283,7 @@ classdef Session < spiky.core.Metadata
                         varargout{2} = chInfo;
                     end
                 case {".mat"}
-                    data = load(fpth, varargin{:});
-                    if isfield(data, "data")
-                        data = data.data;
-                    end
-                    varargout{1} = data;
+                    varargout{1} = spiky.core.Metadata.load(fpth);
                 case {".xml"}
                     varargout{1} = readstruct(fpth);
                 otherwise
@@ -296,7 +300,7 @@ classdef Session < spiky.core.Metadata
                 data spiky.core.Metadata
             end
 
-            save(obj.getFpth(class(data)+".mat"), "data");
+            data.save(obj.getFpth(class(data)+".mat"));
         end
 
         function [data, chInfo] = loadBinary(obj, type, chs, period, precisionOut, precisionIn)

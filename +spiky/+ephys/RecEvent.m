@@ -151,8 +151,8 @@ classdef RecEvent < spiky.core.Metadata & spiky.core.MappableArray
                     idc1 = 1+shift:l+shift;
                     idc2 = 1:l;
                 end
-                t1 = spiky.core.Events(t1.T(idc1));
-                t2 = spiky.core.Events(t2.T(idc2));
+                t1 = spiky.core.Events(t1.Time(idc1));
+                t2 = spiky.core.Events(t2.Time(idc2));
             end
             sync = t1.sync(t2, name);
             obj2 = obj2.syncTime(sync.Inv);

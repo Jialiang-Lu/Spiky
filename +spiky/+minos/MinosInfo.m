@@ -4,7 +4,7 @@ classdef MinosInfo < spiky.core.Metadata
         Session spiky.ephys.Session
         Vars spiky.core.Parameter
         Paradigms spiky.minos.Paradigm
-        Sync spiky.ephys.EventsGroup
+        Sync spiky.ephys.EventGroup
         Eye spiky.minos.EyeData
         Player spiky.core.TimeTable
         Display spiky.core.TimeTable
@@ -70,7 +70,7 @@ classdef MinosInfo < spiky.core.Metadata
             obj.Session = info.Session;
             obj.Vars = log.getParameters(sync.Inv);
             obj.Paradigms = pars;
-            obj.Sync = spiky.ephys.EventsGroup("Stim", ...
+            obj.Sync = spiky.ephys.EventGroup("Stim", ...
                 spiky.ephys.ChannelType.Stim, eventsSync, ...
                 double(log.Values{[1 end], 1})', sync);
             obj.Eye = spiky.minos.EyeData.load(fdir, sync.Inv);

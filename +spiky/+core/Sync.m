@@ -12,6 +12,14 @@ classdef Sync
 
     methods
         function obj = Sync(name, fit, inv, scale, offset, gof)
+            arguments
+                name (1, 1) string = ""
+                fit (1, 1) cfit = cfit
+                inv (1, 1) = @() []
+                scale (1, 1) double = 1
+                offset (1, 1) double = 0
+                gof (1, 1) struct = struct
+            end
             obj.Name = name;
             obj.Fit = fit;
             obj.Inv = inv;

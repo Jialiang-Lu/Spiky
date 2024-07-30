@@ -1,29 +1,26 @@
-classdef Events < matlab.mixin.CustomDisplay
+classdef Events < matlab.mixin.indexing.RedefinesParen & ...
+    matlab.mixin.CustomDisplay
     % EVENTS Class representing discrete events
     
     properties
         Time (:, 1) double % Time vector in seconds
     end
 
-    properties (Dependent)
-        Length double % Number of events
+    methods (Static)
+        function obj = empty(varargin)
+            % EMPTY Create an empty instance of TimeTable
+            obj = spiky.core.Events();
+        end
     end
 
     methods
-         function obj = Events(Time)
+         function obj = Events(time)
             % Constructor for Events class
-            if isnumeric(Time)
-                obj.Time = Time(:);
-            elseif iscell(Time)
-                obj = cellfun(@(x) spiky.core.Events(x), Time);
-            else
-                error("Wrong input type.")
-            end
-        end
 
-        function len = get.Length(obj)
-            % Getter for Length property
-            len = length(obj.Time);
+            arguments
+                time double = []
+            end
+            obj.Time = time(:);
         end
 
         function d = diff(obj, n)
@@ -134,25 +131,85 @@ classdef Events < matlab.mixin.CustomDisplay
                 s = spiky.core.Sync(name, f, @(y) (y<=f.a*f.c-f.b+f.d).*(y-f.d+f.b)./f.a+...
                     (y>f.a*f.c-f.b+f.d).*(y-f.d-f.b)./f.a, f.a, f.d-f.b, gof);
             end
-            h = spiky.plot.Fig;
+            spiky.plot.fig
             plot(t1, t2-t1, "ro", t1, f(t1)-t1, "b.-");
             xlabel("t1");
             ylabel('t2-t1');
             legend(["Data", "Fit"]);
             title(name);
-            h.fix
+            spiky.plot.fixfig
+        end
+
+        function varargout = size(obj, varargin)
+            % SIZE Size of the Events
+            [varargout{1:nargout}] = size(obj.Time, varargin{:});
+        end
+
+        function out = cat(dim, varargin)
+            % CAT Concatenate Events
+            idc = true(1, nargin-1);
+            for ii = 1:nargin-1
+                if ~isa(varargin{ii}, "spiky.core.Events")
+                    if isnumeric(varargin{ii})
+                        varargin{ii} = spiky.core.Events(varargin{ii});
+                    else
+                        idc(ii) = false;
+                    end
+                end
+            end
+            varargin = varargin(idc);
+            if dim>2
+                error("Invalid dimension")
+            end
+            time = cellfun(@(x) x.Time, varargin, UniformOutput=false);
+            out = spiky.core.Events(vertcat(time{:}));
         end
     end
 
     methods (Access = protected)
+        function varargout = parenReference(obj, indexOp)
+            obj.Time = subsref(obj.Time, substruct('()', indexOp(1).Indices(1)));
+            if isscalar(indexOp)
+                varargout{1} = obj;
+                return
+            end
+            [varargout{1:nargout}] = obj.(indexOp(2:end));
+        end
+
+        function obj = parenAssign(obj, indexOp, varargin)
+            if isempty(obj)
+                error("Cannot assign to an empty Events")
+            end
+            if isscalar(indexOp)
+                assert(nargin==3);
+                time = varargin{1};
+                if isa(time, "spiky.core.Events")
+                    time = time.Time;
+                end
+                obj.Time.(indexOp) = time;
+                return
+            end
+            [obj.(indexOp(2:end))] = varargin{:};
+        end
+
+        function n = parenListLength(obj, indexOp, indexContext)
+            if numel(indexOp) <= 2
+                n = 1;
+                return
+            end
+            containedObj = obj.(indexOp(1:2));
+            n = listLength(containedObj, indexOp(3:end), indexContext);
+        end
+
+        function obj = parenDelete(obj, indexOp)
+            obj.Time = subsasgn(obj.Time, substruct('()', indexOp(1).Indices(1)), []);
+        end
+
         function footer = getFooter(obj)
             % Override the getFooter method
-            if ~isscalar(obj)
-                footer = getFooter@matlab.mixin.CustomDisplay(obj);
-            else
-                footer = [sprintf('%g, ', obj.Time(1:min(obj.Length, 20))) ...
-                    spiky.utils.ternary(obj.Length>20, '.....', '') sprintf('\b\b\n')];
-            end
+            footer = sprintf("%g, ", obj.Time(1:min(length(obj), 20)))+...
+                spiky.utils.ternary(length(obj)>20, ".....", "")+sprintf("\b\b\n");
+            footer = char(footer);
         end
     end
 end

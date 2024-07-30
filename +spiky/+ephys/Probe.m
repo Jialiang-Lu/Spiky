@@ -39,6 +39,14 @@ classdef Probe < spiky.core.Metadata
     
     methods
         function obj = Probe(name, oeMap, yCoords, xCoords, kCoords, connected)
+            arguments
+                name (1, 1) string = "Probe"
+                oeMap (:, 1) double = []
+                yCoords (:, 1) double = []
+                xCoords (:, 1) double = []
+                kCoords (:, 1) double = []
+                connected (:, 1) logical = []
+            end
             obj.Name = name;
             obj.OeMap = oeMap;
             obj.YCoords = yCoords;

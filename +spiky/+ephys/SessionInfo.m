@@ -9,16 +9,16 @@ classdef SessionInfo < spiky.core.Metadata
         NSamplesLfp double
         Duration double
         Precision string
-        FpthDat (:, 1) string
-        FpthLfp (:, 1) string
-        ChannelGroups (:, 1) spiky.ephys.ChannelGroup
-        EventsGroups (:, 1) spiky.ephys.EventsGroup
+        FpthDat string
+        FpthLfp string
+        ChannelGroups spiky.ephys.ChannelGroup
+        EventGroups spiky.ephys.EventGroup
         Options struct
     end
 
     methods
         function obj = SessionInfo(session, nChannels, fs, fsLfp, nSamples, nSamplesLfp, ...
-            duration, precision, fpthDat, fpthLfp, channelGroups, eventsGroups, options)
+            duration, precision, fpthDat, fpthLfp, channelGroups, eventGroups, options)
             % SESSIONINFO Create a new instance of SessionInfo
             
             arguments
@@ -32,8 +32,8 @@ classdef SessionInfo < spiky.core.Metadata
                 precision string = ""
                 fpthDat (:, 1) string = ""
                 fpthLfp (:, 1) string = ""
-                channelGroups spiky.ephys.ChannelGroup = spiky.ephys.ChannelGroup.empty
-                eventsGroups spiky.ephys.EventsGroup = spiky.ephys.EventsGroup.empty
+                channelGroups (:, 1) spiky.ephys.ChannelGroup = spiky.ephys.ChannelGroup.empty
+                eventGroups (:, 1) spiky.ephys.EventGroup = spiky.ephys.EventGroup.empty
                 options struct = struct
             end
 
@@ -48,7 +48,7 @@ classdef SessionInfo < spiky.core.Metadata
             obj.FpthDat = fpthDat;
             obj.FpthLfp = fpthLfp;
             obj.ChannelGroups = channelGroups;
-            obj.EventsGroups = eventsGroups;
+            obj.EventGroups = eventGroups;
             obj.Options = options;
         end
 
