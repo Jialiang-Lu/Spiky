@@ -72,7 +72,7 @@ classdef SessionInfo < spiky.core.Metadata
                             ts = spiky.utils.npy.readNPY(fullfile(fdir, "spike_times.npy"));
                             ts = double(ts)./obj.Fs;
                             if ii>1
-                                ts = obj.EventsGroups(ii).Sync.Inv(ts);
+                                ts = obj.EventGroups(ii).Sync.Inv(ts);
                             end
                             clu = spiky.utils.npy.readNPY(fullfile(fdir, "spike_clusters.npy"));
                             tmpl = spiky.utils.npy.readNPY(fullfile(fdir, "templates.npy"));
@@ -98,11 +98,13 @@ classdef SessionInfo < spiky.core.Metadata
                                 idx = idcGood(jj);
                                 neuron = spiky.core.Neuron(obj.Session, ii, label.id(idx), ...
                                     obj.ChannelGroups(ii).Name, chInAll(idx), ch(idx));
-                                s(jj) = spiky.core.Spikes(neuron, uniquetol(ts(clu==label.id(idx)), 8e-4, DataScale=1));
+                                s(jj, 1) = spiky.core.Spikes(neuron, uniquetol(ts(clu==label.id(idx)), ...
+                                    8e-4, DataScale=1));
                             end
+                            s = s([s.Length]./obj.Duration>0.2);
                             spikes{ii} = s;
                         end
-                        spikes = horzcat(spikes{:})';
+                        spikes = vertcat(spikes{:});
                         si = spiky.ephys.SpikeInfo(spikes, options);
                     end
                 otherwise

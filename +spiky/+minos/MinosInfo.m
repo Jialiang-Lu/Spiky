@@ -37,7 +37,7 @@ classdef MinosInfo < spiky.core.Metadata
                     sync.Values{ii, 1}, spiky.ephys.ChannelType.Stim, ...
                     int16(1), "", true, "");
             end
-            events = info.EventsGroups(1).Events(1:2:end);
+            events = info.EventGroups(1).Events(1:2:end);
             [sync, eventsSync] = events.syncWith(syncEvents, "probe1 to minos");
             idcStart = find(startsWith(log.Values.Value, "Start Paradigm"));
             idcStop = find(startsWith(log.Values.Value, "Pause Paradigm"));
@@ -52,7 +52,7 @@ classdef MinosInfo < spiky.core.Metadata
             fiPars = fiPars([fiPars.IsDir] & [fiPars.Name]~="Assets");
             parNamesSpace = [fiPars.Name]';
             parNames = strrep(parNamesSpace, " ", "");
-            photodiode = info.EventsGroups.Adc.Events.Photodiode;
+            photodiode = info.EventGroups.Adc.Events.Photodiode;
             for ii = length(parNames):-1:1
                 periods = spiky.core.Periods(parPeriods(...
                     parPeriodsNames==parNames(ii), :));

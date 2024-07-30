@@ -25,19 +25,23 @@ classdef EyeData < spiky.core.Metadata
                 func = []
                 fiveDot spiky.minos.Paradigm = []
             end
-            data = spiky.minos.Data(fullfile(fdir, "Eye.bin"));
-            data.Values = mergevars(data.Values, ["LeftGazeX", "LeftGazeY", "LeftGazeZ"], ...
-                NewVariableName="LeftGaze");
-            data.Values = mergevars(data.Values, ["LeftGazeRealX", "LeftGazeRealY", ...
-                "LeftGazeRealZ"], NewVariableName="LeftGazeReal");
-            data.Values = mergevars(data.Values, ["RightGazeX", "RightGazeY", "RightGazeZ"], ...
-                NewVariableName="RightGaze");
-            data.Values = mergevars(data.Values, ["RightGazeRealX", "RightGazeRealY", ...
-                "RightGazeRealZ"], NewVariableName="RightGazeReal");
-            data.Values = mergevars(data.Values, ["ConvergenceX", "ConvergenceY", ...
-                "ConvergenceZ"], NewVariableName="Convergence");
-            t = func(double(data.Values.Timestamp)/1e7);
-            data = spiky.core.TimeTable(t, data.Values);
+            data0 = spiky.minos.Data(fullfile(fdir, "Eye.bin"));
+            t = func(double(data0.Values.Timestamp)/1e7);
+            data = table();
+            data.Timestamp = data0.Values.Timestamp;
+            data.LeftPupil = data0.Values.LeftPupil;
+            data.LeftGaze = [data0.Values.LeftGazeX, data0.Values.LeftGazeY, ...
+                data0.Values.LeftGazeZ];
+            data.RightPupil = data0.Values.RightPupil;
+            data.RightGaze = [data0.Values.RightGazeX, data0.Values.RightGazeY, ...
+                data0.Values.RightGazeZ];
+            data.Convergence = [data0.Values.ConvergenceX, data0.Values.ConvergenceY, ...
+                data0.Values.ConvergenceZ];
+            idcLeftClosed = data0.Values.LeftPupil==0;
+            idcRightClosed = data0.Values.RightPupil==0;
+            data.LeftGaze(idcLeftClosed, :) = NaN("single");
+            data.RightGaze(idcRightClosed, :) = NaN("single");
+            data = spiky.core.TimeTable(t, data);
             if exist(fullfile(fdir, "EyeLinkEvent.bin"), "file")
                 events = spiky.minos.Data(fullfile(fdir, "EyeLinkEvent.bin"));
                 fixations = spiky.core.Periods(func(...
@@ -65,12 +69,12 @@ classdef EyeData < spiky.core.Metadata
                 type string
                 eye (1, 1) double = 0
             end
-            events1 = events(endsWith(events.ValueType, type)&...
-                events.ValueEye==eye, :);
-            if startsWith(events1.ValueType(1), "End")
+            events1 = events(endsWith(events.Type, type)&...
+                events.Eye==eye, :);
+            if startsWith(events1.Type(1), "End")
                 events1(1, :) = [];
             end
-            if startsWith(events1.ValueType(end), "Start")
+            if startsWith(events1.Type(end), "Start")
                 events1(end, :) = [];
             end
             if mod(height(events1), 2)~=0

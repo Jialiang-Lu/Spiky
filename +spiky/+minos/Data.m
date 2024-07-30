@@ -105,35 +105,29 @@ classdef Data
                         end
                     else
                         if ~memmapOnly
-                            chunkSize = 2^20;
-                            if len>chunkSize
-                                nChunks = ceil(len/chunkSize);
-                                value = cell(nChunks, 1);
-                                spiky.plot.timedWaitbar(0, sprintf("Loading %s", fi.Name));
-                                for ii = 1:nChunks
-                                    m = memmapfile(fpth, Offset=offset, Format=fmt, ...
-                                        Writable=false);
-                                    idc = (ii-1)*chunkSize+1:min(ii*chunkSize, len);
-                                    value{ii} = struct2table(m.Data(idc), AsArray=true);
-                                    clear m
-                                    spiky.plot.timedWaitbar(ii/nChunks);
-                                end
-                                value = vertcat(value{:});
-                            else
-                                m = memmapfile(fpth, Offset=offset, Format=fmt, ...
-                                    Writable=false);
-                                value = struct2table(m.Data, AsArray=true);
-                            end
+                            fmt = cell2table(fmt, VariableNames=["Type", "Size", "Name"]);
+                            fmt.Bytes = [info1.Bytes]'.*[info1.Length]';
+                            fmt.Offset = cumsum([0; fmt.Bytes(1:end-1)]);
                             n = length(info1);
+                            value = cell(1, n);
+                            fid = fopen(fpth);
                             for ii = 1:n
+                                fseek(fid, offset+fmt.Offset(ii), "bof");
+                                wid = fmt.Size(ii, 2);
+                                tmp = fread(fid, [wid len], sprintf("%d*%s=>%s", ...
+                                    wid, fmt.Type(ii), fmt.Type(ii)), ...
+                                    ti.Bytes-fmt.Bytes(ii))';
                                 if info1(ii).Type=="logical"
-                                    value.(info1(ii).Name) = logical(value.(info1(ii).Name));
+                                    tmp = logical(tmp);
                                 end
                                 if ~isempty(info1(ii).Constants)
-                                    value.(info1(ii).Name) = info1(ii).decode(value.(info1(ii).Name));
+                                    tmp = info1(ii).decode(tmp);
                                 end
+                                value{ii} = tmp;
                             end
+                            value = table(value{:}, VariableNames=fmt.Name');
                             obj.Values = value;
+                            fclose(fid);
                         else
                             m = memmapfile(fpth, Offset=offset, Format=fmt, ...
                                 Writable=true);

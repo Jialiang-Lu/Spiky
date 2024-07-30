@@ -16,7 +16,7 @@ classdef Neuron
     methods
         function obj = Neuron(session, group, id, region, ch, chInGroup)
             arguments
-                session (1, 1) spiky.ephys.Session = spiky.ephys.Session.empty
+                session spiky.ephys.Session = spiky.ephys.Session.empty
                 group double = 0
                 id double = 0
                 region string = ""

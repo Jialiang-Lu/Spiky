@@ -208,25 +208,4 @@ classdef Periods < matlab.mixin.CustomDisplay
             [events, idc, idcPeriods] = events.inPeriods(obj, arraymode, offset);
         end
     end
-
-    methods (Access = protected)
-        function footer = getFooter(obj)
-            % Override the getFooter method
-            if ~isscalar(obj)
-                footer = getFooter@matlab.mixin.CustomDisplay(obj);
-            else
-                n = min(obj.Length, 20);
-                footer = cell(1, n);
-                for k = 1:n
-                    footer{k} = sprintf('[%5g\t%5g]', obj.Time(k, 1), obj.Time(k, 2));
-                end
-                footer = strjoin(footer, newline);
-                if obj.Length>20
-                    footer = [footer newline '   ...' newline];
-                else
-                    footer = [footer newline];
-                end
-            end
-        end
-    end
 end

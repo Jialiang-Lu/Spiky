@@ -1,9 +1,9 @@
-classdef Spikes < spiky.core.MappableArray
+classdef Spikes < spiky.core.Events & ...
+    spiky.core.MappableArray
     % SPIKES Spikes of a neuron
 
     properties
         Neuron spiky.core.Neuron
-        Time (:, 1) double
     end
 
     methods
@@ -65,7 +65,11 @@ classdef Spikes < spiky.core.MappableArray
 
     methods (Access = protected)
         function key = getKey(obj)
-            key = obj.Neuron.Str;
+            if ~isempty(obj.Neuron)
+                key = obj.Neuron.Str;
+            else
+                key = "";
+            end
         end
     end
 end

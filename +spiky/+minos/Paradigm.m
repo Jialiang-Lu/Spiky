@@ -19,7 +19,7 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
             arguments
                 fdir (1, 1) string {mustBeFolder}
                 periods spiky.core.Periods
-                func = []
+                func = @(x) x
                 photodiode double = []
             end
             [~, name] = fileparts(fdir);
@@ -56,10 +56,10 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
                     t1 = t(isEvent1);
                     p1 = spiky.core.Periods([t1 t1+0.1]);
                     e1 = p1.haveEvents(photodiode, true);
-                    l1 = [e1.Length]';
+                    l1 = cellfun(@length, e1)';
                     if sum(l1>0)/length(l1)>0.9
                         isValid = l1>0;
-                        tValid = arrayfun(@(x) x.Time(1), e1(isValid));
+                        tValid = cellfun(@(x) x(1), e1(isValid));
                         tdMean = mean(tValid-t1(isValid));
                         fprintf("Average latency for %s in %s is %.1f(+/-%.1f) ms\n", ...
                             eventNames(ii), name, tdMean*1000, std(tValid-t1(isValid))*1000)
