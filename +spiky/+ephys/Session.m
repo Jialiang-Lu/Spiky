@@ -75,7 +75,8 @@ classdef Session < spiky.core.Metadata
                 options.channelConfig = []
                 options.probe = "NP1030"
                 options.mainProbe (1, 1) double = 1
-                options.configOnly (1, 1) logical = false
+                options.resampleDat (1, 1) logical = false
+                options.resampleLfp (1, 1) logical = true
             end
             
             %% Load configuration
@@ -205,9 +206,51 @@ classdef Session < spiky.core.Metadata
                     eventsGroups(nProbes+2) = spiky.ephys.EventGroup("Net", ...
                         spiky.ephys.ChannelType.Net, eventsNet.syncTime(sync2.Inv), ...
                         tsRangeDaq, sync2);
-                    %% Resample
+                    %% Resample raw
+                    if options.resampleDat
+                        fpthDat = obj.getFpth("dat");
+                        mem = memory;
+                        chunkSize = floor(mem.MaxPossibleArrayBytes*0.2./nCh/8);
+                        nChunks = ceil(nSample/chunkSize);
+                        data = zeros(nCh, chunkSize);
+                        fid = fopen(fpthDat, "w");
+                        %%
+                        spiky.plot.timedWaitbar(0, "Resampling raw data");
+                        for ii = 1:nChunks
+                            idc = (1:chunkSize)+(ii-1)*chunkSize;
+                            idc(idc>nSample) = [];
+                            nIdc = length(idc);
+                            mf = memmapfile(fpthsAp(1), Format={"int16", ...
+                                [nCh1 nSamples1(1)], "m"});
+                            data(1:length(channelGroups(1).Probe.OeMap), 1:nIdc) = ...
+                                mf.Data.m(channelGroups(1).Probe.OeMap, idc);
+                            for jj = 2:nProbes
+                                idcK = eventsGroups(jj).Sync.Fit((idc-1)./fs).*fs+1;
+                                idcK2 = round(idcK(1)-3):round(idcK(end)+3);
+                                idcK2(idcK2<=0) = [];
+                                idcK2(idcK2>nSamples1(jj)) = [];
+                                idcKOff = idcK-idcK2(1)+1; % make loaded data start from 1 for interpolation
+                                mf = memmapfile(fpthsAp(jj), Format={"int16", ...
+                                    [nCh1 nSamples1(jj)], "m"});
+                                dataK = interp1(double(mf.Data.m(channelGroups(jj).Probe.OeMap, ...
+                                    idcK2)'), idcKOff, "linear", 0)';
+                                data((1:length(channelGroups(jj).Probe.OeMap))+384*(jj-1), ...
+                                    1:nIdc) = dataK;
+                            end
+                            if ii~=nChunks
+                                fwrite(fid, data, "int16");
+                            else
+                                fwrite(fid, data(:, 1:nIdc), "int16");
+                            end
+                            spiky.plot.timedWaitbar(ii/nChunks);
+                        end
+                        fclose(fid);
+                    else
+                        fpthDat = fpthsAp;
+                    end
+                    %% Resample LFP
                     fpthLfp = obj.getFpth("lfp");
-                    if ~options.configOnly
+                    if options.resampleLfp
                         ratio = fsLfp1/fsLfp;
                         [p, q] = rat(1/ratio);
                         mf1 = memmapfile(fpthsLfp(1), Format={"int16", [nCh1 nSampleLfp1], "m"});
@@ -259,7 +302,7 @@ classdef Session < spiky.core.Metadata
                     end
                     %% Save
                     info = spiky.ephys.SessionInfo(obj, nChAll, fs, fsLfp, nSample, ...
-                        nSampleLfp1, duration, "int16", fpthsAp, fpthLfp, channelGroups, eventsGroups, options);
+                        nSampleLfp1, duration, "int16", fpthDat, fpthLfp, channelGroups, eventsGroups, options);
                     obj.saveMetaData(info);
                 else % Not neuropixels
                     error("Not implemented")
