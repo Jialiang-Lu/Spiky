@@ -4,6 +4,20 @@
 
 A MATLAB package for neural data analysis
 
+## Usage
+
+Open the +config/Config.yaml file and change the corresponding fields to match your setup.
+
+- `fdirCode`: the path to the code directory.
+- `fdirData`: the path to the data directory containing all session folders.
+- `fdirDataCloud`: the path to the data directory on the server.
+- `fdirDataRemoteRaw`: the path to the raw data directory on the recording computer.
+- `fdirDataRemoteLog`: the path to the log data directory on the recording computer.
+- `fdirDataRemoteMinos`: the path to the Minos data directory on the Unity computer.
+- `fdirConda`: the path to the conda environment directory.
+- `envKilosort4`: the name of the conda environment for Kilosort4.
+- `channelConfig`: channel names for all analog and digital channels.
+
 ## Data structure
 
 After each recording, the data should be put in a folder `fdirData/SessionName`. The 

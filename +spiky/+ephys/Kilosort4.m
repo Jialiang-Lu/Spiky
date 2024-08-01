@@ -20,7 +20,9 @@ classdef Kilosort4
         function run(obj)
             % RUN Run Kilosort4 on the specified data
             fdirConda = spiky.config.loadConfig("fdirConda");
-            fpthKilosort4 = spiky.config.loadConfig("fpthKilosort4");
+            fpth = mfilename("fullpath");
+            fdir = fileparts(fpth);
+            fpthKilosort4 = fullfile(fdir, "kilosort4.py");
             envKilosort4 = spiky.config.loadConfig("envKilosort4");
             status = system(fdirConda+"\Scripts\activate.bat "+fdirConda+...
                 cmdsep+"conda activate "+envKilosort4+cmdsep+"python "+fpthKilosort4+" "+...

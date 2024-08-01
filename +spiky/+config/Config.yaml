@@ -5,9 +5,7 @@ fdirDataCloud: S:\RawData\Ephys
 fdirDataRemoteRaw: O:\Ephys
 fdirDataRemoteLog: O:\Ephys\Log
 fdirDataRemoteMinos: U:\Unity\Minos
-fdirConfigOpenEphys: C:\Jialiang\Data\Config\OpenEphys
 fdirConda: C:\Users\Jialiang\miniconda3
-fpthKilosort4: C:\Jialiang\Python\Kilosort\kilosort4.py
 envKilosort4: ks
 
 # Channel configuration
