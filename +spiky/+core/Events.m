@@ -67,27 +67,36 @@ classdef Events < matlab.mixin.CustomDisplay
                 tmp = tmp';
                 idcIn = find(tmp(:));
                 [idc, idcPeriods] = ind2sub(size(tmp), idcIn);
-                s = spikes(idc);
+                events = spikes(idc);
                 if ~isempty(offset)
-                    s = s-periods(idcPeriods, 1)+offset;
+                    events = events-periods(idcPeriods, 1)+offset;
                 end
             else
                 idc = cell(size(tmp, 1), 1);
-                s = cell(size(tmp, 1), 1);
+                events = cell(size(tmp, 1), 1);
                 if ~isempty(offset)
-                    for c = 1:size(tmp, 1)
-                        idc{c} = find(tmp(c, :));
-                        s{c} = spikes(idc{c})-periods(c, 1)+offset;
+                    for ii = 1:size(tmp, 1)
+                        idc1 = find(tmp(ii, :));
+                        if isempty(idc1)
+                            continue
+                        end
+                        idc{ii} = idc1;
+                        events{ii} = spikes(idc1)-periods(ii, 1)+offset;
                     end
                 else
-                    for c = 1:size(tmp, 1)
-                        idc{c} = find(tmp(c, :));
-                        s{c} = spikes(idc{c});
+                    for ii = 1:size(tmp, 1)
+                        idc1 = find(tmp(ii, :));
+                        if isempty(idc1)
+                            continue
+                        end
+                        idc{ii} = idc1;
+                        events{ii} = spikes(idc1);
                     end
                 end
-                idcPeriods = cellfun(@length, s);
+                if nargout>2
+                    idcPeriods = cellfun(@length, events);
+                end
             end
-            events = s;
         end
 
         function s = sync(obj, obj2, name, varargin)

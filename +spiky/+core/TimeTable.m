@@ -75,5 +75,30 @@ classdef TimeTable < spiky.core.Events & ...
             periods(diff(periods, [], 2)<minperiod, :)=[];
             periods = spiky.core.Periods(periods);
         end
+
+        function varargout = subsref(obj, s)
+            switch s(1).type
+                case '.'
+                    if istable(obj.Data) && ismember(s(1).subs, ...
+                        obj.Data.Properties.VariableNames)
+                        obj = obj.Data;
+                    end
+            end
+            [varargout{1:nargout}] = builtin("subsref", obj, s);
+        end
+
+        function obj = subsasgn(obj, s, varargin)
+            switch s(1).type
+                case '.'
+                    if istable(obj.Data) && ismember(s(1).subs, ...
+                        obj.Data.Properties.VariableNames)
+                        obj1 = obj.Data;
+                        obj1 = builtin("subsasgn", obj1, s, varargin{:});
+                        obj.Data = obj1;
+                        return
+                    end
+            end
+            obj = builtin("subsasgn", obj, s, varargin{:});
+        end
     end
 end

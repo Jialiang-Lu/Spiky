@@ -75,18 +75,15 @@ classdef Periods < matlab.mixin.CustomDisplay
     end
 
     methods
-        function obj = Periods(Time)
+        function obj = Periods(time)
             % Constructor for Periods class
-            if isnumeric(Time)
-                if size(Time, 2)~=2
-                    error("Time must have two columns.")
-                end
-                obj.Time = Time;
-            elseif iscell(Time)
-                obj = cellfun(@(x) spiky.core.Periods(x), Time);
-            else
-                error("Wrong input type.")
+            arguments
+                time double = double.empty(0, 2)
             end
+            if size(time, 2)~=2
+                error("Time must have two columns.")
+            end
+            obj.Time = time;
         end
 
         function len = get.Length(obj)
