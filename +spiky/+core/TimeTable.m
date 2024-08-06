@@ -88,6 +88,9 @@ classdef TimeTable < spiky.core.Events & ...
         end
 
         function obj = subsasgn(obj, s, varargin)
+            if isequal(obj,[])
+                obj = spiky.core.TimeTable.empty;
+            end
             switch s(1).type
                 case '.'
                     if istable(obj.Data) && ismember(s(1).subs, ...
