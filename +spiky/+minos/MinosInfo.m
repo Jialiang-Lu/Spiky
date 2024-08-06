@@ -127,7 +127,7 @@ classdef MinosInfo < spiky.core.Metadata
             %   name: name of the stimulus set
             %
             %   stimuli: stimuli
-            assets = obj.Session.loadData("spiky.minos.Asset.mat");
+            assets = obj.getAssets;
             stimulusType = ["Subset", "GameObject", "Image", "Video"];
             stimulusSource = ["Internal", "External"];
             stimulusSourceType = ["Folder", "List"];

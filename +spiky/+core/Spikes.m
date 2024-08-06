@@ -1,5 +1,5 @@
 classdef Spikes < spiky.core.Events & ...
-    spiky.core.MappableArray
+    spiky.core.MappableArray & spiky.core.ArrayDisplay
     % SPIKES Spikes of a neuron
 
     properties
@@ -38,12 +38,12 @@ classdef Spikes < spiky.core.Events & ...
         function trigSpikes = trig(obj, periods, duration)
             % TRIG Trigger spikes by periods
             %
-            %   periods: periods as spiky.core.Periods or (n, 2) double
+            %   periods: periods as spiky.core.Periods or (n, 1) double
             %
             %   trigSpikes: triggered spikes
             arguments
                 obj spiky.core.Spikes
-                periods % spiky.core.Periods or (n, 2) double
+                periods % spiky.core.Periods or (n, 1) double
                 duration double = 0
             end
             if ~isa(periods, "spiky.core.Periods")

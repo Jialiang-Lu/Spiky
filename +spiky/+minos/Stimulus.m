@@ -1,4 +1,4 @@
-classdef Stimulus < spiky.core.Metadata & spiky.core.MappableArray
+classdef Stimulus < spiky.core.Metadata & spiky.core.MappableArray & spiky.core.ArrayDisplay
 
     properties
         Name string
