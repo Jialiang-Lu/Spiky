@@ -83,12 +83,27 @@ classdef TimeTable < spiky.core.Events & ...
                         obj.Data.Properties.VariableNames)
                         obj = obj.Data;
                     end
+                case '()'
+                    sd = s(1);
+                    st = sd;
+                    st.subs = sd.subs(1);
+                    obj = spiky.core.TimeTable(subsref(obj.Time, st), subsref(obj.Data, sd));
+                    if isscalar(s)
+                        varargout{1} = obj;
+                    else
+                        [varargout{1:nargout}] = subsref(obj, s(2:end));
+                    end
+                    return
+                case '{}'
+                    s.type = '()';
+                    [varargout{1:nargout}] = subsref(obj.Data, s);
+                    return
             end
             [varargout{1:nargout}] = builtin("subsref", obj, s);
         end
 
         function obj = subsasgn(obj, s, varargin)
-            if isequal(obj,[])
+            if isequal(obj, [])
                 obj = spiky.core.TimeTable.empty;
             end
             switch s(1).type
@@ -100,6 +115,26 @@ classdef TimeTable < spiky.core.Events & ...
                         obj.Data = obj1;
                         return
                     end
+                case '()'
+                    sd = s(1);
+                    st = sd;
+                    st.subs = sd.subs{1};
+                    if ~isscalar(s)
+                        error("Assigning properties using parentheses is not allowed. Use braces instead.")
+                    end
+                    if ~isscalar(varargin) || ~isa(varargin{1}, "spiky.core.TimeTable")
+                        error("Assignment must be a TimeTable object")
+                    end
+                    obj1 = varargin{1};
+                    obj = spiky.core.TimeTable(subsasgn(obj.Time, st, obj1.Time), ...
+                        subsasgn(obj.Data, sd, obj1.Data));
+                    return
+                case '{}'
+                    s.type = '()';
+                    obj1 = obj.Data;
+                    obj1 = builtin("subsasgn", obj1, s, varargin{:});
+                    obj.Data = obj1;
+                    return
             end
             obj = builtin("subsasgn", obj, s, varargin{:});
         end
