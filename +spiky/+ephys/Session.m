@@ -66,7 +66,7 @@ classdef Session < spiky.core.Metadata
             minos = obj.loadData("spiky.minos.MinosInfo.mat");
         end
         
-        function processRaw(obj, options)
+        function info = processRaw(obj, options)
             arguments
                 obj spiky.ephys.Session
                 options.fsLfp (1, 1) double = 1000
@@ -82,7 +82,10 @@ classdef Session < spiky.core.Metadata
             %% Load configuration
             if ~isa(options.channelConfig, "spiky.ephys.ChannelConfig")
                 configs = spiky.config.loadConfig("channelConfig");
-                if isnumeric(options.channelConfig)
+                if isempty(options.channelConfig)
+                    names = fieldnames(configs);
+                    options.channelConfig = spiky.ephys.ChannelConfig.read(configs.(names{end}));
+                elseif isnumeric(options.channelConfig)
                     options.channelConfig = spiky.ephys.ChannelConfig.read(configs.(sprintf("v%d", ...
                         options.channelConfig)));
                 elseif isstring(options.channelConfig)
@@ -222,8 +225,8 @@ classdef Session < spiky.core.Metadata
                             nIdc = length(idc);
                             mf = memmapfile(fpthsAp(1), Format={"int16", ...
                                 [nCh1 nSamples1(1)], "m"});
-                            data(1:length(channelGroups(1).Probe.OeMap), 1:nIdc) = ...
-                                mf.Data.m(channelGroups(1).Probe.OeMap, idc);
+                            data(1:length(channelGroups(1).Probe.ChanMap), 1:nIdc) = ...
+                                mf.Data.m(channelGroups(1).Probe.ChanMap, idc);
                             for jj = 2:nProbes
                                 idcK = eventsGroups(jj).Sync.Fit((idc-1)./fs).*fs+1;
                                 idcK2 = round(idcK(1)-3):round(idcK(end)+3);
@@ -232,9 +235,9 @@ classdef Session < spiky.core.Metadata
                                 idcKOff = idcK-idcK2(1)+1; % make loaded data start from 1 for interpolation
                                 mf = memmapfile(fpthsAp(jj), Format={"int16", ...
                                     [nCh1 nSamples1(jj)], "m"});
-                                dataK = interp1(double(mf.Data.m(channelGroups(jj).Probe.OeMap, ...
+                                dataK = interp1(double(mf.Data.m(channelGroups(jj).Probe.ChanMap, ...
                                     idcK2)'), idcKOff, "linear", 0)';
-                                data((1:length(channelGroups(jj).Probe.OeMap))+384*(jj-1), ...
+                                data((1:length(channelGroups(jj).Probe.ChanMap))+384*(jj-1), ...
                                     1:nIdc) = dataK;
                             end
                             if ii~=nChunks
@@ -273,7 +276,7 @@ classdef Session < spiky.core.Metadata
                             end
                             for jj = 1:nGroupPerProbe
                                 idcCh = (1:groupSize)+(jj-1)*groupSize;
-                                idcInGroup = channelGroups(ii).Probe.OeMap(idcCh);
+                                idcInGroup = channelGroups(ii).Probe.ChanMap(idcCh);
                                 idcInOut = idcCh+(ii-1)*384;
                                 if ii==1
                                     tmp = double(mf.Data.m(idcInGroup, :))';
@@ -299,10 +302,13 @@ classdef Session < spiky.core.Metadata
                         fid = fopen(fpthLfp, "w");
                         fwrite(fid, data, "int16");
                         fclose(fid);
+                    else
+                        nSampleLfp = nSampleLfp1;
                     end
                     %% Save
                     info = spiky.ephys.SessionInfo(obj, nChAll, fs, fsLfp, nSample, ...
-                        nSampleLfp1, duration, "int16", fpthDat, fpthLfp, channelGroups, eventsGroups, options);
+                        nSampleLfp, duration, "int16", fpthDat, fpthLfp, channelGroups, ...
+                        eventsGroups, options);
                     obj.saveMetaData(info);
                 else % Not neuropixels
                     error("Not implemented")

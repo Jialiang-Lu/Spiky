@@ -121,7 +121,7 @@ classdef RecEvent < spiky.core.Metadata & spiky.core.MappableArray
                 dl = t1.Length-t2.Length;
                 d1 = diff(t1);
                 d2 = diff(t2);
-                dlmax = min([max(abs(dl), 4) t1.Length-1 t2.Length-1]);
+                dlmax = min([max(abs(dl), 4) t1.Length-2 t2.Length-2]);
                 shifts = -dlmax:dlmax;
                 d = zeros(length(shifts), 1);
                 for ii = 1:length(shifts)

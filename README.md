@@ -4,9 +4,20 @@
 
 A MATLAB package for neural data analysis
 
-## Usage
+## Installation
 
-Open the +config/Config.yaml file and change the corresponding fields to match your setup.
+Clone the repository to your computer and add the parent folder to the MATLAB path.
+
+If you want to use Kilosort3, download it from the 
+[Kilosort3 Github branch](https://github.com/MouseLand/Kilosort/tree/kilosort3). 
+Also download the npy-matlab package from the 
+[npy-matlab Github](https://github.com/kwikteam/npy-matlab) 
+and put it inside the Kilosort3 package folder. 
+Then set the `fdirKilosort3` field in the `+config/Config.yaml` file to the path of the Kilosort3.
+
+## Configuration
+
+Open the `+config/Config.yaml` file and change the corresponding fields to match your setup.
 
 - `fdirCode`: the path to the code directory.
 - `fdirData`: the path to the data directory containing all session folders.
@@ -14,15 +25,58 @@ Open the +config/Config.yaml file and change the corresponding fields to match y
 - `fdirDataRemoteRaw`: the path to the raw data directory on the recording computer.
 - `fdirDataRemoteLog`: the path to the log data directory on the recording computer.
 - `fdirDataRemoteMinos`: the path to the Minos data directory on the Unity computer.
+- `fdirKilosort3`: the path to the Kilosort3 directory.
 - `fdirConda`: the path to the conda environment directory.
 - `envKilosort4`: the name of the conda environment for Kilosort4.
 - `channelConfig`: channel names for all analog and digital channels.
 
-## Data structure
+## Pre-processing
 
 After each recording, the data should be put in a folder `fdirData/SessionName`. The 
 electrophysiological data goes into the `Raw` subfolder and the behavioral data goes to the `Minos` 
 folder.
+
+### Raw data
+
+To start the preprocessing, , create a `spiky.ephys.Session` 
+object by calling
+```
+session = spiky.ephys.Session(SessionName);
+```
+
+Then start the preprocessing by calling
+```
+info = session.processRaw(brainRegions=["Region1" "Region2"], ...)
+```
+Additional arguments can be passed to the `processRaw` function:
+- `fsLfp`: the desired sampling frequency of the LFP data.
+- `period`: [start end] in seconds to process the data, by default the whole recording is processed.
+- `channelConfig`: the channel configuration name saved in the `+config/Config.yaml` file. By
+  default the last configuration is used.
+- `probe`: the file name saved in the `+config/+probes` folder. If only one file is provided, all
+  probes are assumed to be the same. 
+- `mainProbe`: the probe to use as the main probe for synchronization. By default the first probe is
+  used.
+- `resampleDat`: whether to resample the raw data to a single file. By default it is false.
+- `resampleLfp`: whether to resample the LFP data to a single file. By default it is true.
+
+The returned `info` object  is a `spiky.ephys.SessionInfo` object that contains the general 
+information about the session and the options used. All subsequent processing steps are methods of
+this object.
+
+### Spike sorting
+
+Call `info.spikeSort(method="kilosort3")`. Method can be either `kilosort3` or `kilosort4`.
+
+Call `info.extractSpikes(method="kilosort3")` to extract the spike information from the
+corresponding Kilosort3 or Kilosort4 output files.
+
+### Minos data
+
+To process the Minos data, call `info.extractMinos()`. This function reads the Minos data and saves
+it in the `SessionName.spiky.minos.MinosInfo.mat` file.
+
+## Data analysis
 
 The preprocessing produces the following files. To load these files, create a `spiky.ephys.Session` 
 object by calling

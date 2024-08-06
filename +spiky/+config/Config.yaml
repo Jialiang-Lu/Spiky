@@ -5,6 +5,7 @@ fdirDataCloud: S:\RawData\Ephys
 fdirDataRemoteRaw: O:\Ephys
 fdirDataRemoteLog: O:\Ephys\Log
 fdirDataRemoteMinos: U:\Unity\Minos
+fdirKilosort3: C:\Jialiang\Code\Packages\Kilosort3
 fdirConda: C:\Users\Jialiang\miniconda3
 envKilosort4: ks
 
