@@ -115,20 +115,6 @@ classdef TimeTable < spiky.core.Events & ...
                         obj.Data = obj1;
                         return
                     end
-                case '()'
-                    sd = s(1);
-                    st = sd;
-                    st.subs = sd.subs{1};
-                    if ~isscalar(s)
-                        error("Assigning properties using parentheses is not allowed. Use braces instead.")
-                    end
-                    if ~isscalar(varargin) || ~isa(varargin{1}, "spiky.core.TimeTable")
-                        error("Assignment must be a TimeTable object")
-                    end
-                    obj1 = varargin{1};
-                    obj = spiky.core.TimeTable(subsasgn(obj.Time, st, obj1.Time), ...
-                        subsasgn(obj.Data, sd, obj1.Data));
-                    return
                 case '{}'
                     s.type = '()';
                     obj1 = obj.Data;
