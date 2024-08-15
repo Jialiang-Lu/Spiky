@@ -196,11 +196,18 @@ classdef SessionInfo < spiky.core.Metadata
                 obj
                 options.method string {mustBeMember(options.method, ["kilosort3", "kilosort4"])} = ...
                     "kilosort3"
-                options.labels string {mustBeMember(options.labels, ["good", "mua"])} = "good"
+                options.labels string {mustBeMember(options.labels, ["", "good", "mua"])} = ""
             end
 
             switch options.method
                 case {"kilosort3", "kilosort4"}
+                    if options.labels==""
+                        if options.method=="kilosort3"
+                            options.labels = ["good", "mua"];
+                        else
+                            options.labels = "good";
+                        end
+                    end
                     if obj.Options.resampleDat
                         error("Not implemented")
                     else % multiple files
@@ -226,7 +233,7 @@ classdef SessionInfo < spiky.core.Metadata
                             tmpl2 = reshape(tmpl, n, []);
                             [~, ch] = max(abs(tmpl2), [], 2);
                             ch = floor((ch-1)/nT)+1;
-                            [~, ch] = ismember(ch, obj.ChannelGroups(ii).Probe.ChanMap);
+                            %[~, ch] = ismember(ch, obj.ChannelGroups(ii).Probe.ChanMap);
                             if ii>1
                                 chInAll = ch+sum(nChs(1:ii-1));
                             else
