@@ -115,6 +115,14 @@ classdef TimeTable < spiky.core.Events & ...
                         obj.Data = obj1;
                         return
                     end
+                case '()'
+                    sd = s(1);
+                    st = sd;
+                    st.subs = sd.subs(1);
+                    obj1 = varargin{1};
+                    obj.Time = subsasgn(obj.Time, st, obj1.Time);
+                    obj.Data = subsasgn(obj.Data, sd, obj1.Data);
+                    return
                 case '{}'
                     s.type = '()';
                     obj1 = obj.Data;

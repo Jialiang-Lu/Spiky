@@ -49,6 +49,19 @@ classdef Metadata
                 return
             end
             props = intersect(fieldnames(s.Value), properties(s.Class));
+            if n==1
+                obj = feval(s.Class);
+                for ii = 1:numel(props)
+                    propName = props{ii};
+                    s1 = s.Value.(propName);
+                    if isstruct(s1) && isequal(fieldnames(s1), {'Class'; 'Value'})
+                        obj.(propName) = spiky.core.Metadata.structToObj(s1);
+                    else
+                        obj.(propName) = s1;
+                    end
+                end
+                return
+            end
             for ii = n:-1:1
                 obj(ii, 1) = feval(s.Class);
                 for jj = 1:numel(props)
