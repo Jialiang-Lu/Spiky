@@ -179,30 +179,30 @@ classdef Periods < matlab.mixin.CustomDisplay
             periods = period - obj;
         end
 
-        function [events, idc, idcPeriods] = haveEvents(obj, events, arraymode, offset)
+        function [events, idc, idcPeriods] = haveEvents(obj, events, cellmode, offset)
             % HAVEEVENTS Find events within periods
             %
             %   obj: periods
             %   periods: events object
-            %   arraymode: if true, events is an array with the same size as periods
+            %   cellmode: if true, events is an array with the same size as periods
             %   offset: events is relative time to the beginning of the periods plus offset if 
             %       non-empty and absolute time otherwise
             %
-            %   events: events within periods, cell if arraymode is true
+            %   events: events within periods, cell if cellmode is true
             %   idc: indices of events within periods, events.Time = obj.Time(idc), or cell of it
             %   idcPeriods: indices of periods for each event, or count of events within each 
-            %       period when arraymode is true (similar to histcounts, but much slower so 
+            %       period when cellmode is true (similar to histcounts, but much slower so 
             %       don't use for this purpose)
             arguments
                 obj spiky.core.Periods
                 events % double or spiky.core.Events
-                arraymode logical = false
+                cellmode logical = false
                 offset double {mustBeScalarOrEmpty} = []
             end
             if isnumeric(events)
                 events = spiky.core.Events(events);
             end
-            [events, idc, idcPeriods] = events.inPeriods(obj, arraymode, offset);
+            [events, idc, idcPeriods] = events.inPeriods(obj, cellmode, offset);
         end
     end
 end

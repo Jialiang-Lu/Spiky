@@ -40,34 +40,85 @@ classdef Events < matlab.mixin.CustomDisplay
             d = diff(obj.Time, n);
         end
 
-        function [events, idc, idcPeriods] = inPeriods(obj, periods, arraymode, offset)
+        function [events, idc, idcPeriods] = inPeriods(obj, periods, cellmode, offset, ...
+            rightClose, sorted)
             % INPERIODS Find events within periods
             %
             %   obj: events
             %   periods: periods object
-            %   arraymode: if true, events is an array with the same size as periods
-            %   offset: events is relative time to the beginning of the periods plus offset if 
+            %   [cellmode]: if true, events is an array with the same size as periods
+            %   [offset]: events is relative time to the beginning of the periods plus offset if 
             %       non-empty and absolute time otherwise
+            %   [rightClose]: whether the right boundary is closed. By default false.
+            %   [sorted]: whether the events are sorted by time already. By default true.
             %
-            %   events: events within periods, cell if arraymode is true
+            %   events: events within periods, cell if cellmode is true
             %   idc: indices of events within periods, events.Time = obj.Time(idc), or cell of it
             %   idcPeriods: indices of periods for each event, or count of events within each 
-            %       period when arraymode is true (similar to histcounts, but much slower so 
+            %       period when cellmode is true (similar to histcounts, but much slower so 
             %       don't use for this purpose)
             arguments
                 obj spiky.core.Events
                 periods spiky.core.Periods
-                arraymode logical = false
+                cellmode logical = false
                 offset double {mustBeScalarOrEmpty} = []
+                rightClose logical = false
+                sorted logical = true
             end
-            spikes = obj.Time;
+            ts = obj.Time;
             periods = periods.Time;
-            tmp = spikes'>=periods(:, 1)&spikes'<periods(:, 2);
-            if ~arraymode
+            if sorted
+                [indices, counts] = spiky.mex.findInPeriods(ts, periods, rightClose);
+                if ~cellmode
+                    idc = zeros(sum(counts), 1);
+                    idcPeriods = zeros(sum(counts), 1);
+                    acc = 0;
+                    for ii = 1:size(periods, 1)
+                        count = counts(ii);
+                        if count==0
+                            continue
+                        end
+                        idc(acc+1:acc+count) = indices(ii):indices(ii)+count-1;
+                        idcPeriods(acc+1:acc+count) = ii;
+                        acc = acc+count;
+                    end
+                    events = ts(idc);
+                    if ~isempty(offset)
+                        events = events-periods(idcPeriods, 1)+offset;
+                    end
+                else
+                    idc = cell(size(periods, 1), 1);
+                    idcPeriods = zeros(size(periods, 1), 1);
+                    events = cell(size(periods, 1), 1);
+                    acc = 0;
+                    for ii = 1:size(periods, 1)
+                        count = counts(ii);
+                        if count==0
+                            continue
+                        end
+                        idc1 = indices(ii):indices(ii)+count-1;
+                        idc{ii} = idc1';
+                        if ~isempty(offset)
+                            events{ii} = ts(idc1)-periods(ii, 1)+offset;
+                        else
+                            events{ii} = ts(idc1);
+                        end
+                        idcPeriods(ii) = count;
+                        acc = acc+count;
+                    end
+                end
+                return
+            end
+            if rightClose
+                tmp = ts'>=periods(:, 1)&ts'<=periods(:, 2);
+            else
+                tmp = ts'>=periods(:, 1)&ts'<periods(:, 2);
+            end
+            if ~cellmode
                 tmp = tmp';
                 idcIn = find(tmp(:));
                 [idc, idcPeriods] = ind2sub(size(tmp), idcIn);
-                events = spikes(idc);
+                events = ts(idc);
                 if ~isempty(offset)
                     events = events-periods(idcPeriods, 1)+offset;
                 end
@@ -81,7 +132,7 @@ classdef Events < matlab.mixin.CustomDisplay
                             continue
                         end
                         idc{ii} = idc1;
-                        events{ii} = spikes(idc1)-periods(ii, 1)+offset;
+                        events{ii} = ts(idc1)-periods(ii, 1)+offset;
                     end
                 else
                     for ii = 1:size(tmp, 1)
@@ -90,7 +141,7 @@ classdef Events < matlab.mixin.CustomDisplay
                             continue
                         end
                         idc{ii} = idc1;
-                        events{ii} = spikes(idc1);
+                        events{ii} = ts(idc1);
                     end
                 end
                 if nargout>2
