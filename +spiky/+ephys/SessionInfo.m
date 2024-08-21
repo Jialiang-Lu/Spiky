@@ -189,7 +189,7 @@ classdef SessionInfo < spiky.core.Metadata
             end
         end
 
-        function extractSpikes(obj, options)
+        function si = extractSpikes(obj, options)
             % EXTRACTSPIKES Extract spikes from sorted data
 
             arguments
@@ -245,7 +245,7 @@ classdef SessionInfo < spiky.core.Metadata
                             for jj = length(idcGood):-1:1
                                 idx = idcGood(jj);
                                 neuron = spiky.core.Neuron(obj.Session, ii, label.id(idx), ...
-                                    obj.ChannelGroups(ii).Name, chInAll(idx), ch(idx));
+                                    obj.ChannelGroups(ii).Name, chInAll(idx), ch(idx), label.label(idx));
                                 s(jj, 1) = spiky.core.Spikes(neuron, uniquetol(ts(clu==label.id(idx)), ...
                                     8e-4, DataScale=1));
                             end
@@ -261,10 +261,10 @@ classdef SessionInfo < spiky.core.Metadata
             obj.Session.saveMetaData(si);
         end
 
-        function extractMinos(obj)
+        function minos = extractMinos(obj)
             fdir = obj.Session.getFdir("Minos");
-            data = spiky.minos.MinosInfo.load(fdir, obj);
-            obj.Session.saveMetaData(data);
+            minos = spiky.minos.MinosInfo.load(fdir, obj);
+            obj.Session.saveMetaData(minos);
         end
     end
 end

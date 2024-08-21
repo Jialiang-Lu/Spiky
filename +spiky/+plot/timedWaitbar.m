@@ -16,6 +16,8 @@ function fout = timedWaitbar(x, varargin)
     %   length to X and caculated the estimated remaining time.
     %
     %   TIMEDWAITBAR("Add", X, ...) will add the frational length to current X.
+    %
+    %   TIMEDWAITBAR([]) will close the waitbar.
     
     import spiky.plot.*
     mon = get(0, "MonitorPositions");
@@ -24,6 +26,11 @@ function fout = timedWaitbar(x, varargin)
     res = mon(end, 3:4);
     sz = [270 80];
     pos = [mon(end, 1:2)-1+res./[6 4]-sz/2 sz];
+    if isempty(x)
+        h = findobj(allchild(0),"flat","Tag","TMWWaitbar");
+        delete(h);
+        return
+    end
     if strcmpi(x, "Add")
         if isempty(varargin)
             error("Pease provide the fractional length")

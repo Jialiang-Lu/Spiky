@@ -1,4 +1,4 @@
-classdef Parameter < spiky.core.MappableArray & spiky.core.Metadata
+classdef Parameter < spiky.core.MappableArray & spiky.core.Metadata & spiky.core.ArrayDisplay
     % PARAMETER A parameter that can be changed during an experiment
 
     properties
@@ -60,24 +60,33 @@ classdef Parameter < spiky.core.MappableArray & spiky.core.Metadata
             end
         end
 
-        function periods = getPeriods(obj, value)
+        function periods = getPeriods(obj, value, partialMatch)
             % GETPERIODS Get the periods when the parameter has a specific value
             %
             %   value: value(s) or function handle
+            %   partialMatch: whether to use partial match
             %
             %   periods: periods when the parameter has the value
             arguments
                 obj spiky.core.Parameter
                 value % value(s) or function handle
+                partialMatch logical = true
             end
             if isempty(obj.Time)
                 periods = spiky.core.Periods.empty;
                 return
             end
             if ~isa(value, "function_handle")
-                h = @(x) x==value;
+                if isstring(value) && partialMatch
+                    h = @(x) contains(x, value);
+                else
+                    h = @(x) isequal(x, value);
+                end
             else
                 h = value;
+            end
+            if iscell(obj.Data)
+                h = @(c) cellfun(h, c);
             end
             n = length(obj.Time);
             idc = find(h(obj.Data));

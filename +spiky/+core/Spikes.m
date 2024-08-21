@@ -35,31 +35,29 @@ classdef Spikes < spiky.core.Events & ...
             spikes = obj(isValid);
         end
 
-        function trigSpikes = trig(obj, periods, duration)
-            % TRIG Trigger spikes by periods
+        function trigSpikes = trig(obj, events, window)
+            % TRIG Trigger spikes by events
             %
-            %   periods: periods as spiky.core.Periods or (n, 1) double
+            %   events: event times
+            %   window: 1x2 window around events, e.g. [-before after]
             %
             %   trigSpikes: triggered spikes
             arguments
                 obj spiky.core.Spikes
-                periods % spiky.core.Periods or (n, 1) double
-                duration double = 0
+                events % (n, 1) double or spiky.core.Events
+                window (1, 2) double = [0 1]
             end
-            if ~isa(periods, "spiky.core.Periods")
-                if isvector(periods)
-                    periods = periods(:);
-                    periods = [periods periods+duration];
-                end
-                periods = spiky.core.Periods(periods);
+            if isa(events, "spiky.core.Events")
+                events = events.Time;
             end
-            spiky.plot.timedWaitbar(0, "Triggering spikes");
+            spiky.plot.timedWaitbar(0, "Analyzing spikes");
             for ii = numel(obj):-1:1
-                spikes = periods.haveEvents(obj(ii).Time, true, 0);
+                spikes = obj(ii).inPeriods([events+window(1), events+window(2)], true, window(1));
                 trigSpikes(ii, 1) = spiky.trig.TrigSpikes(obj(ii).Neuron, ...
-                    periods, spikes);
+                    events, spikes, window);
                 spiky.plot.timedWaitbar((numel(obj)-ii+1)/numel(obj));
             end
+            spiky.plot.timedWaitbar([]);
         end
     end
 

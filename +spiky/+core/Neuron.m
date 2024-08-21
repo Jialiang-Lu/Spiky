@@ -7,6 +7,7 @@ classdef Neuron
         Region string
         Ch double
         ChInGroup double
+        Label string
     end
 
     properties (Dependent)
@@ -14,7 +15,7 @@ classdef Neuron
     end
 
     methods
-        function obj = Neuron(session, group, id, region, ch, chInGroup)
+        function obj = Neuron(session, group, id, region, ch, chInGroup, label)
             arguments
                 session spiky.ephys.Session = spiky.ephys.Session.empty
                 group double = 0
@@ -22,6 +23,7 @@ classdef Neuron
                 region string = ""
                 ch double = 0
                 chInGroup double = 0
+                label string = ""
             end
             obj.Session = session;
             obj.Group = group;
@@ -29,6 +31,7 @@ classdef Neuron
             obj.Region = region;
             obj.Ch = ch;
             obj.ChInGroup = chInGroup;
+            obj.Label = label;
         end
 
         function str = get.Str(obj)
