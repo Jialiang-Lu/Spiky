@@ -8,6 +8,8 @@ classdef Periods < matlab.mixin.CustomDisplay
     properties (Dependent)
         Length
         Duration
+        Start
+        End
     end
 
     methods (Static)
@@ -96,6 +98,16 @@ classdef Periods < matlab.mixin.CustomDisplay
             dur = diff(obj.Time, 1, 2);
         end
 
+        function start = get.Start(obj)
+            % Getter for Start property
+            start = obj.Time(:, 1);
+        end
+
+        function ed = get.End(obj)
+            % Getter for End property
+            ed = obj.Time(:, 2);
+        end
+
         function periods = unionWith(obj, periods)
             % UNIONWITH Union with another periods object
             arguments
@@ -179,14 +191,17 @@ classdef Periods < matlab.mixin.CustomDisplay
             periods = period - obj;
         end
 
-        function [events, idc, idcPeriods] = haveEvents(obj, events, cellmode, offset)
+        function [events, idc, idcPeriods] = haveEvents(obj, events, cellmode, offset, ...
+                rightClose, sorted)
             % HAVEEVENTS Find events within periods
             %
             %   obj: periods
             %   periods: events object
-            %   cellmode: if true, events is an array with the same size as periods
-            %   offset: events is relative time to the beginning of the periods plus offset if 
+            %   [cellmode]: if true, events is an array with the same size as periods
+            %   [offset]: events is relative time to the beginning of the periods plus offset if 
             %       non-empty and absolute time otherwise
+            %   [rightClose]: whether the right boundary is closed. By default false.
+            %   [sorted]: whether the events are sorted by time already. By default true.
             %
             %   events: events within periods, cell if cellmode is true
             %   idc: indices of events within periods, events.Time = obj.Time(idc), or cell of it
@@ -198,11 +213,13 @@ classdef Periods < matlab.mixin.CustomDisplay
                 events % double or spiky.core.Events
                 cellmode logical = false
                 offset double {mustBeScalarOrEmpty} = []
+                rightClose logical = false
+                sorted logical = true
             end
             if isnumeric(events)
                 events = spiky.core.Events(events);
             end
-            [events, idc, idcPeriods] = events.inPeriods(obj, cellmode, offset);
+            [events, idc, idcPeriods] = events.inPeriods(obj, cellmode, offset, rightClose, sorted);
         end
     end
 end
