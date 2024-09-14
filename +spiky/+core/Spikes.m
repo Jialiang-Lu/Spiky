@@ -1,5 +1,5 @@
 classdef Spikes < spiky.core.Events & ...
-    spiky.core.MappableArray & spiky.core.ArrayDisplay
+    spiky.core.MappableArray
     % SPIKES Spikes of a neuron
 
     properties
@@ -45,19 +45,95 @@ classdef Spikes < spiky.core.Events & ...
             arguments
                 obj spiky.core.Spikes
                 events % (n, 1) double or spiky.core.Events
-                window (1, 2) double = [0 1]
+                window double = [0 1]
             end
             if isa(events, "spiky.core.Events")
                 events = events.Time;
             end
-            spiky.plot.timedWaitbar(0, "Analyzing spikes");
-            for ii = numel(obj):-1:1
+            events = events(:);
+            if isscalar(window)
+                window = [0 window];
+            end
+            % if numel(obj)>1
+            %     spiky.plot.timedWaitbar(0, "Analyzing spikes");
+            % end
+            % trigSpikes(numel(obj), 1) = spiky.trig.TrigSpikes;
+            parfor ii = 1:numel(obj)
                 spikes = obj(ii).inPeriods([events+window(1), events+window(2)], true, window(1));
                 trigSpikes(ii, 1) = spiky.trig.TrigSpikes(obj(ii).Neuron, ...
                     events, spikes, window);
-                spiky.plot.timedWaitbar((numel(obj)-ii+1)/numel(obj));
+                % if numel(obj)>1
+                %     spiky.plot.timedWaitbar((numel(obj)-ii+1)/numel(obj));
+                % end
             end
-            spiky.plot.timedWaitbar([]);
+            % if numel(obj)>1
+            %     spiky.plot.timedWaitbar([]);
+            % end
+        end
+
+        function fr = trigFr(obj, events, window, options)
+            % TRIGFR Trigger firing rate by events
+            %
+            %   events: event times
+            %   window: time vector around events, e.g. -before:1/fs:after
+            %   options: options for spiky.trig.TrigFr
+            %
+            %   fr: triggered firing rate
+            arguments
+                obj spiky.core.Spikes
+                events % (n, 1) double or spiky.core.Events
+                window double {mustBeVector}
+                options.halfWidth double {mustBePositive} = 0.1
+                options.kernel string {mustBeMember(options.kernel, ["gaussian", "box"])} = "gaussian"
+            end
+            if isa(events, "spiky.core.Events")
+                events = events.Time;
+            end
+            events = events(:);
+            t = window(:)';
+            nRows = numel(events);
+            nT = numel(t);
+            res = t(2)-t(1);
+            wAdd = round(options.halfWidth*3/res);
+            idcAdd = wAdd+1:wAdd+nT;
+            tWide = t(1)-wAdd*res:res:t(end)+wAdd*res+eps;
+            windowWide = tWide([1 end]);
+            edges = [tWide-res/2, tWide(end)+res/2];
+            switch options.kernel
+                case "gaussian"
+                    kernel = exp(-0.5.*(tWide-(tWide(1)+tWide(end))/2).^2./options.halfWidth.^2)./...
+                        (sqrt(2*pi)*options.halfWidth);
+                case "box"
+                    kernel = zeros(size(tWide));
+                    idx = find(tWide-(tWide(1)+tWide(end))/2>=options.halfWidth, 1, "first");
+                    idc = idx:idx+options.halfWidth*2/res-1;
+                    kernel(idc) = 1/options.halfWidth/2;
+                otherwise
+                    error("Unknown kernel %s", options.kernel);
+            end
+            % if numel(obj)>1
+            %     spiky.plot.timedWaitbar(0, "Analyzing spikes");
+            % end
+            fr(numel(obj), 1) = spiky.trig.TrigFr;
+            parfor ii = 1:numel(obj)
+                fr1 = zeros(nRows, nT);
+                tr = obj(ii).trig(events, windowWide);
+                for jj = nRows:-1:1
+                    sp = tr.Data.Spikes{jj};
+                    spWide = histcounts(sp, edges);
+                    spWide = conv(spWide, kernel, "same");
+                    fr1(jj, :) = spWide(idcAdd);
+                end
+                fr(ii, 1) = spiky.trig.TrigFr(obj(ii).Neuron, ...
+                    spiky.core.TimeTable(events, table(fr1, VariableNames="Fr")), ...
+                    t, options);
+                % if numel(obj)>1
+                %     spiky.plot.timedWaitbar((numel(obj)-ii+1)/numel(obj));
+                % end
+            end
+            % if numel(obj)>1
+            %     spiky.plot.timedWaitbar([]);
+            % end
         end
     end
 
