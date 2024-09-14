@@ -54,10 +54,10 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
                 for ii = 1:nEvents
                     isEvent1 = trials.Values.Event==eventNames(ii);
                     t1 = t(isEvent1);
-                    p1 = spiky.core.Periods([t1 t1+0.1]);
+                    p1 = spiky.core.Periods([t1 t1+0.15]);
                     e1 = p1.haveEvents(photodiode, true);
                     l1 = cellfun(@length, e1)';
-                    if sum(l1>0)/length(l1)>0.9
+                    if sum(l1>0)/length(l1)>0.8
                         isValid = l1>0;
                         tValid = cellfun(@(x) x(1), e1(isValid));
                         tdMean = mean(tValid-t1(isValid));
