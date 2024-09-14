@@ -132,5 +132,13 @@ classdef TimeTable < spiky.core.Events & ...
             end
             obj = builtin("subsasgn", obj, s, varargin{:});
         end
+
+        function varargout = size(obj, varargin)
+            [varargout{1:nargout}] = size(obj.Data, varargin{:});
+        end
+
+        function b = isscalar(obj)
+            b = true;
+        end
     end
 end

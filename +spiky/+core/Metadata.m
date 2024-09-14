@@ -48,7 +48,11 @@ classdef Metadata
                 obj = reshape(obj, size(s.Value));
                 return
             end
-            props = intersect(fieldnames(s.Value), properties(s.Class));
+            mc = matlab.metadata.Class.fromName(s.Class);
+            p = {mc.PropertyList(~[mc.PropertyList.Dependent] & ...
+                ~[mc.PropertyList.Abstract] & ...
+                ~[mc.PropertyList.Transient]).Name};
+            props = intersect(fieldnames(s.Value), p);
             if n==1
                 obj = feval(s.Class);
                 for ii = 1:numel(props)
