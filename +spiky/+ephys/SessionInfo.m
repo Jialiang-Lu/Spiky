@@ -197,6 +197,9 @@ classdef SessionInfo < spiky.core.Metadata
                 options.method string {mustBeMember(options.method, ["kilosort3", "kilosort4"])} = ...
                     "kilosort3"
                 options.labels string {mustBeMember(options.labels, ["", "good", "mua"])} = ""
+                options.minAmplitude double = 5
+                options.minFr double = 0.1
+                options.maxCv double = 0.5
             end
 
             switch options.method
@@ -209,52 +212,24 @@ classdef SessionInfo < spiky.core.Metadata
                         end
                     end
                     if obj.Options.resampleDat
-                        error("Not implemented")
+                        spikes = obj.loadSpikesFolder(obj.Session.getFdir("Kilosort3"), options);
                     else % multiple files
                         nProbes = length(obj.FpthDat);
                         nChs = [obj.ChannelGroups.NChannels]';
                         spikes = cell(nProbes, 1);
                         for ii = 1:nProbes
+                            if ii>1
+                                sync = obj.EventGroups(ii).Sync.Inv;
+                            else
+                                sync = [];
+                            end
                             fpth = obj.FpthDat(ii);
                             fdir = fullfile(fileparts(fpth), options.method);
-                            ts = spiky.utils.npy.readNPY(fullfile(fdir, "spike_times.npy"));
-                            ts = double(ts)./obj.Fs;
-                            if ii>1
-                                ts = obj.EventGroups(ii).Sync.Inv(ts);
-                            end
-                            clu = spiky.utils.npy.readNPY(fullfile(fdir, "spike_clusters.npy"));
-                            tmpl = spiky.utils.npy.readNPY(fullfile(fdir, "templates.npy"));
-                            fid = fopen(fullfile(fdir, "cluster_group.tsv"));
-                            C = textscan(fid, "%d%s%[^\n\r]", "Delimiter", "\t", "HeaderLines", 1);
-                            fclose(fid);
-                            label = table(C{1}, string(C{2}), VariableNames=["id", "label"]);
-                            n = height(label);
-                            nT = size(tmpl, 2);
-                            tmpl2 = reshape(tmpl, n, []);
-                            [~, ch] = max(abs(tmpl2), [], 2);
-                            ch = floor((ch-1)/nT)+1;
-                            %[~, ch] = ismember(ch, obj.ChannelGroups(ii).Probe.ChanMap);
-                            if ii>1
-                                chInAll = ch+sum(nChs(1:ii-1));
-                            else
-                                chInAll = ch;
-                            end
-                            isGood = ismember(label.label, options.labels);
-                            idcGood = find(isGood);
-                            clear s;
-                            for jj = length(idcGood):-1:1
-                                idx = idcGood(jj);
-                                neuron = spiky.core.Neuron(obj.Session, ii, label.id(idx), ...
-                                    obj.ChannelGroups(ii).Name, chInAll(idx), ch(idx), label.label(idx));
-                                s(jj, 1) = spiky.core.Spikes(neuron, uniquetol(ts(clu==label.id(idx)), ...
-                                    8e-4, DataScale=1));
-                            end
-                            s = s([s.Length]./obj.Duration>0.2);
-                            spikes{ii} = s;
+                            spikes{ii} = obj.loadSpikesFolder(fdir, options, sum(nChs(1:ii-1)), sync, ii);
                         end
                         spikes = vertcat(spikes{:});
-                        si = spiky.ephys.SpikeInfo(spikes, options);
                     end
+                    si = spiky.ephys.SpikeInfo(spikes, options);
                 otherwise
                     error("Method %s not recognized", options.method)
             end
@@ -265,6 +240,86 @@ classdef SessionInfo < spiky.core.Metadata
             fdir = obj.Session.getFdir("Minos");
             minos = spiky.minos.MinosInfo.load(fdir, obj);
             obj.Session.saveMetaData(minos);
+        end
+    end
+
+    methods (Access = protected)
+        function s = loadSpikesFolder(obj, fdir, options, chOffset, sync, idxGroup)
+            arguments
+                obj spiky.ephys.SessionInfo
+                fdir string
+                options struct
+                chOffset double = 0
+                sync = []
+                idxGroup double = []
+            end
+            if isempty(sync)
+                sync = @(x) x;
+            end
+            ts = spiky.utils.npy.readNPY(fullfile(fdir, "spike_times.npy"));
+            ts = double(ts)./obj.Fs;
+            ts = sync(ts);
+            clu = spiky.utils.npy.readNPY(fullfile(fdir, "spike_clusters.npy"));
+            scaling = spiky.utils.npy.readNPY(fullfile(fdir, "amplitudes.npy"));
+            tmpl = spiky.utils.npy.readNPY(fullfile(fdir, "templates.npy"));
+            tmpl = double(tmpl);
+            fid = fopen(fullfile(fdir, "cluster_group.tsv"));
+            C = textscan(fid, "%d%s%[^\n\r]", "Delimiter", "\t", "HeaderLines", 1);
+            fclose(fid);
+            %%
+            data = table(C{1}, string(C{2}), VariableNames=["id", "label"]);
+            n = height(data);
+            nT = size(tmpl, 2);
+            data.ts = cell(n, 1);
+            data.fr = zeros(n, 1);
+            data.amplitude = zeros(n, 1);
+            data.cv = zeros(n, 1);
+            data.waveform = zeros(n, nT);
+            [amplitude, ch] = max(max(tmpl, [], 2)-min(tmpl, [], 2), [], 3);
+            chInAll = ch+chOffset;
+            edges = 0:100:obj.Duration;
+            if isempty(idxGroup)
+                spiky.plot.timedWaitbar(0, "Extracting");
+            else
+                spiky.plot.timedWaitbar(0, sprintf("Extracting probe %d", idxGroup));
+            end
+            for jj = 1:n
+                idc = clu==data.id(jj);
+                data.ts{jj} = uniquetol(ts(idc), 8e-4, DataScale=1);
+                data.fr(jj) = sum(idc)./obj.Duration;
+                frs = histcounts(data.ts{jj}, edges);
+                data.cv(jj) = std(frs)./mean(frs);
+                sc = mean(scaling(idc));
+                data.waveform(jj, :) = sc.*tmpl(jj, :, ch(jj));
+                data.amplitude(jj) = sc.*amplitude(jj);
+                spiky.plot.timedWaitbar(jj/n);
+            end
+            spiky.plot.timedWaitbar([]);
+            %%
+            isGood = ismember(data.label, options.labels) & data.cv<options.maxCv & ...
+                data.fr>options.minFr & data.amplitude>options.minAmplitude;
+            idcGood = find(isGood);
+            %%
+            if isempty(idxGroup)
+                chs = [obj.ChannelGroups([obj.ChannelGroups.ChannelType]'=="Neural").NChannels]';
+                chsRanges = spiky.core.Periods([cumsum([1; chs(1:end-1)]), cumsum(chs)]);
+                [ch, ~, idcGroup] = chsRanges.haveEvents(chInAll, false, 1, true, false);
+                singleFile = true;
+            else
+                singleFile = false;
+            end
+            %%
+            clear s;
+            for jj = length(idcGood):-1:1
+                idx = idcGood(jj);
+                if singleFile
+                    idxGroup = idcGroup(idx);
+                end
+                neuron = spiky.core.Neuron(obj.Session, idxGroup, data.id(idx), ...
+                    obj.ChannelGroups(idxGroup).Name, chInAll(idx), ch(idx), ...
+                    data.label(idx), data.waveform(idx, :)');
+                s(jj, 1) = spiky.core.Spikes(neuron, data.ts{idx});
+            end
         end
     end
 end

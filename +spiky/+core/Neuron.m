@@ -8,6 +8,7 @@ classdef Neuron
         Ch double
         ChInGroup double
         Label string
+        Waveform double
     end
 
     properties (Dependent)
@@ -15,7 +16,7 @@ classdef Neuron
     end
 
     methods
-        function obj = Neuron(session, group, id, region, ch, chInGroup, label)
+        function obj = Neuron(session, group, id, region, ch, chInGroup, label, waveform)
             arguments
                 session spiky.ephys.Session = spiky.ephys.Session.empty
                 group double = 0
@@ -24,6 +25,7 @@ classdef Neuron
                 ch double = 0
                 chInGroup double = 0
                 label string = ""
+                waveform double = 0
             end
             obj.Session = session;
             obj.Group = group;
@@ -32,6 +34,7 @@ classdef Neuron
             obj.Ch = ch;
             obj.ChInGroup = chInGroup;
             obj.Label = label;
+            obj.Waveform = waveform;
         end
 
         function str = get.Str(obj)

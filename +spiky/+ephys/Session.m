@@ -3,31 +3,29 @@ classdef Session < spiky.core.Metadata
 
     properties (SetAccess = {?spiky.core.Metadata, ?spiky.ephys.Session})
         Name string
+    end
+
+    properties (Dependent)
         Fdir string
     end
 
     methods
-        function obj = Session(name, fdir)
+        function obj = Session(name)
             % Constructor for Session class.
             % name: name of the session
-            % fdir: directory to all session datas (optional)
             
             arguments
                 name string = ""
-                fdir string = ""
             end
             
             if name==""
                 return
             end
             obj.Name = name;
-            if fdir==""
-                fdir = spiky.config.loadConfig("fdirData");
-            end
-            obj.Fdir = fullfile(fdir, name);
-            if ~exist(obj.Fdir, "dir")
-                error("Session directory does not exist!")
-            end
+        end
+
+        function fdir = get.Fdir(obj)
+            fdir = fullfile(spiky.config.loadConfig("fdirData"), obj.Name);
         end
 
         function out = eq(obj, other)
@@ -210,7 +208,7 @@ classdef Session < spiky.core.Metadata
                         spiky.ephys.ChannelType.Net, eventsNet.syncTime(sync2.Inv), ...
                         tsRangeDaq, sync2);
                     %% Resample raw
-                    if options.resampleDat
+                    if false%options.resampleDat
                         fpthDat = obj.getFpth("dat");
                         mem = memory;
                         chunkSize = floor(mem.MaxPossibleArrayBytes*0.2./nCh/8);
@@ -253,7 +251,7 @@ classdef Session < spiky.core.Metadata
                     end
                     %% Resample LFP
                     fpthLfp = obj.getFpth("lfp");
-                    if options.resampleLfp
+                    if false%options.resampleLfp
                         ratio = fsLfp1/fsLfp;
                         [p, q] = rat(1/ratio);
                         mf1 = memmapfile(fpthsLfp(1), Format={"int16", [nCh1 nSampleLfp1], "m"});
