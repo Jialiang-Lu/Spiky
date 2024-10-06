@@ -1,5 +1,4 @@
-classdef Spikes < spiky.core.Events & ...
-    spiky.core.MappableArray
+classdef Spikes < spiky.core.Events
     % SPIKES Spikes of a neuron
 
     properties
@@ -51,24 +50,10 @@ classdef Spikes < spiky.core.Events & ...
                 events = events.Time;
             end
             events = events(:);
-            if isscalar(window)
-                window = [0 window];
-            end
-            % if numel(obj)>1
-            %     spiky.plot.timedWaitbar(0, "Analyzing spikes");
-            % end
-            % trigSpikes(numel(obj), 1) = spiky.trig.TrigSpikes;
+            trigSpikes(numel(obj), 1) = spiky.trig.TrigSpikes();
             parfor ii = 1:numel(obj)
-                spikes = obj(ii).inPeriods([events+window(1), events+window(2)], true, window(1));
-                trigSpikes(ii, 1) = spiky.trig.TrigSpikes(obj(ii).Neuron, ...
-                    events, spikes, window);
-                % if numel(obj)>1
-                %     spiky.plot.timedWaitbar((numel(obj)-ii+1)/numel(obj));
-                % end
+                trigSpikes(ii, 1) = spiky.trig.TrigSpikes(obj(ii), events, window);
             end
-            % if numel(obj)>1
-            %     spiky.plot.timedWaitbar([]);
-            % end
         end
 
         function fr = trigFr(obj, events, window, options)
@@ -119,7 +104,7 @@ classdef Spikes < spiky.core.Events & ...
                 fr1 = zeros(nRows, nT);
                 tr = obj(ii).trig(events, windowWide);
                 for jj = nRows:-1:1
-                    sp = tr.Data.Spikes{jj};
+                    sp = tr.Data{jj};
                     spWide = histcounts(sp, edges);
                     spWide = conv(spWide, kernel, "same");
                     fr1(jj, :) = spWide(idcAdd);

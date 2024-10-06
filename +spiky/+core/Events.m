@@ -1,27 +1,119 @@
-classdef Events < matlab.mixin.CustomDisplay
+classdef Events < spiky.core.BackwardCompatible
     % EVENTS Class representing discrete events
     
-    properties
-        Time (:, 1) double % Time vector in seconds
+    properties (Access = protected, Hidden)
+        T_ (:, 1) double % Time vector in seconds
+        Start_ double % Start time in seconds
+        Step_ double % Step in seconds
+        N_ double % Number of events
     end
 
     properties (Dependent)
+        Time (:, 1) double % Time vector in seconds
         Length double % Number of events
+        Start double % Start time in seconds
+        End double % End time in seconds
+        Step double % Step in seconds
+        IsUniform logical % Whether the events are uniformly spaced
+        Fs double % Sampling frequency if uniform
     end
 
     methods
-         function obj = Events(time)
+        function obj = Events(time, n, step)
             % Constructor for Events class
+            %
+            %   Events(time) create a non-uniform events object
+            %   Events(start, n, step) create a uniform events object
 
             arguments
                 time double = []
+                n double = 1
+                step double = 1
             end
-            obj.Time = time(:);
+            if nargin<=1
+                obj.T_ = time(:);
+            else
+                obj.Start_ = time;
+                obj.Step_ = step;
+                obj.N_ = n;
+            end
+        end
+
+        function t = get.Time(obj)
+            % Get the time vector
+            if obj.IsUniform
+                t = (obj.Start_:obj.Step_:obj.Start_+(obj.N_-1)*obj.Step_)';
+            else
+                t = obj.T_;
+            end
+        end
+        
+        function obj = set.Time(obj, t)
+            % Set the time vector
+            obj.T_ = t(:);
+            obj.Start_ = [];
+            obj.Step_ = [];
+            obj.N_ = [];
         end
 
         function l = get.Length(obj)
             % Get the number of events
-            l = length(obj.Time);
+            if obj.IsUniform
+                l = obj.N_;
+            else
+                l = length(obj.T_);
+            end
+        end
+
+        function s = get.Start(obj)
+            % Get the start time
+            if obj.IsUniform
+                s = obj.Start_;
+            else
+                s = obj.T_(1);
+            end
+        end
+
+        function e = get.End(obj)
+            % Get the end time
+            if obj.IsUniform
+                e = obj.Start_+(obj.N_-1)*obj.Step_;
+            else
+                e = obj.T_(end);
+            end
+        end
+
+        function s = get.Step(obj)
+            % Get the step
+            if obj.IsUniform
+                s = obj.Step_;
+            else
+                s = NaN;
+            end
+        end
+
+        function u = get.IsUniform(obj)
+            % Check if the events are uniformly spaced
+            u = ~isempty(obj.Start_) && ~isempty(obj.Step_) && ~isempty(obj.N_);
+        end
+
+        function f = get.Fs(obj)
+            % Get the sampling frequency
+            if obj.IsUniform
+                f = 1./obj.Step_;
+            else
+                f = NaN;
+            end
+        end
+
+        function obj = updateFields(obj, s)
+            % Update fields of the object from a struct of older version
+            if isfield(s, "Time")
+                obj.T_ = s.Time(:);
+                obj.Start_ = [];
+                obj.Step_ = [];
+                obj.N_ = [];
+            end
         end
 
         function d = diff(obj, n)
@@ -150,25 +242,27 @@ classdef Events < matlab.mixin.CustomDisplay
             end
         end
 
-        function s = sync(obj, obj2, name, varargin)
+        function s = sync(obj, obj2, name, varargin, options)
             % SYNC Synchronize two events objects
             %
             %   obj: events
             %   obj2: events
             %   name: name of the synchronized events
             %   varargin: additional options passed to fit
+            %   options
+            %       allowStep: allow fitting with heavyside step function
             %
             %   s: synchronized events
-            arguments (Input)
+            arguments
                 obj spiky.core.Events
                 obj2 spiky.core.Events
                 name string = "sync"
             end
-            arguments (Input, Repeating)
+            arguments (Repeating)
                 varargin
             end
-            arguments (Output)
-                s spiky.core.Sync
+            arguments
+                options.allowStep logical = true
             end
             if (obj.Length<2)||(obj2.Length<2)
                 error("Not enough events to synchronize.")
@@ -180,7 +274,7 @@ classdef Events < matlab.mixin.CustomDisplay
             t2 = obj2.Time;
             td = t2-t1;
             d = diff(td);
-            if sum(abs(d-mean(d))/std(d)>10)==0
+            if sum(abs(d-mean(d))/std(d)>10)==0 || ~options.allowStep
                 [f, gof] = fit(t1, t2, "poly1", "Robust", "Bisquare", varargin{:});
                 s = spiky.core.Sync(name, f, @(y) (y-f.p2)/f.p1, f.p1, f.p2, gof);
             else

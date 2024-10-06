@@ -96,6 +96,22 @@ classdef Session < spiky.core.Metadata
             if ~isa(options.probe, "spiky.ephys.Probe")
                 options.probe = spiky.config.loadProbe(options.probe);
             end
+            options.brainRegions = options.brainRegions(:);
+            if isscalar(options.probe)&&~isscalar(options.brainRegions)
+                options.probe = repmat(options.probe, length(options.brainRegions), 1);
+            end
+
+            %% Load raw
+            rawData = spiky.ephys.RawData(obj.getFdir("Raw"));
+            eventGroups = rawData.getEvents(options.channelConfig.Dig);
+            channelGroups = rawData.getChannels(options.brainRegions, options.probe, ...
+                options.channelConfig.Adc);
+            [nSample, nSampleLfp] = rawData.resampleRaw(obj.getFpth("dat"), obj.getFpth("lfp"), ...
+                options.probe, options.fsLfp);
+            info = spiky.ephys.SessionInfo(obj, sum([channelGroups.NChannels]), 30000, options.fsLfp, ...
+                nSample, nSampleLfp, nSample/30000, "int16", obj.getFpth("dat"), ...
+                obj.getFpth("lfp"), channelGroups, eventGroups, options);
+            obj.saveMetaData(info);
 
             %% Detect type
             fi = spiky.core.FileInfo(obj.getFdir("Raw", "**/*.continuous"));
@@ -184,14 +200,14 @@ classdef Session < spiky.core.Metadata
                         for ii = nProbes:-1:2
                             [sync2, eventsProbe2] = eventsProbe{1}.syncWith(eventsProbe{ii}, ...
                                 sprintf("probe1 to probe%d", ii));
-                            eventsGroups(ii, 1) = spiky.ephys.EventGroup(sprintf("Probe%d", ii), ...
+                            eventGroups(ii, 1) = spiky.ephys.EventGroup(sprintf("Probe%d", ii), ...
                                 spiky.ephys.ChannelType.Neural, eventsProbe2, tsRanges(ii, :), sync2);
                         end
                     end
-                    eventsGroups(1, 1) = spiky.ephys.EventGroup("Probe1", ...
+                    eventGroups(1, 1) = spiky.ephys.EventGroup("Probe1", ...
                         spiky.ephys.ChannelType.Neural, eventsProbe{1}, tsRanges(1, :));
                     sync2 = eventsProbe{1}.syncWith(eventsSync, "probe1 to adc");
-                    eventsGroups(nProbes+1, 1) = spiky.ephys.EventGroup("Adc", ...
+                    eventGroups(nProbes+1, 1) = spiky.ephys.EventGroup("Adc", ...
                         spiky.ephys.ChannelType.Adc, events.syncTime(sync2.Inv), tsRangeDaq, sync2);
                     eventsSyncNet = eventsNet(contains([eventsNet.Message], ["Sync" "sync"]));
                     if eventsSyncNet(1).Message==eventsSyncNet(2).Message
@@ -204,7 +220,7 @@ classdef Session < spiky.core.Metadata
                     eventsProbeSync = eventsProbe{1}(1:2:end);
                     eventsProbeSync = eventsProbeSync(idcNet+1);
                     sync2 = eventsProbeSync.syncWith(eventsSyncNet, "probe1 to net");
-                    eventsGroups(nProbes+2) = spiky.ephys.EventGroup("Net", ...
+                    eventGroups(nProbes+2) = spiky.ephys.EventGroup("Net", ...
                         spiky.ephys.ChannelType.Net, eventsNet.syncTime(sync2.Inv), ...
                         tsRangeDaq, sync2);
                     %% Resample raw
@@ -226,7 +242,7 @@ classdef Session < spiky.core.Metadata
                             data(1:length(channelGroups(1).Probe.ChanMap), 1:nIdc) = ...
                                 mf.Data.m(channelGroups(1).Probe.ChanMap, idc);
                             for jj = 2:nProbes
-                                idcK = eventsGroups(jj).Sync.Fit((idc-1)./fs).*fs+1;
+                                idcK = eventGroups(jj).Sync.Fit((idc-1)./fs).*fs+1;
                                 idcK2 = round(idcK(1)-3):round(idcK(end)+3);
                                 idcK2(idcK2<=0) = [];
                                 idcK2(idcK2>nSamples1(jj)) = [];
@@ -266,7 +282,7 @@ classdef Session < spiky.core.Metadata
                             spiky.plot.timedWaitbar(0, "Resampling LFP");
                             mf = memmapfile(fpthsLfp(ii), Format={"int16", [nCh1 nSamplesLfp1(ii)], "m"});
                             if ii>1
-                                idcK = eventsGroups(ii).Sync.Fit((0:nSamplesLfp1(1)-1)./fsLfp1).*fsLfp1+1;
+                                idcK = eventGroups(ii).Sync.Fit((0:nSamplesLfp1(1)-1)./fsLfp1).*fsLfp1+1;
                                 idcK2 = round(idcK(1)-3):round(idcK(end)+3);
                                 idcK2(idcK2<=0) = [];
                                 idcK2(idcK2>nSamplesLfp1(ii)) = [];
@@ -289,7 +305,7 @@ classdef Session < spiky.core.Metadata
                         mf = memmapfile(fpthDaq, Format={"int16", [nChDaq nSampleDaq1], "m"});
                         tmp = double(mf.Data.m)';
                         tmp = medfilt1(tmp, ceil(fsDaq/fsLfp));
-                        idcK = eventsGroups("Adc").Sync.Fit((0:nSampleLfp-1)./fsLfp).*fsDaq+1;
+                        idcK = eventGroups("Adc").Sync.Fit((0:nSampleLfp-1)./fsLfp).*fsDaq+1;
                         idcK2 = round(idcK(1)-3):round(idcK(end)+3);
                         idcK2(idcK2<=0) = [];
                         idcK2(idcK2>nSampleDaq1) = [];
@@ -306,7 +322,7 @@ classdef Session < spiky.core.Metadata
                     %% Save
                     info = spiky.ephys.SessionInfo(obj, nChAll, fs, fsLfp, nSample, ...
                         nSampleLfp, duration, "int16", fpthDat, fpthLfp, channelGroups, ...
-                        eventsGroups, options);
+                        eventGroups, options);
                     obj.saveMetaData(info);
                 else % Not neuropixels
                     error("Not implemented")
@@ -364,14 +380,15 @@ classdef Session < spiky.core.Metadata
             
             arguments
                 obj spiky.ephys.Session
-                type string = "dat"
+                type string = "lfp"
                 chs double = []
                 period = [0 Inf]
                 precisionOut string = "int16"
                 precisionIn string = "int16"
             end
-            error("spiky:NotImplemented", "Not implemented yet!")
-            fdir = obj.Fdir;
+            if type~="lfp"
+                error("Not implemented yet!")
+            end
             fpth = obj.getFpth(type);
 
             %% Preprocessing

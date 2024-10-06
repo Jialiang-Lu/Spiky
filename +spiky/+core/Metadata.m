@@ -9,9 +9,11 @@ classdef Metadata
                 return
             end
             s.Value = struct;
-            m = metaclass(obj);
-            props = {m.PropertyList.Name}';
-            props = props(~[m.PropertyList.Dependent]);
+            mc = metaclass(obj);
+            props = {mc.PropertyList.Name}';
+            props = props(~[mc.PropertyList.Dependent] & ...
+                ~[mc.PropertyList.Abstract] & ...
+                ~[mc.PropertyList.Transient]);
             if ~isscalar(obj)
                 c = cell(size(obj));
                 for ii = 1:numel(obj)
@@ -31,7 +33,8 @@ classdef Metadata
             end
         end
 
-        function obj = structToObj(s)
+        function [obj, updated] = structToObj(s)
+            updated = false;
             if ~isequal(fieldnames(s), {'Class'; 'Value'})
                 error("Input struct must have 'Class' and 'Value' fields.")
             end
@@ -52,6 +55,7 @@ classdef Metadata
             p = {mc.PropertyList(~[mc.PropertyList.Dependent] & ...
                 ~[mc.PropertyList.Abstract] & ...
                 ~[mc.PropertyList.Transient]).Name};
+            hasExtra = ~isempty(setdiff(fieldnames(s.Value), p));
             props = intersect(fieldnames(s.Value), p);
             if n==1
                 obj = feval(s.Class);
@@ -63,6 +67,10 @@ classdef Metadata
                     else
                         obj.(propName) = s1;
                     end
+                end
+                if hasExtra && isa(obj, "spiky.core.BackwardCompatible")
+                    updated = true;
+                    obj = obj.updateFields(s.Value);
                 end
                 return
             end
@@ -77,13 +85,24 @@ classdef Metadata
                         obj(ii, 1).(propName) = s1;
                     end
                 end
+                if hasExtra && isa(obj(ii, 1), "spiky.core.BackwardCompatible")
+                    updated = true;
+                    obj(ii, 1) = obj(ii, 1).updateFields(s.Value(ii));
+                end
             end
             obj = reshape(obj, size(s.Value));
         end
 
-        function obj = load(fpth)
+        function obj = load(fpth, saveIfUpdated)
+            arguments
+                fpth (1, 1) string
+                saveIfUpdated (1, 1) logical = true
+            end
             data = load(fpth, "data");
-            obj = spiky.core.Metadata.structToObj(data.data);
+            [obj, updated] = spiky.core.Metadata.structToObj(data.data);
+            if updated && saveIfUpdated
+                obj.save(fpth);
+            end
         end
     end
     

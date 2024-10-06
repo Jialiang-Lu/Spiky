@@ -93,26 +93,25 @@ classdef RecEvent < spiky.core.Metadata & spiky.core.MappableArray
             obj = obj(idc);
         end
 
-        function [sync, obj2] = syncWith(obj, obj2, name, tol)
+        function [sync, obj2] = syncWith(obj, obj2, name, tol, options)
             % SYNCWITH Synchronize two event objects
             %
             %   obj: events
             %   obj2: events to synchronize with
             %   name: name of the synchronization
             %   tol: tolerance in seconds
+            %   options
+            %       allowStep: allow fitting with heavyside step function
             %
             %   sync: synchronization object
             %   obj2: updated events
 
-            arguments (Input)
+            arguments
                 obj spiky.ephys.RecEvent
                 obj2 spiky.ephys.RecEvent
                 name string
                 tol double = 0.01
-            end
-            arguments (Output)
-                sync spiky.core.Sync
-                obj2 spiky.ephys.RecEvent
+                options.allowStep logical = true
             end
 
             t1 = spiky.core.Events([obj.Time]);
@@ -154,7 +153,8 @@ classdef RecEvent < spiky.core.Metadata & spiky.core.MappableArray
                 t1 = spiky.core.Events(t1.Time(idc1));
                 t2 = spiky.core.Events(t2.Time(idc2));
             end
-            sync = t1.sync(t2, name);
+            optionsArgs = namedargs2cell(options);
+            sync = t1.sync(t2, name, optionsArgs{:});
             obj2 = obj2.syncTime(sync.Inv);
         end
 

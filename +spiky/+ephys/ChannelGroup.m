@@ -51,6 +51,21 @@ classdef ChannelGroup < spiky.core.Metadata & spiky.core.MappableArray
             obj.BitVolts = bitVolts;
             obj.ToMv = toMv;
         end
+
+        function [ch, idcGroup] = getChannel(obj, idc)
+            % GETCHANNEL Get a channel by index
+
+            arguments
+                obj spiky.ephys.ChannelGroup
+                idc double
+            end
+
+            chs = [obj.NChannels]';
+            chsCum = [0; cumsum(chs)];
+            periods = spiky.core.Periods([chsCum(1:end-1)+1, chsCum(2:end)]);
+            [ch, ~, idcGroup] = periods.haveEvents(idc, false, 0, true, false);
+            ch = ch+1;
+        end
     end
 
     methods (Access = protected)

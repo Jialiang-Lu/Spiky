@@ -1,28 +1,50 @@
-classdef TimeTable < spiky.core.Events & ...
-    matlab.mixin.CustomDisplay
+classdef TimeTable < spiky.core.Events & matlab.mixin.CustomDisplay
     % TIMETABLE Represents data indexed by time points in seconds
 
     properties
-        Data (:, :)
+        Data
     end
 
     methods
-        function obj = TimeTable(time, data)
-            arguments
-                time = []
-                data = []
-            end
-            if ~isempty(time) && isempty(data)
-                data = time;
+        function obj = TimeTable(varargin)
+            % TIMETABLE Create a new instance of TimeTable
+            %
+            %   TimeTable(time, data) creates a non-uniformly sampled time table
+            %   TimeTable(start, step, data) creates a uniformly sampled time table
+            %   TimeTable(data) creates a uniformly sampled time table at 0, 1, 2,... seconds
+
+            if nargin==0
+                return
+            elseif nargin==1
+                data = varargin{1};
                 if isvector(data)
                     data = data(:);
                 end
-                time = 1:size(data, 1);
-            end
-            obj.Time = time(:);
-            obj.Data = data;
-            if length(obj.Time)~=size(obj.Data, 1)
-                error("The number of time points and values must be the same")
+                obj.Data = data;
+                obj.Start_ = 0;
+                obj.Step_ = 1;
+                obj.N_ = height(data);
+            elseif nargin==2
+                obj.T_ = varargin{1};
+                data = varargin{2};
+                % if isvector(data)
+                %     data = data(:);
+                % end
+                if length(obj.T_)~=height(data)
+                    error("The number of time points and values must be the same")
+                end
+                obj.Data = data;
+            elseif nargin==3
+                obj.Start_ = varargin{1};
+                obj.Step_ = varargin{2};
+                data = varargin{3};
+                if isvector(data)
+                    data = data(:);
+                end
+                obj.N_ = height(data);
+                obj.Data = data;
+            else
+                error("Invalid number of arguments")
             end
         end
 
@@ -137,7 +159,52 @@ classdef TimeTable < spiky.core.Events & ...
             [varargout{1:nargout}] = size(obj.Data, varargin{:});
         end
 
-        function b = isscalar(obj)
+        function obj = cat(dim, varargin)
+            n = numel(varargin);
+            if n==0
+                obj = spiky.core.TimeTable.empty;
+                return
+            end
+            obj = varargin{1};
+            if n==1
+                return
+            end
+            c = class(obj);
+            for ii = 2:n
+                assert(isa(varargin{ii}, c), "All inputs must be of the same class")
+                assert(isequal(class(obj.Data), class(varargin{ii}.Data)), ...
+                    "All inputs must have the same data type")
+                switch dim
+                    case 1
+                        assert(isequal(size(obj.Data, 2), size(varargin{ii}.Data, 2)), ...
+                            "All inputs must have the same size")
+                        obj.Data = [obj.Data; varargin{ii}.Data];
+                        if ~obj.IsUniform
+                            obj.T_ = [obj.T_; varargin{ii}.Time];
+                        end
+                    case 2
+                        assert(isequal(size(obj.Data, 1), size(varargin{ii}.Data, 1)), ...
+                            "All inputs must have the same size")
+                        obj.Data = [obj.Data varargin{ii}.Data];
+                    case 3
+                        assert(isequal(size(obj.Data, 1:2), size(varargin{ii}.Data, 1:2)), ...
+                            "All inputs must have the same size")
+                        obj.Data = cat(3, obj.Data, varargin{ii}.Data);
+                    otherwise
+                        error("Invalid dimension")
+                end
+            end
+        end
+
+        function obj = horzcat(varargin)
+            obj = cat(2, varargin{:});
+        end
+
+        function obj = vertcat(varargin)
+            obj = cat(1, varargin{:});
+        end
+
+        function b = isscalar(~)
             b = true;
         end
     end

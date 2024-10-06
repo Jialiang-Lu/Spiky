@@ -59,10 +59,15 @@ classdef Probe < spiky.core.Metadata
             NChannels = numel(obj.ChanMap);
         end
 
-        function s = toStruct(obj, nTotalChannels)
+        function obj = resample(obj)
+            obj.ChanMap = 1:obj.NChannels;
+        end
+
+        function s = toStruct(obj, nChTotal, resample)
             arguments
                 obj spiky.ephys.Probe
-                nTotalChannels double = []
+                nChTotal double = []
+                resample logical = false
             end
             if numel(obj)>1
                 obj = obj(:);
@@ -87,15 +92,19 @@ classdef Probe < spiky.core.Metadata
                 s.connected = cat(1, s1.connected);
                 s.chanMap = cat(1, s1.chanMap);
                 s.chanMap0ind = cat(1, s1.chanMap0ind);
-                if ~isempty(nTotalChannels)
+                if ~isempty(nChTotal)
                     nOld = length(s.oeMap);
-                    s.oeMap = [s.oeMap; (nOld+1:nTotalChannels)'];
-                    s.ycoords = [s.ycoords; zeros(nTotalChannels-nOld, 1)];
-                    s.xcoords = [s.xcoords; zeros(nTotalChannels-nOld, 1)];
-                    s.kcoords = [s.kcoords; zeros(nTotalChannels-nOld, 1)];
-                    s.connected = [s.connected; false(nTotalChannels-nOld, 1)];
-                    s.chanMap = [s.chanMap; (nOld+1:nTotalChannels)'];
-                    s.chanMap0ind = [s.chanMap0ind; (nOld:nTotalChannels-1)'];
+                    s.oeMap = [s.oeMap; (nOld+1:nChTotal)'];
+                    s.ycoords = [s.ycoords; zeros(nChTotal-nOld, 1)];
+                    s.xcoords = [s.xcoords; zeros(nChTotal-nOld, 1)];
+                    s.kcoords = [s.kcoords; zeros(nChTotal-nOld, 1)];
+                    s.connected = [s.connected; false(nChTotal-nOld, 1)];
+                    s.chanMap = [s.chanMap; (nOld+1:nChTotal)'];
+                    s.chanMap0ind = [s.chanMap0ind; (nOld:nChTotal-1)'];
+                end
+                if resample
+                    s.chanMap = (1:length(s.chanMap))';
+                    s.chanMap0ind = s.chanMap-1;
                 end
                 return
             end
@@ -107,24 +116,30 @@ classdef Probe < spiky.core.Metadata
             s.chanMap = obj.ChanMap;
             s.chanMap0ind = obj.ChanMap-1;
             s.oeMap = obj.ChanMap;
-            if ~isempty(nTotalChannels)
+            if ~isempty(nChTotal)
                 nOld = length(s.oeMap);
-                s.ycoords = [s.ycoords; zeros(nTotalChannels-nOld, 1)];
-                s.xcoords = [s.xcoords; zeros(nTotalChannels-nOld, 1)];
-                s.kcoords = [s.kcoords; zeros(nTotalChannels-nOld, 1)];
-                s.connected = [s.connected; false(nTotalChannels-nOld, 1)];
-                s.chanMap = [s.chanMap; (nOld+1:nTotalChannels)'];
-                s.chanMap0ind = [s.chanMap0ind; (nOld:nTotalChannels-1)'];
-                s.oeMap = [s.oeMap; (nOld+1:nTotalChannels)'];
+                s.ycoords = [s.ycoords; zeros(nChTotal-nOld, 1)];
+                s.xcoords = [s.xcoords; zeros(nChTotal-nOld, 1)];
+                s.kcoords = [s.kcoords; zeros(nChTotal-nOld, 1)];
+                s.connected = [s.connected; false(nChTotal-nOld, 1)];
+                s.chanMap = [s.chanMap; (nOld+1:nChTotal)'];
+                s.chanMap0ind = [s.chanMap0ind; (nOld:nChTotal-1)'];
+                s.oeMap = [s.oeMap; (nOld+1:nChTotal)'];
+            end
+            if resample
+                s.chanMap = (1:length(s.chanMap))';
+                s.chanMap0ind = s.chanMap-1;
             end
         end
 
-        function s = save(obj, fpth)
+        function s = save(obj, fpth, nChTotal, resample)
             arguments
                 obj spiky.ephys.Probe
                 fpth string = ""
+                nChTotal double = []
+                resample logical = false
             end
-            s = obj.toStruct();
+            s = obj.toStruct(nChTotal, resample);
             if fpth~=""
                 save(fpth, "-struct", "s");
             end

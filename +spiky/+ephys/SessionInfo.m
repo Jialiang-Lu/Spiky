@@ -52,6 +52,49 @@ classdef SessionInfo < spiky.core.Metadata
             obj.Options = options;
         end
 
+        function data = loadBinary(obj, ch, period, options)
+            % LOADBINARY Load binary data
+            %
+            % data = LOADBINARY(obj, type, ch, period, options)
+            %
+            %   ch: channel numbers
+            %   period: time period
+            %   options:
+            %       type: "dat" or "lfp"
+            %       precision: e.g. "int16" or "double"
+
+            arguments
+                obj
+                ch double
+                period double = []
+                options.type string {mustBeMember(options.type, ["dat", "lfp"])} = "lfp"
+                options.precision string = "double"
+            end
+
+            fpth = obj.Session.getFpth(options.type);
+            if options.type=="dat"
+                error("Not implemented yet")
+            else
+                nSample = obj.NSamplesLfp;
+                fs = obj.FsLfp;
+            end
+            if isempty(period)
+                idc = 1:nSample;
+            elseif isscalar(period)
+                idc = 1:min(nSample, round(period*fs));
+            else
+                idc = (max(1, round(period(1)*fs)):min(nSample, round(period(2)*fs)));
+            end
+            m = memmapfile(fpth, Format={"int16", [obj.NChannels, nSample], "m"});
+            data = m.Data.m(ch, idc);
+            if options.precision~="int16"
+                [~, idxGroup] = obj.ChannelGroups.getChannel(ch);
+                data = cast(data, options.precision)*obj.ChannelGroups(idxGroup).BitVolts*...
+                    obj.ChannelGroups(idxGroup).ToMv;
+            end
+            data = spiky.lfp.Lfp(0, fs, data');
+        end
+
         function spikeSort(obj, options)
             % SPIKESORT Sort spikes from raw data
 
@@ -60,132 +103,22 @@ classdef SessionInfo < spiky.core.Metadata
                 options.method string {mustBeMember(options.method, ["kilosort3", "kilosort4"])} = ...
                     "kilosort3"
             end
-            switch options.method
-                case "kilosort3"
-                    %% Add paths
-                    fdirKilosort3 = spiky.config.loadConfig("fdirKilosort3");
-                    addpath(genpath(fdirKilosort3));
-                    %% Options
-                    ops.fshigh = 300; % frequency for high pass filtering (150)
-                    ops.fslow = 6000;  % frequency for low pass filtering (optional)
-                    ops.minfr_goodchannels = 0; % minimum firing rate on a "good" channel (0 to skip)
-                    ops.Th = [10 4]; % threshold on projections (like in Kilosort1, can be different for last pass like [10 4]) 
-                    ops.lam = 20; % how important is the amplitude penalty (like in Kilosort1, 0 means not used, 10 is average, 50 is a lot) 
-                    ops.AUCsplit = 0.9; % splitting a cluster at the end requires at least this much isolation for each sub-cluster (max = 1)
-                    ops.minFR = 1/50; % minimum spike rate (Hz), if a cluster falls below this for too long it gets removed
-                    ops.momentum = [20 400]; % number of samples to average over (annealed from first to second value) 
-                    ops.sigmaMask = 30; % spatial constant in um for computing residual variance of spike
-                    ops.ThPre = 8; % threshold crossings for pre-clustering (in PCA projection space)
-                    % options for determining PCs
-                    ops.spkTh           = -6;      % spike threshold in standard deviations (-6)
-                    ops.reorder         = 1;       % whether to reorder batches for drift correction. 
-                    ops.nskip           = 25;  % how many batches to skip for determining spike PCs
-                    ops.GPU                 = 1; % has to be 1, no CPU version yet, sorry
-                    % ops.Nfilt               = 1024; % max number of clusters
-                    ops.nfilt_factor        = 4; % max number of clusters per good channel (even temporary ones)
-                    ops.ntbuff              = 64;    % samples of symmetrical buffer for whitening and spike detection
-                    ops.NT                  = 64*1024*2+ops.ntbuff; % must be multiple of 32 + ntbuff. This is the batch size (try decreasing if out of memory). 
-                    ops.whiteningRange      = 32; % number of channels to use for whitening each channel
-                    ops.nSkipCov            = 25; % compute whitening matrix from every N-th batch
-                    ops.scaleproc           = 200;   % int16 scaling of whitened data
-                    ops.nPCs                = 3; % how many PCs to project the spikes into
-                    ops.useRAM              = 0; % not yet available
-                    ops.trange = [0 Inf]; % time range to sort
-                    ops.fproc = fullfile(tempdir, 'temp_wh.dat'); % proc file on a fast SSD
-                    
-                    % main parameter changes from Kilosort2 to v2.5
-                    ops.sig        = 20;  % spatial smoothness constant for registration
-                    ops.nblocks    = 5; % blocks for registration. 0 turns it off, 1 does rigid registration. Replaces "datashift" option. 
-                    ops.fs = obj.Fs; % sample rate
-                    %% Run Kilosort3
-                    nProbes = length(obj.FpthDat);
-                    idcNeural = find([obj.ChannelGroups.ChannelType]==spiky.ephys.ChannelType.Neural);
-                    resampled = obj.Options.resampleDat;
-                    for ii = 1:nProbes
-                        fprintf("Running Kilosort3 on probe %d\n", ii);
-                        fdir = fileparts(obj.FpthDat(ii));
-                        fdirSort = fullfile(fdir, "kilosort3");
-                        mkdir(fdirSort);
-                        ops.fbinary = obj.FpthDat(ii);
-                        if resampled
-                            probe = [obj.ChannelGroups(idcNeural).Probe]';
-                            probe = probe.toStruct(obj.NChannels);
-                            ops.NchanTOT = obj.NChannels;
-                        else
-                            probe = obj.ChannelGroups(ii).Probe.toStruct();
-                            ops.NchanTOT = obj.ChannelGroups(ii).NChannels;
-                        end
-                        ops.Nchan = sum(probe.connected);
-                        ops.chanMap = probe;
-                        %% Main computation
-                        % preprocess data to create temp_wh.dat
-                        rez = preprocessDataSub(ops);
-                        % NEW STEP TO DO DATA REGISTRATION
-                        rez = datashift2(rez, 1); % last input is for shifting data
-                        save(fullfile(fdirSort, "rez.mat"), "rez", "-v7.3");
-                        % main tracking and template matching algorithm
-                        [rez, st3, tF]     = extract_spikes(rez);
-                        rez                = template_learning(rez, tF, st3);
-                        [rez, st3, tF]     = trackAndSort(rez);
-                        rez                = final_clustering(rez, tF, st3);
-                        rez                = find_merges(rez, 1);
-                        % write to Phy
-                        fprintf("Saving results to Phy  \n")
-                        rezToPhy2(rez, fdirSort);
-                        % discard features in final rez file (too slow to save)
-                        rez.cProj = [];
-                        rez.cProjPC = [];
-                        % final time sorting of spikes, for apps that use st3 directly
-                        [~, isort]   = sortrows(rez.st3);
-                        rez.st3      = rez.st3(isort, :);
-                        % Ensure all GPU arrays are transferred to CPU side before saving to .mat
-                        rez_fields = fieldnames(rez);
-                        for i = 1:numel(rez_fields)
-                            field_name = rez_fields{i};
-                            if(isa(rez.(field_name), "gpuArray"))
-                                rez.(field_name) = gather(rez.(field_name));
-                            end
-                        end
-                        % save final results as rez2
-                        fprintf("Saving final results in rez2  \n")
-                        save(fullfile(fdirSort, "rez2.mat"), "rez", "-v7.3");
-                        % Change the param.py to correct the path
-                        fpthParams = fullfile(fdirSort, "params.py");
-                        t = fileread(fpthParams);
-                        t = regexprep(t, "dat_path = ''.+?''", ...
-                            "dat_path = ''../continuous.dat''");
-                        t = regexprep(t, "n_channels_dat = \d+", ...
-                            sprintf("n_channels_dat = %d", obj.ChannelGroups(ii).NChannels));
-                        t = regexprep(t, "hp_filtered = True", ...
-                            "hp_filtered = False");
-                        fid = fopen(fpthParams, "w");
-                        fwrite(fid, t, "char");
-                        fclose(fid);
-                        delete(ops.fproc);
-                    end
-                    rmpath(genpath(fdirKilosort3));
-                case "kilosort4"
-                    fdirConda = spiky.config.loadConfig("fdirConda");
-                    fpth = mfilename("fullpath");
-                    fdir = fileparts(fpth);
-                    fpthKilosort4 = fullfile(fdir, "kilosort4.py");
-                    envKilosort4 = spiky.config.loadConfig("envKilosort4");
-                    nProbes = length(obj.FpthDat);
-                    for ii = 1:nProbes
-                        fdir = fileparts(obj.FpthDat(ii));
-                        fpthProbe = fullfile(fdir, "probe.mat");
-                        obj.ChannelGroups(ii).Probe.save(fpthProbe);
-                        status = system(fdirConda+"\Scripts\activate.bat "+fdirConda+...
-                            cmdsep+"conda activate "+envKilosort4+cmdsep+"python "+fpthKilosort4+" "+...
-                            fdir+" "+fpthProbe, "-echo");
-                        if status==0
-                            fprintf("Kilosort4 completed on probe %d successfully.\n", ii)
-                        else
-                            error("Kilosort4 failed on probe %d.", ii)
-                        end
-                    end
-                otherwise
-                    error("Method %s not recognized", options.method)
+
+            nProbes = length(obj.FpthDat);
+            idcNeural = find([obj.ChannelGroups.ChannelType]==spiky.ephys.ChannelType.Neural);
+            resampled = obj.Options.resampleDat;
+            if resampled
+                fprintf("Running %s on resampled data\n", options.method);
+                spiky.ephys.SpikeSorter(obj.FpthDat, ...
+                    obj.ChannelGroups(idcNeural).Probe.toStruct(obj.NChannels, true), ...
+                    options.method).run();
+            else
+                for ii = 1:nProbes
+                    fprintf("Running %s on probe %d\n", options.method, ii);
+                    spiky.ephys.SpikeSorter(obj.FpthDat(ii), ...
+                        obj.ChannelGroups(ii).Probe.toStruct(obj.ChannelGroups(ii).NChannels), ...
+                        options.method).run();
+                end
             end
         end
 
@@ -237,9 +170,121 @@ classdef SessionInfo < spiky.core.Metadata
         end
 
         function minos = extractMinos(obj)
+            % EXTRACTMINOS Extract Minos data
+
             fdir = obj.Session.getFdir("Minos");
             minos = spiky.minos.MinosInfo.load(fdir, obj);
             obj.Session.saveMetaData(minos);
+        end
+
+        function createNsXml(obj)
+            % CREATENSXML Create Neuroscope XML file
+            
+            defaultColors = ["#ffeb3b", "#aeea00", "#00e5ff", "#d1c4e9"];
+            defaultAdcColor = "#ff0000";
+            nGroups = length(obj.ChannelGroups);
+            colors = strings(nGroups, 1);
+            for ii = 1:nGroups
+                chType = obj.ChannelGroups(ii).ChannelType;
+                if chType==spiky.ephys.ChannelType.Adc
+                    colors(ii) = defaultAdcColor;
+                else
+                    colors(ii) = defaultColors(ii);
+                end
+            end
+            chGroup = zeros(obj.NChannels, 1);
+            %%
+            clear parameters s
+            parameters.Attributes.version = "1.0";
+            parameters.Attributes.creator = "neuroscope-2.0.0";
+            parameters.acquisitionSystem.nBits = 16;
+            parameters.acquisitionSystem.nChannels = obj.NChannels;
+            parameters.acquisitionSystem.samplingRate = obj.Fs;
+            parameters.acquisitionSystem.voltageRange = 12;
+            parameters.acquisitionSystem.amplification = 1000;
+            parameters.acquisitionSystem.offset = 0;
+            parameters.fieldPotentials.lfpSamplingRate = obj.FsLfp;
+            parameters.files.file.extension = "lfp";
+            parameters.files.file.samplingRate = obj.FsLfp;
+            ch = 1;
+            for ii = 1:nGroups
+                isNeural = obj.ChannelGroups(ii).ChannelType==spiky.ephys.ChannelType.Neural;
+                for jj = 1:obj.ChannelGroups(ii).NChannels
+                    parameters.anatomicalDescription.channelGroups.group{ii}.channel{jj}.Text = ch-1;
+                    parameters.anatomicalDescription.channelGroups.group{ii}.channel{jj}.Attributes.skip = 0;
+                    if isNeural
+                        parameters.spikeDetection.channelGroups.group.channels.channel{ch}.Text = ch-1;
+                    end
+                    chGroup(ch) = ii;
+                    ch = ch+1;
+                end
+            end
+            if ~isfield(parameters, "spikeDetection")
+                parameters.spikeDetection = "";
+            end
+            parameters.neuroscope.Attributes.version = "2.0.0";
+            parameters.neuroscope.miscellaneous.screenGain = 0.2;
+            parameters.neuroscope.miscellaneous.traceBackgroundImage = "";
+            parameters.neuroscope.video.rotate = 0;
+            parameters.neuroscope.video.flip = 0;
+            parameters.neuroscope.video.videoImage = "";
+            parameters.neuroscope.video.positionsBackground = 0;
+            parameters.neuroscope.spikes.nSamples = 32;
+            parameters.neuroscope.spikes.peakSampleIndex = 16;
+            for ii = 1:obj.NChannels
+                color = colors(chGroup(ii));
+                parameters.neuroscope.channels.channelColors{ii}.channel = ii-1;
+                parameters.neuroscope.channels.channelColors{ii}.color = color;
+                parameters.neuroscope.channels.channelColors{ii}.anatomyColor = color;
+                parameters.neuroscope.channels.channelColors{ii}.spikeColor = color;
+                parameters.neuroscope.channels.channelOffset{ii}.channel = ii-1;
+                parameters.neuroscope.channels.channelOffset{ii}.defaultOffset = 0;
+            end
+            s.parameters = parameters;
+            spiky.utils.struct2xml(s, obj.Session.getFpth("xml"));
+            %%
+            clear neuroscope s
+            neuroscope.Attributes.version = "2.0.0";
+            neuroscope.files = "";
+            neuroscope.displays.display.tabLabel = "Field Potentials Display";
+            neuroscope.displays.display.showLabels = 0;
+            neuroscope.displays.display.startTime = 0;
+            neuroscope.displays.display.duration = 2000;
+            neuroscope.displays.display.multipleColumns = 0;
+            neuroscope.displays.display.greyScale = 0;
+            neuroscope.displays.display.autocenterChannels = 0;
+            neuroscope.displays.display.positionView = 0;
+            neuroscope.displays.display.showEvents = 0;
+            neuroscope.displays.display.spikePresentation = 0;
+            neuroscope.displays.display.rasterHeight = 33;
+            for ii = 1:obj.NChannels
+                neuroscope.displays.display.channelPositions.channelPosition{ii}.channel = ii-1;
+                neuroscope.displays.display.channelPositions.channelPosition{ii}.gain = 0;
+                neuroscope.displays.display.channelPositions.channelPosition{ii}.offset = 0;
+            end
+            neuroscope.displays.display.channelsSelected = "";
+            ch = 1;
+            idx = 1;
+            for ii = 1:nGroups
+                nCh = obj.ChannelGroups(ii).NChannels;
+                if nCh<128
+                    for jj = 1:nCh
+                        neuroscope.displays.display.channelsShown.channel{idx}.Text = ch-1;
+                        idx = idx+1;
+                        ch = ch+1;
+                    end
+                else
+                    for jj = 1:nCh
+                        if mod(jj, 4)==1
+                            neuroscope.displays.display.channelsShown.channel{idx}.Text = ch-1;
+                            idx = idx+1;
+                        end
+                        ch = ch+1;
+                    end
+                end
+            end
+            s.neuroscope = neuroscope;
+            spiky.utils.struct2xml(s, obj.Session.getFpth("nrs"));
         end
     end
 

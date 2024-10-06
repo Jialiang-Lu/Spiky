@@ -37,8 +37,12 @@ classdef MinosInfo < spiky.core.Metadata
                     sync.Values{ii, 1}, spiky.ephys.ChannelType.Stim, ...
                     int16(1), "", true, "");
             end
-            events = info.EventGroups(1).Events(1:2:end);
-            [sync, eventsSync] = events.syncWith(syncEvents, "probe1 to minos");
+            events = info.EventGroups(1).Events.Sync;
+            if isempty(events)
+                events = info.EventGroups(1).Events;
+            end
+            events = events([events.Rising]);
+            [sync, eventsSync] = events.syncWith(syncEvents, "probe1 to minos", allowStep=false);
             idcStart = find(startsWith(log.Values.Value, "Start Paradigm"));
             idcStop = find(startsWith(log.Values.Value, "Pause Paradigm"));
             if length(idcStart)~=length(idcStop)
