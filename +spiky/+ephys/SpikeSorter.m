@@ -44,7 +44,7 @@ classdef SpikeSorter
             if isempty(nChannels)
                 nChannels = numel(obj.Probe.connected);
             elseif nChannels>numel(obj.Probe.connected)
-                probe = spiky.ephys.Probe(obj.Probe).toStruct(nChannels);
+                obj.Probe = spiky.ephys.Probe(obj.Probe).toStruct(nChannels);
             end
             if obj.Method=="kilosort3"
                 %% Add paths
@@ -85,8 +85,8 @@ classdef SpikeSorter
                 %% Run Kilosort3
                 ops.fbinary = obj.Fpth;
                 ops.NchanTOT = nChannels;
-                ops.Nchan = sum(probe.connected);
-                ops.chanMap = probe;
+                ops.Nchan = sum(obj.Probe.connected);
+                ops.chanMap = obj.Probe;
                 %% Main computation
                 % preprocess data to create temp_wh.dat
                 rez = preprocessDataSub(ops);

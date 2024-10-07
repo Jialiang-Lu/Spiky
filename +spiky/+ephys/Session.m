@@ -102,16 +102,16 @@ classdef Session < spiky.core.Metadata
             end
 
             %% Load raw
-            rawData = spiky.ephys.RawData(obj.getFdir("Raw"));
-            eventGroups = rawData.getEvents(options.channelConfig.Dig);
-            channelGroups = rawData.getChannels(options.brainRegions, options.probe, ...
-                options.channelConfig.Adc);
-            [nSample, nSampleLfp] = rawData.resampleRaw(obj.getFpth("dat"), obj.getFpth("lfp"), ...
-                options.probe, options.fsLfp);
-            info = spiky.ephys.SessionInfo(obj, sum([channelGroups.NChannels]), 30000, options.fsLfp, ...
-                nSample, nSampleLfp, nSample/30000, "int16", obj.getFpth("dat"), ...
-                obj.getFpth("lfp"), channelGroups, eventGroups, options);
-            obj.saveMetaData(info);
+            % rawData = spiky.ephys.RawData(obj.getFdir("Raw"));
+            % eventGroups = rawData.getEvents(options.channelConfig.Dig);
+            % channelGroups = rawData.getChannels(options.brainRegions, options.probe, ...
+            %     options.channelConfig.Adc);
+            % [nSample, nSampleLfp] = rawData.resampleRaw(obj.getFpth("dat"), obj.getFpth("lfp"), ...
+            %     options.probe, options.fsLfp);
+            % info = spiky.ephys.SessionInfo(obj, sum([channelGroups.NChannels]), 30000, options.fsLfp, ...
+            %     nSample, nSampleLfp, nSample/30000, "int16", obj.getFpth("dat"), ...
+            %     obj.getFpth("lfp"), channelGroups, eventGroups, options);
+            % obj.saveMetaData(info);
 
             %% Detect type
             fi = spiky.core.FileInfo(obj.getFdir("Raw", "**/*.continuous"));
