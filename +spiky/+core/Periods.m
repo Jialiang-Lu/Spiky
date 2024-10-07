@@ -38,7 +38,7 @@ classdef Periods < matlab.mixin.CustomDisplay
             for ii = 1:n
                 intervals(idc2(ii, 1):idc2(ii, 2)-1) = 1;
             end
-            intervals = spiky.core.TimeTable(intervals);
+            intervals = spiky.core.TimeTable(1, 1, intervals);
             idcOut = intervals.findPeriods;
             idcOut = idcOut.Time;
             periods = [edges(idcOut(:, 1))' edges(idcOut(:, 2)+1)'];

@@ -1,7 +1,7 @@
 classdef Events < spiky.core.BackwardCompatible
     % EVENTS Class representing discrete events
     
-    properties (Access = protected, Hidden)
+    properties (Hidden)
         T_ (:, 1) double % Time vector in seconds
         Start_ double % Start time in seconds
         Step_ double % Step in seconds
