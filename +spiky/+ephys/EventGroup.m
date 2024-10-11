@@ -4,7 +4,7 @@ classdef EventGroup < spiky.core.Metadata & spiky.core.MappableArray
     properties %(SetAccess = {?spiky.core.Metadata, ?spiky.ephys.EventGroup})
         Name string
         Type spiky.ephys.ChannelType
-        Events spiky.ephys.RecEvent
+        Events spiky.ephys.RecEvents
         TsRange (1, 2) double
         Sync spiky.core.Sync
     end
@@ -16,7 +16,7 @@ classdef EventGroup < spiky.core.Metadata & spiky.core.MappableArray
             arguments
                 name string = ""
                 type spiky.ephys.ChannelType = spiky.ephys.ChannelType.Neural
-                events spiky.ephys.RecEvent = spiky.ephys.RecEvent.empty
+                events spiky.ephys.RecEvents = spiky.ephys.RecEvents.empty
                 tsRange (1, 2) double = [0, 0]
                 sync spiky.core.Sync = spiky.core.Sync.empty
             end
@@ -26,6 +26,15 @@ classdef EventGroup < spiky.core.Metadata & spiky.core.MappableArray
             obj.Events = events;
             obj.TsRange = tsRange;
             obj.Sync = sync;
+        end
+
+        function obj = updateFields(obj, s)
+            types = [s.Events.Value.Type];
+            types = struct("Class", s.Events.Value(1).Type.Class, "Value", ...
+                [types.Value]');
+            obj.Events = spiky.ephys.RecEvents([s.Events.Value.Time], [s.Events.Value.Timestamp], ...
+                spiky.core.Metadata.structToObj(types), [s.Events.Value.Channel], [s.Events.Value.ChannelName], ...
+                [s.Events.Value.Rising], [s.Events.Value.Message]);
         end
     end
 

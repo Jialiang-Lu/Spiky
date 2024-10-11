@@ -42,7 +42,8 @@ classdef EyeData < spiky.core.Metadata
             data.LeftGaze(idcLeftClosed, :) = NaN("single");
             data.RightGaze(idcRightClosed, :) = NaN("single");
             data = spiky.core.TimeTable(t, data);
-            if exist(fullfile(fdir, "EyeLinkEvent.bin"), "file")
+            events = spiky.minos.Data(fullfile(fdir, "EyeLinkEvent.bin"));
+            if ~isempty(events.Values)
                 events = spiky.minos.Data(fullfile(fdir, "EyeLinkEvent.bin"));
                 fixations = spiky.core.Periods(func(...
                     spiky.minos.EyeData.extractPeriods(events.Values, "Fixation")));
@@ -54,7 +55,9 @@ classdef EyeData < spiky.core.Metadata
                     spiky.minos.EyeData.extractPeriods(events.Values, "Blink", 1)));
                 blinks = leftBlinks|rightBlinks;
             else
-                error("Not implemented")
+                fixations = spiky.core.Periods.empty;
+                saccades = spiky.core.Periods.empty;
+                blinks = spiky.core.Periods.empty;
             end
             obj = spiky.minos.EyeData;
             obj.Data = data;

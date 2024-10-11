@@ -1,7 +1,7 @@
 classdef Data
 
     properties (Constant, Hidden)
-        LogPattern = "\[(?<timestamp>\d+)\] (?<name>[\w\.]+) \(?(?<type>.*?)\)? ?= (?<value>[^\r\n]+)";
+        LogPattern = "\[(?<timestamp>\d+)\] (?<name>[\w\.]+) \(?(?<type>.*?)\)? ?= (?<value>[^\r\n]*)";
         MessagePattern = "\[(?<timestamp>\d+)\] (?<message>[^\r\n]+)";
         NetNumbers = ["System.SByte" "System.Byte" "System.Int16" "System.UInt16" ...
             "System.Int32" "System.UInt32" "System.Int64" "System.UInt64" ...

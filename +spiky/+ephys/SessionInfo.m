@@ -169,11 +169,16 @@ classdef SessionInfo < spiky.core.Metadata
             obj.Session.saveMetaData(si);
         end
 
-        function minos = extractMinos(obj)
+        function minos = extractMinos(obj, options)
             % EXTRACTMINOS Extract Minos data
 
+            arguments
+                obj
+                options.minPhotodiodeGap double = 0.05
+            end
+            optionsCell = namedargs2cell(options);
             fdir = obj.Session.getFdir("Minos");
-            minos = spiky.minos.MinosInfo.load(fdir, obj);
+            minos = spiky.minos.MinosInfo.load(fdir, obj, optionsCell{:});
             obj.Session.saveMetaData(minos);
         end
 

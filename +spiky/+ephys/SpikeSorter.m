@@ -122,8 +122,8 @@ classdef SpikeSorter
                 % Change the param.py to correct the path
                 fpthParams = fullfile(fdirSort, "params.py");
                 t = fileread(fpthParams);
-                t = regexprep(t, "dat_path = ''.+?''", ...
-                    "dat_path = ''../continuous.dat''");
+                t = regexprep(t, "dat_path = '.+?'", ...
+                    "dat_path = '../continuous.dat'");
                 t = regexprep(t, "n_channels_dat = \d+", ...
                     sprintf("n_channels_dat = %d", ops.NchanTOT));
                 t = regexprep(t, "hp_filtered = True", ...
@@ -134,7 +134,9 @@ classdef SpikeSorter
                 delete(ops.fproc);
                 rmpath(genpath(fdirKilosort3));
             else
-                fpthProbe = fullfile(fdir, "probe.mat");
+                [~, fn] = fileparts(obj.Fpth);
+                fpthProbe = fullfile(fdir, fn+".probe.mat");
+                probe = obj.Probe;
                 save(fpthProbe, "-struct", "probe");
                 fdirConda = spiky.config.loadConfig("fdirConda");
                 fpthKilosort4 = fullfile(fileparts(mfilename("fullpath")), "kilosort4.py");

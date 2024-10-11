@@ -48,10 +48,28 @@ classdef TimeTable < spiky.core.Events & matlab.mixin.CustomDisplay
             end
         end
 
+        function [obj, idc] = sort(obj, direction)
+            %SORT Sort data by time
+            %
+            %   direction: 'ascend' or 'descend'
+            %
+            %   obj: sorted TimeTable
+            %   idc: indices of the sorted data
+            arguments
+                obj spiky.core.TimeTable
+                direction string {mustBeMember(direction, ["ascend" "descend"])} = "ascend"
+            end
+
+            [obj, idc] = sort@spiky.core.Events(obj, direction);
+            obj.Data = obj.Data(idc, :);
+        end
+
         function periods = findPeriods(obj, thr, mingap, minperiod, extrapolate)
             %FINDPERIODS finds period intervals of the input crossing the threshold
             %
-            %   x: input vector, or a cell {time, input vector}
+            %   periods = findPeriods(obj, thr, mingap, minperiod, extrapolate)
+            %
+            %   obj: TimeTable
             %   thr: threshold
             %   mingap: minimum distance to be considered a different period. 
             %       Otherwise it gets concatenated
@@ -59,7 +77,8 @@ classdef TimeTable < spiky.core.Events & matlab.mixin.CustomDisplay
             %   extrapolate: if true, periods end at the first value below the
             %       threshold, not the last value above
             %
-            %   periods: Period object
+            %   periods: Periods object
+
             arguments
                 obj spiky.core.TimeTable
                 thr (1, 1) double = 0
@@ -109,7 +128,10 @@ classdef TimeTable < spiky.core.Events & matlab.mixin.CustomDisplay
                     sd = s(1);
                     st = sd;
                     st.subs = sd.subs(1);
-                    obj = spiky.core.TimeTable(subsref(obj.Time, st), subsref(obj.Data, sd));
+                    obj1 = feval(class(obj));
+                    obj1.T_ = subsref(obj.Time, st);
+                    obj1.Data = subsref(obj.Data, sd);
+                    obj = obj1;
                     if isscalar(s)
                         varargout{1} = obj;
                     else
@@ -202,6 +224,15 @@ classdef TimeTable < spiky.core.Events & matlab.mixin.CustomDisplay
 
         function obj = vertcat(varargin)
             obj = cat(1, varargin{:});
+        end
+
+        function ind = end(obj,k,n)
+            sz = size(obj);
+            if k < n
+                ind = sz(k);
+            else
+                ind = prod(sz(k:end));
+            end
         end
 
         function b = isscalar(~)

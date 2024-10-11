@@ -14,34 +14,35 @@ classdef MinosInfo < spiky.core.Metadata
     end
 
     methods (Static)
-        function obj = load(fdir, info)
+        function obj = load(fdir, info, options)
             % LOAD Load Minos info from a directory
             %
             %   fdir: directory containing the Minos info
             %   info: SessionInfo object
+            %   options: 
+            %       minPhotodiodeGap: minimum photodiode gap in seconds
             %
             %   obj: Minos info object
+
             arguments
                 fdir (1, 1) string {mustBeFolder}
                 info spiky.ephys.SessionInfo = spiky.ephys.SessionInfo.empty
+                options.minPhotodiodeGap double = 0.05
             end
             if isempty(info)
                 error("Not implemented")
             end
             log = spiky.minos.Data(fullfile(fdir, "Log.txt"));
-            sync = spiky.minos.Data(fullfile(fdir, "Sync.bin"));
-            n = height(sync.Values);
-            for ii = n:-1:1
-                syncEvents(ii, 1) = spiky.ephys.RecEvent(...
-                    double(sync.Values{ii, 1})./1e7, ...
-                    sync.Values{ii, 1}, spiky.ephys.ChannelType.Stim, ...
-                    int16(1), "", true, "");
-            end
+            sync1 = spiky.minos.Data(fullfile(fdir, "Sync.bin"));
+            n = height(sync1.Values);
+            syncEvents = spiky.ephys.RecEvents(sync1.Values.timestamp./1e7, ...
+                sync1.Values.timestamp, spiky.ephys.ChannelType.Stim, ...
+                int16(1), "Sync", true, "");
             events = info.EventGroups(1).Events.Sync;
             if isempty(events)
                 events = info.EventGroups(1).Events;
             end
-            events = events([events.Rising]);
+            events = events(events.Rising, :);
             [sync, eventsSync] = events.syncWith(syncEvents, "probe1 to minos", allowStep=false);
             idcStart = find(startsWith(log.Values.Value, "Start Paradigm"));
             idcStop = find(startsWith(log.Values.Value, "Pause Paradigm"));
@@ -51,18 +52,22 @@ classdef MinosInfo < spiky.core.Metadata
             parPeriods = sync.Inv(double([log.Values.Timestamp(idcStart) ...
                 log.Values.Timestamp(idcStop)])/1e7);
             parPeriodsNames = strrep(extractAfter(log.Values.Value(idcStart), ...
-            "Paradigm "), " ", "");
+                "Paradigm "), " ", "");
             fiPars = spiky.core.FileInfo(fdir+filesep);
             fiPars = fiPars([fiPars.IsDir] & [fiPars.Name]~="Assets");
             parNamesSpace = [fiPars.Name]';
             parNames = strrep(parNamesSpace, " ", "");
             photodiode = info.EventGroups.Adc.Events.Photodiode;
+            [~, idc] = photodiode.findContinuous(options.minPhotodiodeGap);
+            idc = unique(cell2mat(cellfun(@(x) x([1 end])', idc, UniformOutput=false)));
+            tPhotodiode = photodiode(idc, :).Time;
+
             for ii = length(parNames):-1:1
                 periods = spiky.core.Periods(parPeriods(...
                     parPeriodsNames==parNames(ii), :));
                 pars(ii, 1) = spiky.minos.Paradigm.load(...
                     fdir+filesep+parNamesSpace(ii), ...
-                    periods, sync.Inv, [photodiode.Time]');
+                    periods, sync.Inv, tPhotodiode);
             end
             player = spiky.minos.Data(fullfile(fdir, "Player.bin"));
             display = spiky.minos.Data(fullfile(fdir, "Display.bin"));

@@ -11,20 +11,7 @@ classdef (Abstract) MappableArray
         end
         
         function varargout = subsref(obj, s)
-            switch s(1).type
-                case '()'
-                    useKey = cellfun(@isstring, s(1).subs);
-                    if any(useKey)
-                        keys = [s(1).subs{useKey}];
-                        s(1).subs = {ismember([obj.Key], keys)'};
-                    end
-                case '.'
-                    useKey = strcmp(s(1).subs, [obj.Key]);
-                    if any(useKey)
-                        s(1).type = '()';
-                        s(1).subs = {useKey};
-                    end
-            end
+            s(1) = obj.useKey(s(1));
             if isscalar(s)
                 [varargout{1:nargout}] = builtin("subsref", obj, s);
             elseif strcmp(s(1).type, '.') && ismember(s(1).subs, methods(obj))
@@ -42,20 +29,7 @@ classdef (Abstract) MappableArray
             if isempty(obj)
                 obj = feval(str2func(class(varargin{1})+".empty"));
             end
-            switch s(1).type
-                case '()'
-                    useKey = cellfun(@isstring, s(1).subs);
-                    if any(useKey)
-                        keys = [s(1).subs{useKey}];
-                        s(1).subs = {ismember([obj.Key], keys)'};
-                    end
-                case '.'
-                    useKey = strcmp(s(1).subs, [obj.Key]);
-                    if any(useKey)
-                        s(1).type = '()';
-                        s(1).subs = {useKey};
-                    end
-            end
+            s(1) = obj.useKey(s(1));
             if isscalar(s)
                 obj = builtin("subsasgn", obj, s, varargin{:});
             else
@@ -66,27 +40,41 @@ classdef (Abstract) MappableArray
         end
 
         function n = numArgumentsFromSubscript(obj, s, indexingContext)
-            if ismember(s(1).type, {'.', '()'})
-                if strcmp(s(1).type, '.')
-                    useKey = strcmp(s(1).subs, [obj.Key]);
-                else
-                    useKey = cellfun(@isstring, s(1).subs);
-                end
-                if any(useKey)
-                    if isscalar(s)
-                        n = 1;
-                    else
-                        obj = subsref(obj, s(1));
-                        n = numArgumentsFromSubscript(obj, s(2:end), indexingContext);
-                    end
-                    return
-                end
-            end
+            [s(1), use] = obj.useKey(s(1));
             if isscalar(s)
-                n = builtin("numArgumentsFromSubscript", obj, s, indexingContext);
+                if use
+                    n = 1;
+                else
+                    n = builtin("numArgumentsFromSubscript", obj, s, indexingContext);
+                end
             else
                 obj = subsref(obj, s(1));
                 n = numArgumentsFromSubscript(obj, s(2:end), indexingContext);
+            end
+        end
+    end
+
+    methods (Access = protected)
+        function [s, use] = useKey(obj, s)
+            use = false;
+            switch s(1).type
+                case {'()', '{}'}
+                    is = cellfun(@isstring, s(1).subs);
+                    if any(is)
+                        keys = [s(1).subs{is}];
+                        s.subs = {ismember([obj.Key], keys)};
+                        use = true;
+                    end
+                case '.'
+                    is = strcmp(s(1).subs, [obj.Key]);
+                    if any(is)
+                        s.type = '()';
+                        s.subs = {is};
+                        use = true;
+                    end
+            end
+            if use && size(obj, 2)>1
+                s(1).subs = {s(1).subs{1}, ':'};
             end
         end
     end

@@ -1,4 +1,4 @@
-classdef Events < spiky.core.BackwardCompatible
+classdef Events
     % EVENTS Class representing discrete events
     
     properties (Hidden)
@@ -117,7 +117,7 @@ classdef Events < spiky.core.BackwardCompatible
         end
 
         function d = diff(obj, n)
-            % DIFF Calculate the difference between events
+            %DIFF Calculate the difference between events
             %
             %   obj: events
             %   n: number of differences
@@ -132,9 +132,36 @@ classdef Events < spiky.core.BackwardCompatible
             d = diff(obj.Time, n);
         end
 
+        function [obj, idc] = sort(obj, direction)
+            %SORT Sort events by time
+            %
+            %   obj: events
+            %   [direction]: "ascend" or "descend", default "ascend"
+            %
+            %   obj: sorted events
+            %   idc: indices of the sorted events
+
+            arguments
+                obj spiky.core.Events
+                direction string {mustBeMember(direction, ["ascend" "descend"])} = "ascend"
+            end
+
+            idc = (1:obj.Length)';
+            if obj.IsUniform
+                if xor(strcmp(direction, "ascend"), obj.Step_>0)
+                    obj.Start_ = obj.End;
+                    obj.Step_ = -obj.Step_;
+                    idc = flipud(idc);
+                end
+            else
+                [~, idc] = sort(obj.T_);
+                obj.T_ = obj.T_(idc);
+            end
+        end
+
         function [events, idc, idcPeriods] = inPeriods(obj, periods, cellmode, offset, ...
             rightClose, sorted)
-            % INPERIODS Find events within periods
+            %INPERIODS Find events within periods
             %
             %   obj: events
             %   periods: periods object
@@ -242,8 +269,42 @@ classdef Events < spiky.core.BackwardCompatible
             end
         end
 
+        function [periods, idc] = findContinuous(obj, minGap, minPeriod)
+            %FINDCONTINUOUS Find continuous periods of events
+            %
+            %   periods = findContinuous(obj, minGap, minPeriod)
+            %   
+            %   obj: events
+            %   [minGap]: minimum gap between periods
+            %   [minPeriod]: minimum period duration
+            %
+            %   periods: Periods object
+            %   idc: indices of the periods
+
+            arguments
+                obj spiky.core.Events
+                minGap double = []
+                minPeriod double = 0
+            end
+            dt = [diff(obj.Time); Inf];
+            if isempty(minGap)
+                minGap = max(dt);
+            end
+            isCross = dt>=minGap;
+            idc = find(isCross);
+            prd = [[1; idc(1:end-1)+1] idc];
+            periods = spiky.core.Periods(obj.Time(prd));
+            isValid = periods.Duration>=minPeriod;
+            periods.Time = periods.Time(isValid, :);
+            prd1 = prd(isValid, 1);
+            prd2 = prd(isValid, 2);
+            idc = arrayfun(@(x, y) x:y, prd1, prd2, UniformOutput=false);
+        end
+
         function s = sync(obj, obj2, name, varargin, options)
             % SYNC Synchronize two events objects
+            %
+            %   s = sync(obj, obj2, name, varargin, options)
             %
             %   obj: events
             %   obj2: events
@@ -287,9 +348,9 @@ classdef Events < spiky.core.BackwardCompatible
                     (y>f.a*f.c-f.b+f.d).*(y-f.d-f.b)./f.a, f.a, f.d-f.b, gof);
             end
             spiky.plot.fig
-            plot(t1, t2-t1, "ro", t1, f(t1)-t1, "b.-");
+            plot(t1, td-td(1), "ro", t1, f(t1)-t1-td(1), "b.-");
             xlabel("t1");
-            ylabel('t2-t1');
+            ylabel('td-td(1)');
             legend(["Data", "Fit"]);
             title(name);
             spiky.plot.fixfig

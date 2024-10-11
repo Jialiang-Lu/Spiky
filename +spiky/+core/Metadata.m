@@ -54,38 +54,43 @@ classdef Metadata
             mc = matlab.metadata.Class.fromName(s.Class);
             p = {mc.PropertyList(~[mc.PropertyList.Dependent] & ...
                 ~[mc.PropertyList.Abstract] & ...
-                ~[mc.PropertyList.Transient]).Name};
-            hasExtra = ~isempty(setdiff(fieldnames(s.Value), p));
+                ~[mc.PropertyList.Transient]).Name}';
+            isDiff = ~isempty(setdiff(fieldnames(s.Value), p)) || ...
+                ~isempty(setdiff(p, fieldnames(s.Value)));
             props = intersect(fieldnames(s.Value), p);
-            if n==1
-                obj = feval(s.Class);
-                for ii = 1:numel(props)
-                    propName = props{ii};
-                    s1 = s.Value.(propName);
-                    if isstruct(s1) && isequal(fieldnames(s1), {'Class'; 'Value'})
-                        obj.(propName) = spiky.core.Metadata.structToObj(s1);
-                    else
-                        obj.(propName) = s1;
-                    end
-                end
-                if hasExtra && isa(obj, "spiky.core.BackwardCompatible")
-                    updated = true;
-                    obj = obj.updateFields(s.Value);
-                end
-                return
-            end
+            % if n==1
+            %     obj = feval(s.Class);
+            %     for ii = 1:numel(props)
+            %         propName = props{ii};
+            %         s1 = s.Value.(propName);
+            %         if isstruct(s1) && isequal(fieldnames(s1), {'Class'; 'Value'})
+            %             obj.(propName) = spiky.core.Metadata.structToObj(s1);
+            %         else
+            %             obj.(propName) = s1;
+            %         end
+            %     end
+            %     if isDiff && isa(obj, "spiky.core.BackwardCompatible")
+            %         updated = true;
+            %         obj = obj.updateFields(s.Value);
+            %     end
+            %     return
+            % end
             for ii = n:-1:1
                 obj(ii, 1) = feval(s.Class);
                 for jj = 1:numel(props)
                     propName = props{jj};
                     s1 = s.Value(ii).(propName);
                     if isstruct(s1) && isequal(fieldnames(s1), {'Class'; 'Value'})
+                        if isempty(which(s1.Class))
+                            isDiff = true;
+                            continue
+                        end
                         obj(ii, 1).(propName) = spiky.core.Metadata.structToObj(s1);
                     else
                         obj(ii, 1).(propName) = s1;
                     end
                 end
-                if hasExtra && isa(obj(ii, 1), "spiky.core.BackwardCompatible")
+                if isDiff && ismethod(obj(ii, 1), "updateFields")
                     updated = true;
                     obj(ii, 1) = obj(ii, 1).updateFields(s.Value(ii));
                 end
