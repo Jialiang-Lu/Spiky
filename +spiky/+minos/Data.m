@@ -59,16 +59,18 @@ classdef Data
     end
 
     methods
-        function obj = Data(fpth, memmapOnly)
+        function obj = Data(fpth, memmapOnly, flattenVector)
             %DATA Create a new instance of Data
             %   
             %   fpth: path to file
             %   memmapOnly: load only memmapfile
+            %   flattenVector: flatten vector2 and vector3 fields
             %
             %   obj: Data object
             arguments
                 fpth string {mustBeFile} = []
                 memmapOnly (1, 1) logical = false
+                flattenVector (1, 1) logical = false
             end
             obj.Path = fpth;
             if isempty(fpth)
@@ -94,7 +96,7 @@ classdef Data
                     if abs(len-round(len))>eps
                         error("Number of entries is not an integer")
                     end
-                    [fmt, info1] = ti.getFormat();
+                    [fmt, info1] = ti.getFormat(flattenVector);
                     obj.Info = ti;
                     if len==0
                         if memmapOnly

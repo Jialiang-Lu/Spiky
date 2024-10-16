@@ -234,9 +234,5 @@ classdef TimeTable < spiky.core.Events & matlab.mixin.CustomDisplay
                 ind = prod(sz(k:end));
             end
         end
-
-        function b = isscalar(~)
-            b = true;
-        end
     end
 end

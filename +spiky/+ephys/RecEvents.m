@@ -122,6 +122,9 @@ classdef RecEvents < spiky.core.TimeTable & spiky.core.MappableArray
         end
 
         function obj = subsasgn(obj, s, varargin)
+            if isequal(obj, [])
+                obj = spiky.ephys.RecEvents.empty;
+            end
             s(1) = obj.useKey(s(1));
             obj = subsasgn@spiky.core.TimeTable(obj, s, varargin{:});
         end

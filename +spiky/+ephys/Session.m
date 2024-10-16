@@ -111,6 +111,7 @@ classdef Session < spiky.core.Metadata
             info = spiky.ephys.SessionInfo(obj, sum([channelGroups.NChannels]), 30000, options.fsLfp, ...
                 nSamples, nSamplesLfp, nSamples/30000, "int16", obj.getFpth("dat"), ...
                 obj.getFpth("lfp"), channelGroups, eventGroups, options);
+            info.createNsXml();
             obj.saveMetaData(info);
         end
 

@@ -8,6 +8,7 @@ classdef TypeInfo
         BasePattern = "(?<name>[a-zA-Z_][a-zA-Z0-9_]*)?:?(?<comment>\^?)"+...
             "(?<length>\d+)(?<descr>[buicfd\^]+)(?<bytes>\d+)";
         CommentPattern = "(?<name>[a-zA-Z_][a-zA-Z0-9_]*):?(?<value>[-\d]+)?";
+        VectorFields = ["(x,y)2f4" "(x,y,z)3f4"]
     end
 
     properties %(SetAccess = private)
@@ -232,7 +233,20 @@ classdef TypeInfo
             end
         end
 
-        function objs = flatten(obj)
+        function objs = flatten(obj, flattenVector)
+            arguments
+                obj spiky.minos.TypeInfo
+                flattenVector logical = false
+            end
+            if ~flattenVector && ismember(obj.Str, spiky.minos.TypeInfo.VectorFields)
+                n = length(obj.Children);
+                obj.Type = obj.Children(1).Type;
+                obj.Bytes = obj.Children(1).Bytes;
+                obj.Length = n;
+                obj.Children = spiky.minos.TypeInfo.empty;
+                objs = obj;
+                return
+            end
             if isempty(obj.Children)
                 objs = obj;
             else
@@ -259,8 +273,12 @@ classdef TypeInfo
             end
         end
 
-        function [fmt, objs] = getFormat(obj)
-            objs = obj.flatten();
+        function [fmt, objs] = getFormat(obj, flattenVector)
+            arguments
+                obj spiky.minos.TypeInfo
+                flattenVector logical = false
+            end
+            objs = obj.flatten(flattenVector);
             n = length(objs);
             fmt = cell(n, 3);
             for k = 1:n

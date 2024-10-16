@@ -14,7 +14,7 @@ classdef Metadata
             props = props(~[mc.PropertyList.Dependent] & ...
                 ~[mc.PropertyList.Abstract] & ...
                 ~[mc.PropertyList.Transient]);
-            if ~isscalar(obj)
+            if ~isa(obj, "spiky.core.TimeTable") && ~isscalar(obj)
                 c = cell(size(obj));
                 for ii = 1:numel(obj)
                     s1 = spiky.core.Metadata.objToStruct(obj(ii));
@@ -58,23 +58,23 @@ classdef Metadata
             isDiff = ~isempty(setdiff(fieldnames(s.Value), p)) || ...
                 ~isempty(setdiff(p, fieldnames(s.Value)));
             props = intersect(fieldnames(s.Value), p);
-            % if n==1
-            %     obj = feval(s.Class);
-            %     for ii = 1:numel(props)
-            %         propName = props{ii};
-            %         s1 = s.Value.(propName);
-            %         if isstruct(s1) && isequal(fieldnames(s1), {'Class'; 'Value'})
-            %             obj.(propName) = spiky.core.Metadata.structToObj(s1);
-            %         else
-            %             obj.(propName) = s1;
-            %         end
-            %     end
-            %     if isDiff && isa(obj, "spiky.core.BackwardCompatible")
-            %         updated = true;
-            %         obj = obj.updateFields(s.Value);
-            %     end
-            %     return
-            % end
+            if n==1
+                obj = feval(s.Class);
+                for ii = 1:numel(props)
+                    propName = props{ii};
+                    s1 = s.Value.(propName);
+                    if isstruct(s1) && isequal(fieldnames(s1), {'Class'; 'Value'})
+                        obj.(propName) = spiky.core.Metadata.structToObj(s1);
+                    else
+                        obj.(propName) = s1;
+                    end
+                end
+                if isDiff && ismethod(obj(ii, 1), "updateFields")
+                    updated = true;
+                    obj = obj.updateFields(s.Value);
+                end
+                return
+            end
             for ii = n:-1:1
                 obj(ii, 1) = feval(s.Class);
                 for jj = 1:numel(props)
