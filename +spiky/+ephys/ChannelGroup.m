@@ -52,12 +52,13 @@ classdef ChannelGroup < spiky.core.Metadata & spiky.core.MappableArray
             obj.ToMv = toMv;
         end
 
-        function [ch, idcGroup] = getChannel(obj, idc)
+        function [ch, idcGroup] = getChannel(obj, idc, resample)
             % GETCHANNEL Get a channel by index
 
             arguments
                 obj spiky.ephys.ChannelGroup
                 idc double
+                resample = true
             end
 
             chs = [obj.NChannels]';
@@ -65,6 +66,26 @@ classdef ChannelGroup < spiky.core.Metadata & spiky.core.MappableArray
             periods = spiky.core.Periods([chsCum(1:end-1)+1, chsCum(2:end)]);
             [ch, ~, idcGroup] = periods.haveEvents(idc, false, 0, true, false);
             ch = ch+1;
+            if ~resample
+                groups = unique(idcGroup);
+                for ii = 1:numel(groups)
+                    idc1 = idcGroup==groups(ii);
+                    ch(idc1) = obj(groups(ii)).Probe.ChanMap(ch(idc1));
+                end
+            end
+        end
+
+        function idc = getGroupIndices(obj, group)
+            % GETGROUPINDICES Get indices of a group
+
+            arguments
+                obj spiky.ephys.ChannelGroup
+                group double
+            end
+
+            chs = [obj.NChannels]';
+            chsCum = [0; cumsum(chs)];
+            idc = chsCum(group)+1:chsCum(group+1);
         end
     end
 

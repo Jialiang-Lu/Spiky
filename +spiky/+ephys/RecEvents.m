@@ -128,6 +128,24 @@ classdef RecEvents < spiky.core.TimeTable & spiky.core.MappableArray
             s(1) = obj.useKey(s(1));
             obj = subsasgn@spiky.core.TimeTable(obj, s, varargin{:});
         end
+
+        function n = numArgumentsFromSubscript(obj, s, indexingContext)
+            [s(1), use] = obj.useKey(s(1));
+            switch s(1).type
+                case '{}'
+                    s(1).type = '()';
+            end
+            if isscalar(s)
+                if use
+                    n = 1;
+                else
+                    n = builtin("numArgumentsFromSubscript", obj, s, indexingContext);
+                end
+            else
+                obj = subsref(obj, s(1));
+                n = numArgumentsFromSubscript(obj, s(2:end), indexingContext);
+            end
+        end
     end
 
     methods (Access = protected)

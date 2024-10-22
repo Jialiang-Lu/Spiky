@@ -52,9 +52,18 @@ classdef Metadata
                 return
             end
             mc = matlab.metadata.Class.fromName(s.Class);
-            p = {mc.PropertyList(~[mc.PropertyList.Dependent] & ...
+            p1 = mc.PropertyList(~[mc.PropertyList.Dependent] & ...
                 ~[mc.PropertyList.Abstract] & ...
-                ~[mc.PropertyList.Transient]).Name}';
+                ~[mc.PropertyList.Transient]);
+            p = {p1.Name}';
+            pClass = cell(length(p1), 1);
+            for ii = 1:length(p)
+                if isempty(p1(ii).Validation) || isempty(p1(ii).Validation.Class)
+                    pClass{ii} = '';
+                else
+                    pClass{ii} = p1(ii).Validation.Class.Name;
+                end
+            end
             isDiff = ~isempty(setdiff(fieldnames(s.Value), p)) || ...
                 ~isempty(setdiff(p, fieldnames(s.Value)));
             props = intersect(fieldnames(s.Value), p);
@@ -62,14 +71,19 @@ classdef Metadata
                 obj = feval(s.Class);
                 for ii = 1:numel(props)
                     propName = props{ii};
+                    propClass = pClass{strcmp(p, propName)};
                     s1 = s.Value.(propName);
                     if isstruct(s1) && isequal(fieldnames(s1), {'Class'; 'Value'})
+                        if ~isempty(propClass) && ~strcmp(propClass, s1.Class)
+                            isDiff = true;
+                            continue
+                        end
                         obj.(propName) = spiky.core.Metadata.structToObj(s1);
                     else
                         obj.(propName) = s1;
                     end
                 end
-                if isDiff && ismethod(obj(ii, 1), "updateFields")
+                if isDiff && ismethod(obj, "updateFields")
                     updated = true;
                     obj = obj.updateFields(s.Value);
                 end

@@ -177,6 +177,19 @@ classdef TimeTable < spiky.core.Events & matlab.mixin.CustomDisplay
             obj = builtin("subsasgn", obj, s, varargin{:});
         end
 
+        function n = numArgumentsFromSubscript(obj, s, indexingContext)
+            switch s(1).type
+                case '{}'
+                    s(1).type = '()';
+            end
+            if isscalar(s)
+                n = builtin("numArgumentsFromSubscript", obj, s, indexingContext);
+            else
+                obj = subsref(obj, s(1));
+                n = numArgumentsFromSubscript(obj, s(2:end), indexingContext);
+            end
+        end
+
         function varargout = size(obj, varargin)
             [varargout{1:nargout}] = size(obj.Data, varargin{:});
         end

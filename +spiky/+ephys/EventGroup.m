@@ -8,6 +8,10 @@ classdef EventGroup < spiky.core.Metadata & spiky.core.MappableArray
         TsRange (1, 2) double
         Sync spiky.core.Sync
     end
+
+    properties (Dependent)
+        NSamples double
+    end
     
     methods
         function obj = EventGroup(name, type, events, tsRange, sync)
@@ -35,6 +39,10 @@ classdef EventGroup < spiky.core.Metadata & spiky.core.MappableArray
             obj.Events = spiky.ephys.RecEvents([s.Events.Value.Time], [s.Events.Value.Timestamp], ...
                 spiky.core.Metadata.structToObj(types), [s.Events.Value.Channel], [s.Events.Value.ChannelName], ...
                 [s.Events.Value.Rising], [s.Events.Value.Message]);
+        end
+
+        function n = get.NSamples(obj)
+            n = diff(obj.TsRange)+1;
         end
     end
 

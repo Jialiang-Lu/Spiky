@@ -357,7 +357,7 @@ classdef RawData
             end
         end
 
-        function [nSamples, nSamplesLfp] = resampleRaw(obj, fpthDat, fpthLfp, probes, fsLfp, ...
+        function [nSamples, nSamplesLfp, fpthDat] = resampleRaw(obj, fpthDat, fpthLfp, probes, fsLfp, ...
             resampleDat, syncs)
             arguments
                 obj spiky.ephys.RawData
@@ -500,6 +500,7 @@ classdef RawData
                         else
                         error("Not implemented")
                     end
+                fpthDat = [obj.DatFiles(1:end-1).Path]';
             end
         end
     end

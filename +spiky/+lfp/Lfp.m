@@ -1,8 +1,9 @@
 classdef Lfp < spiky.core.TimeTable
-    % LFP Class representing a Local Field Potential signal
+    % LFP Class representing a Local Field Potential signal in microvolts
 
     properties (Dependent)
         NChannels double
+        NSamples double
     end
     
     methods
@@ -26,6 +27,10 @@ classdef Lfp < spiky.core.TimeTable
 
         function n = get.NChannels(obj)
             n = size(obj.Data, 2);
+        end
+
+        function n = get.NSamples(obj)
+            n = size(obj.Data, 1);
         end
 
         function v = get(obj, time, ch)
@@ -236,7 +241,7 @@ classdef Lfp < spiky.core.TimeTable
             if obj.NChannels==1
                 h1 = plot(obj.Time, mean(obj.Data, 3), varargin{:});
                 xlabel("Time (s)")
-                ylabel("LFP (mV)")
+                ylabel("LFP (\muV)")
             else
                 error("Not implemented")
             end

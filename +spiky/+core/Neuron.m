@@ -8,7 +8,7 @@ classdef Neuron
         Ch double
         ChInGroup double
         Label string
-        Waveform double
+        Waveform spiky.lfp.Lfp
     end
 
     properties (Dependent)
@@ -25,7 +25,7 @@ classdef Neuron
                 ch double = 0
                 chInGroup double = 0
                 label string = ""
-                waveform double = 0
+                waveform spiky.lfp.Lfp = spiky.lfp.Lfp.empty
             end
             obj.Session = session;
             obj.Group = group;
@@ -43,6 +43,12 @@ classdef Neuron
 
         function out = eq(obj, other)
             out = obj.Session == other.Session & obj.Group == other.Group & obj.Id == other.Id;
+        end
+
+        function obj = updateFields(obj, s)
+            if isfield(s, "Waveform")
+                obj.Waveform = spiky.lfp.Lfp((length(s.Waveform)-1)/2/30000, 30000, s.Waveform);
+            end
         end
     end
 end
