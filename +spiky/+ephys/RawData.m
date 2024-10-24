@@ -192,6 +192,7 @@ classdef RawData
                         eventGroups(1, 1) = spiky.ephys.EventGroup("Probe1", ...
                             spiky.ephys.ChannelType.Neural, events{1}, tsRanges(1, :));
                         sync = events{1}.syncWith(eventsAdc.Sync, "probe1 to adc");
+                        eventsAdc.Time = sync.Inv(eventsAdc.Time);
                         eventGroups(end+1, 1) = spiky.ephys.EventGroup("Adc", ...
                             spiky.ephys.ChannelType.Adc, eventsAdc, tsRangesAdc, sync);
                     else
@@ -201,7 +202,7 @@ classdef RawData
                     events1 = eventGroups(1).Events.Sync;
                     events1 = events1(events1.Rising, :);
                     events1 = events1(idcNet+1, :);
-                    sync = events1.syncWith(eventsSyncNet, "probe1 to net");
+                    sync = events1.syncWith(eventsSyncNet, "probe1 to net", 0.5);
                     eventGroups(end+1, 1) = spiky.ephys.EventGroup("Net", ...
                         spiky.ephys.ChannelType.Net, eventsNet, tsRangesAdc, sync);
             end
@@ -358,7 +359,7 @@ classdef RawData
         end
 
         function [nSamples, nSamplesLfp, fpthDat] = resampleRaw(obj, fpthDat, fpthLfp, probes, fsLfp, ...
-            resampleDat, syncs)
+            resampleDat, resampleLfp, syncs)
             arguments
                 obj spiky.ephys.RawData
                 fpthDat string
@@ -366,6 +367,7 @@ classdef RawData
                 probes spiky.ephys.Probe
                 fsLfp double = 1000
                 resampleDat logical = false
+                resampleLfp logical = false
                 syncs spiky.core.Sync = spiky.core.Sync.empty
             end
 

@@ -30,13 +30,10 @@ classdef EyeData < spiky.core.Metadata
             data = table();
             data.Timestamp = data0.Values.Timestamp;
             data.LeftPupil = data0.Values.LeftPupil;
-            data.LeftGaze = [data0.Values.LeftGazeX, data0.Values.LeftGazeY, ...
-                data0.Values.LeftGazeZ];
+            data.LeftGaze = data0.Values.LeftGaze;
             data.RightPupil = data0.Values.RightPupil;
-            data.RightGaze = [data0.Values.RightGazeX, data0.Values.RightGazeY, ...
-                data0.Values.RightGazeZ];
-            data.Convergence = [data0.Values.ConvergenceX, data0.Values.ConvergenceY, ...
-                data0.Values.ConvergenceZ];
+            data.RightGaze = data0.Values.RightGaze;
+            data.Convergence = data0.Values.Convergence;
             idcLeftClosed = data0.Values.LeftPupil==0;
             idcRightClosed = data0.Values.RightPupil==0;
             data.LeftGaze(idcLeftClosed, :) = NaN("single");

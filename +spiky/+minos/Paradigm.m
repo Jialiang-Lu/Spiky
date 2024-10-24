@@ -67,6 +67,8 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
                         t2(isValid) = tValid;
                         t2(~isValid) = t1(~isValid)+tdMean;
                         t(isEvent1) = t2;
+                    else
+                        fprintf("No photodiode signal for %s in %s\n", eventNames(ii), name)
                     end
                 end
             end

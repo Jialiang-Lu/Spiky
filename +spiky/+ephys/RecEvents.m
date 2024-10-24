@@ -68,49 +68,47 @@ classdef RecEvents < spiky.core.TimeTable & spiky.core.MappableArray
                 obj spiky.ephys.RecEvents
                 obj2 spiky.ephys.RecEvents
                 name string
-                tol double = 0.01
+                tol double = 0.02
                 options.allowStep logical = true
             end
 
             t1 = spiky.core.Events(obj.Time);
             t2 = spiky.core.Events(obj2.Time);
-            if t1.Length~=t2.Length
-                dl = t1.Length-t2.Length;
-                d1 = diff(t1);
-                d2 = diff(t2);
-                dlmax = min([max(abs(dl), 4) t1.Length-2 t2.Length-2]);
-                shifts = -dlmax:dlmax;
-                d = zeros(length(shifts), 1);
-                for ii = 1:length(shifts)
-                    s = shifts(ii);
-                    if s<0
-                        l = min(t1.Length-1, t2.Length-1+s);
-                        idc1 = 1:l;
-                        idc2 = 1-s:l-s;
-                    else
-                        l = min(t1.Length-1-s, t2.Length-1);
-                        idc1 = 1+s:l+s;
-                        idc2 = 1:l;
-                    end
-                    d(ii) = max(abs(d1(idc1)-d2(idc2)));
-                end
-                [dmin, idx] = min(d);
-                if dmin>tol
-                    error("Max jitter is %.3f s, which is larger than the tolerance %.3f s", dmin, tol)
-                end
-                shift = shifts(idx);
-                if shift<0
-                    l = min(t1.Length, t2.Length+shift);
+            dl = t1.Length-t2.Length;
+            d1 = diff(t1);
+            d2 = diff(t2);
+            dlmax = min([max(abs(dl), 6) t1.Length-2 t2.Length-2]);
+            shifts = -dlmax:dlmax;
+            d = zeros(length(shifts), 1);
+            for ii = 1:length(shifts)
+                s = shifts(ii);
+                if s<0
+                    l = min(t1.Length-1, t2.Length-1+s);
                     idc1 = 1:l;
-                    idc2 = 1-shift:l-shift;
+                    idc2 = 1-s:l-s;
                 else
-                    l = min(t1.Length-shift, t2.Length);
-                    idc1 = 1+shift:l+shift;
+                    l = min(t1.Length-1-s, t2.Length-1);
+                    idc1 = 1+s:l+s;
                     idc2 = 1:l;
                 end
-                t1 = spiky.core.Events(t1.Time(idc1));
-                t2 = spiky.core.Events(t2.Time(idc2));
+                d(ii) = max(abs(d1(idc1)-d2(idc2)));
             end
+            [dmin, idx] = min(d);
+            if dmin>tol
+                error("Max jitter is %.3f s, which is larger than the tolerance %.3f s", dmin, tol)
+            end
+            shift = shifts(idx);
+            if shift<0
+                l = min(t1.Length, t2.Length+shift);
+                idc1 = 1:l;
+                idc2 = 1-shift:l-shift;
+            else
+                l = min(t1.Length-shift, t2.Length);
+                idc1 = 1+shift:l+shift;
+                idc2 = 1:l;
+            end
+            t1 = spiky.core.Events(t1.Time(idc1));
+            t2 = spiky.core.Events(t2.Time(idc2));
             optionsArgs = namedargs2cell(options);
             sync = t1.sync(t2, name, optionsArgs{:});
             obj2.Time = sync.Inv(obj2.Time);

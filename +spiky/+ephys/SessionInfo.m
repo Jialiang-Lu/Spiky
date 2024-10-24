@@ -230,6 +230,9 @@ classdef SessionInfo < spiky.core.Metadata
             fdir = obj.Session.getFdir("Minos");
             minos = spiky.minos.MinosInfo.load(fdir, obj, optionsCell{:});
             obj.Session.saveMetaData(minos);
+            if ~exist(obj.Session.getFpth("spiky.minos.Asset.mat"), "file")
+                minos.getAssets();
+            end
         end
 
         function createNsXml(obj)

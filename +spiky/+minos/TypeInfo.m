@@ -23,6 +23,10 @@ classdef TypeInfo
         Children spiky.minos.TypeInfo
         Str string
     end
+
+    properties (Hidden)
+        Name_ string
+    end
     
     methods (Static)
         function tokens = createTokens(str)
@@ -78,8 +82,10 @@ classdef TypeInfo
             extents = extents{1};
             obj = spiky.minos.TypeInfo;
             if m.name~=""
+                obj.Name_ = m.name;
                 obj.Name = string([upper(m.name{1}(1)) spiky.utils.ternary(strlength(m.name)>1, m.name{1}(2:end), '')]);
             else
+                obj.Name_ = "";
                 obj.Name = "";
             end
             obj.Length = spiky.utils.str2int(m.length, "int32");
@@ -119,6 +125,7 @@ classdef TypeInfo
                     ti1.Length = 1;
                     for k = 1:obj.Length
                         ti1.Name = names(k);
+                        ti1.Name_ = names(k);
                         ti1 = updateString(ti1);
                         obj.Children(k, 1) = ti1;
                     end
@@ -150,6 +157,7 @@ classdef TypeInfo
                     ti1.Length = 1;
                     for k = 1:length(names)
                         ti1.Name = names(k);
+                        ti1.Name_ = names(k);
                         ti1 = updateString(ti1);
                         children(k, 1) = ti1;
                     end
@@ -199,13 +207,13 @@ classdef TypeInfo
                     if isempty(obj.Children) % built-in type or its array
                         obj.Str = sprintf("%d%s", obj.Length, obj.BuiltIns(obj.Type));
                     elseif length(obj.Children)>1 % struct
-                        if isscalar(unique([obj.Children.Type]))
+                        if isscalar(unique([obj.Children.Str]))
                             obj.Str = sprintf("(%s)%s", ...
-                                join([obj.Children.Name], ","), ...
+                                join([obj.Children.Name_], ","), ...
                                 spiky.minos.TypeInfo(obj.Children(1), length(obj.Children)).Str);
                         else
                             obj.Str = sprintf("1(%s)%d", ...
-                                selectJoin(@(x) spiky.utils.ternary(x.Name=="", "", x.Name+":")+x.Str, ...
+                                selectJoin(@(x) spiky.utils.ternary(x.Name_=="", "", x.Name_+":")+x.Str, ...
                                 obj.Children, ","), obj.Bytes);
                         end
                     else % struct array
@@ -253,7 +261,7 @@ classdef TypeInfo
                 n = length(obj.Children);
                 c = cell(n, 1);
                 for k = 1:n
-                    c{k} = obj.Children(k).flatten();
+                    c{k} = obj.Children(k).flatten(flattenVector);
                 end
                 objs = vertcat(c{:});
                 % prefix = ternary(isempty(obj.Name), "", [obj.Name "_"]);
@@ -273,7 +281,7 @@ classdef TypeInfo
             end
         end
 
-        function [fmt, objs] = getFormat(obj, flattenVector)
+        function [fmt, objs, tbl] = getFormat(obj, flattenVector)
             arguments
                 obj spiky.minos.TypeInfo
                 flattenVector logical = false
@@ -292,9 +300,23 @@ classdef TypeInfo
                 fmt{k, 2} = double([1 objs(k).Length]);
                 fmt{k, 3} = objs(k).Name;
             end
+            tbl = cell2table(fmt, VariableNames=["Type", "Size", "Name"]);
+            tbl.Bytes = [objs.Bytes]'.*[objs.Length]';
+            tbl.Offset = cumsum([0; tbl.Bytes(1:end-1)]);
         end
 
         function out = decode(obj, values)
+            %DECODE Decode values
+            %
+            %   out = decode(obj, values)
+            %
+            %   obj: spiky.minos.TypeInfo
+            %   values: array
+
+            arguments
+                obj spiky.minos.TypeInfo
+                values
+            end
             sz = size(values);
             n = numel(values);
             values = values(:);
@@ -311,6 +333,31 @@ classdef TypeInfo
                 end
                 [~, idc] = max(isCode, [], 1);
                 out = obj.Constants.name(idc');
+            else
+                out = values;
+            end
+        end
+
+        function out = encode(obj, values)
+            %ENCODE Encode values
+            %
+            %   out = encode(obj, values)
+            %
+            %   obj: spiky.minos.TypeInfo
+            %   values: array
+
+            arguments
+                obj spiky.minos.TypeInfo
+                values
+            end
+            sz = size(values);
+            n = numel(values);
+            values = values(:);
+            if obj.EnumType=="Flag"
+                out = arrayfun(@(x) sum(obj.Constants.value(logical(sum(...
+                    split(x, "_")==obj.Constants.name', 1))), "native"), values);
+            elseif obj.EnumType=="Enum"
+                out = arrayfun(@(x) obj.Constants.value(x==obj.Constants.name), values);
             else
                 out = values;
             end

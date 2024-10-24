@@ -96,7 +96,7 @@ classdef Data
                     if abs(len-round(len))>eps
                         error("Number of entries is not an integer")
                     end
-                    [fmt, info1] = ti.getFormat(flattenVector);
+                    [fmt, info1, tbl] = ti.getFormat(flattenVector);
                     obj.Info = ti;
                     if len==0
                         if memmapOnly
@@ -107,18 +107,15 @@ classdef Data
                         end
                     else
                         if ~memmapOnly
-                            fmt = cell2table(fmt, VariableNames=["Type", "Size", "Name"]);
-                            fmt.Bytes = [info1.Bytes]'.*[info1.Length]';
-                            fmt.Offset = cumsum([0; fmt.Bytes(1:end-1)]);
                             n = length(info1);
                             value = cell(1, n);
                             fid = fopen(fpth);
                             for ii = 1:n
-                                fseek(fid, offset+fmt.Offset(ii), "bof");
-                                wid = fmt.Size(ii, 2);
+                                fseek(fid, offset+tbl.Offset(ii), "bof");
+                                wid = tbl.Size(ii, 2);
                                 tmp = fread(fid, [wid len], sprintf("%d*%s=>%s", ...
-                                    wid, fmt.Type(ii), fmt.Type(ii)), ...
-                                    ti.Bytes-fmt.Bytes(ii))';
+                                    wid, tbl.Type(ii), tbl.Type(ii)), ...
+                                    ti.Bytes-tbl.Bytes(ii))';
                                 if info1(ii).Type=="logical"
                                     tmp = logical(tmp);
                                 end
@@ -127,7 +124,7 @@ classdef Data
                                 end
                                 value{ii} = tmp;
                             end
-                            value = table(value{:}, VariableNames=fmt.Name');
+                            value = table(value{:}, VariableNames=tbl.Name');
                             obj.Values = value;
                             fclose(fid);
                         else
@@ -165,10 +162,36 @@ classdef Data
             end
         end
 
-        function save(obj)
+        function save(obj, fpth, flattenVector)
+            arguments
+                obj spiky.minos.Data
+                fpth string = string.empty
+                flattenVector (1, 1) logical = false
+            end
+            if isempty(fpth)
+                fpth = obj.Path;
+            end
             switch obj.Type
                 case "Binary"
-                    error("Not implemented")
+                    header = [obj.Info.Str{1} newline];
+                    offset = 2^nextpow2(length(header)+8);
+                    padding = zeros(1, offset-length(header)-8);
+                    header = [header padding];
+                    [~, info1, tbl] = obj.Info.getFormat(flattenVector);
+                    % tbl.Name = arrayfun(@(s) string([lower(s{1}(1)) s{1}(2:end)]), tbl.Name);
+                    fid = fopen(fpth, "w");
+                    fwrite(fid, [2 66 73 78 1 0 typecast(uint16(length(header)), "uint8")], "uint8");
+                    fwrite(fid, header, "char");
+                    nSamples = height(obj.Values);
+                    nBytesPerSample = obj.Info.Bytes*obj.Info.Length;
+                    data = zeros(nBytesPerSample, nSamples, "uint8");
+                    for ii = 1:height(tbl)
+                        value = typecast(info1(ii).encode(obj.Values.(tbl.Name{ii})), "uint8");
+                        value = reshape(value, [], nSamples);
+                        data(tbl.Offset(ii)+1:tbl.Offset(ii)+tbl.Bytes(ii), :) = value;
+                    end
+                    fwrite(fid, data, "uint8");
+                    fclose(fid);
                 case "Log"
                     txt = string.empty;
                     n = height(obj.Values);
@@ -217,6 +240,32 @@ classdef Data
             if ~isempty(func)
                 out = out.syncTime(func);
             end
+        end
+
+        function varargout = subsref(obj, s)
+            switch s(1).type
+                case '.'
+                    if ismember(s(1).subs, obj.Values.Properties.VariableNames)
+                        obj = obj.Values;
+                    end
+            end
+            [varargout{1:nargout}] = builtin("subsref", obj, s);
+        end
+
+        function obj = subsasgn(obj, s, varargin)
+            if isequal(obj, [])
+                obj = spiky.core.TimeTable.empty;
+            end
+            switch s(1).type
+                case '.'
+                    if ismember(s(1).subs, obj.Values.Properties.VariableNames)
+                        obj1 = obj.Values;
+                        obj1 = builtin("subsasgn", obj1, s, varargin{:});
+                        obj.Values = obj1;
+                        return
+                    end
+            end
+            obj = builtin("subsasgn", obj, s, varargin{:});
         end
     end
 end
