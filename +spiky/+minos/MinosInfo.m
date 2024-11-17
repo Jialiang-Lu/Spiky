@@ -154,17 +154,13 @@ classdef MinosInfo < spiky.core.Metadata
             asset.x_source = stimulusSource(asset.x_source+1);
             asset.x_setType = stimulusSourceType(asset.x_setType+1);
             if strcmp(asset.x_source, "Internal") % internal
-                if strcmp(asset.x_type, "Image")
-                    ims = cell2mat(asset.x_images.value);
-                    guids = [ims.guid]';
-                    [~, idc] = ismember(guids, [assets.Guid]);
-                    for ii = length(idc):-1:1
-                        stimuli(ii, 1) = spiky.minos.Stimulus(...
-                            assets(idc(ii)).Name, "Image", ...
-                            assets(idc(ii)).Path, 1);
-                    end
-                else
-                    error('Not implemented');
+                ims = cell2mat(asset.x_images.value);
+                guids = [ims.guid]';
+                [~, idc] = ismember(guids, [assets.Guid]);
+                for ii = length(idc):-1:1
+                    stimuli(ii, 1) = spiky.minos.Stimulus(...
+                        assets(idc(ii)).Name, categorical(asset.x_type, ["Image" "Video" "GameObject"]), ...
+                        assets(idc(ii)).Path, 1);
                 end
             else % external
                 paths = strsplit(asset.x_text, newline)';
@@ -177,7 +173,7 @@ classdef MinosInfo < spiky.core.Metadata
                 end
                 for ii = length(paths):-1:1
                     stimuli(ii, 1) = spiky.minos.Stimulus(...
-                        names(ii), "Video", paths(ii), 1);
+                        names(ii), categorical(asset.x_type, ["Image" "Video" "GameObject"]), paths(ii), 1);
                 end
             end
         end

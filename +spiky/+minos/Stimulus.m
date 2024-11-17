@@ -2,7 +2,7 @@ classdef Stimulus < spiky.core.Metadata & spiky.core.MappableArray & spiky.core.
 
     properties
         Name string
-        Type string
+        Type categorical
         Path string
         Subset double
     end
@@ -11,7 +11,7 @@ classdef Stimulus < spiky.core.Metadata & spiky.core.MappableArray & spiky.core.
         function obj = Stimulus(name, type, path, subset)
             arguments
                 name string = ""
-                type string {mustBeMember(type, ["Image", "Video", "GameObject"])} = "Image"
+                type categorical = categorical("Image", ["Image" "Video" "GameObject"])
                 path string = ""
                 subset double = 1
             end
