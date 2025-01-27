@@ -52,6 +52,15 @@ classdef Session < spiky.core.Metadata
         function info = getInfo(obj)
             % GETINFO Get the session info.
             info = obj.loadData("spiky.ephys.SessionInfo.mat");
+            if ~exist(info.FpthDat(1), "file")
+                for ii = 1:numel(info.FpthDat)
+                    info.FpthDat(ii) = fullfile(obj.Fdir, extractAfter(info.FpthDat(ii), obj.Name));
+                end
+                for ii = 1:numel(info.FpthLfp)
+                    info.FpthLfp(ii) = fullfile(obj.Fdir, extractAfter(info.FpthLfp(ii), obj.Name));
+                end
+                obj.saveMetaData(info);
+            end
         end
 
         function spikes = getSpikes(obj)
@@ -75,6 +84,7 @@ classdef Session < spiky.core.Metadata
                 options.mainProbe (1, 1) double = 1
                 options.resampleDat (1, 1) logical = false
                 options.resampleLfp (1, 1) logical = true
+                options.plot (1, 1) logical = true
             end
             
             %% Load configuration
@@ -103,7 +113,7 @@ classdef Session < spiky.core.Metadata
 
             %% Load Raw
             rawData = spiky.ephys.RawData(obj.getFdir("Raw"));
-            eventGroups = rawData.getEvents(options.channelConfig.Dig);
+            eventGroups = rawData.getEvents(options.channelConfig.Dig, plot=options.plot);
             channelGroups = rawData.getChannels(options.brainRegions, options.probe, ...
                 options.channelConfig.Adc);
             [nSamples, nSamplesLfp, fpthDat] = rawData.resampleRaw(obj.getFpth("dat"), obj.getFpth("lfp"), ...

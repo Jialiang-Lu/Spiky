@@ -25,6 +25,9 @@ classdef Correlogram
                 epochs = []
             end
 
+            if isa(cellEvents, "spiky.core.Spikes")
+                cellEvents = {cellEvents.Time}';
+            end
             if isnumeric(cellEvents)
                 cellEvents = {cellEvents(:)};
             end

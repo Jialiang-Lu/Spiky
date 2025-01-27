@@ -34,25 +34,27 @@ function result = load(s, options)
 arguments
     s (1, 1) string
     options.ConvertToArray (1, 1) logical = false
+    options.Radix (1, 1) double = 2
 end
 
 initSnakeYaml
 import spiky.utils.*
 import org.yaml.snakeyaml.*;
+c = CustomConstructor();
 try
-    rootNode = Yaml().load(s);
+    rootNode = Yaml(c).load(s);
 catch cause
     MException("yaml:load:Failed", "Failed to load YAML string.").addCause(cause).throw
 end
 
-try
+% try
     result = convert(rootNode);
-catch exc
-    if startsWith(exc.identifier, "yaml:load:")
-        error(exc.identifier, exc.message);
-    end
-    exc.rethrow;
-end
+% catch exc
+%     if startsWith(exc.identifier, "yaml:load:")
+%         error(exc.identifier, exc.message);
+%     end
+%     exc.rethrow;
+% end
 
     function result = convert(node)
         switch class(node)
@@ -74,7 +76,7 @@ end
                 long = node.getTime;
                 result = datetime(long, "ConvertFrom", "epochtime", "TicksPerSecond", 1000, "TimeZone", "UTC", "Format", "dd-MMM-uuuu HH:mm:ss.SSS z");
             otherwise
-                error("yaml:load:TypeNotSupported", "Data type '%s' is not supported.", class(node))
+                result = MException("yaml:load:TypeNotSupported", "Data type '%s' is not supported.", class(node));
         end
     end
 
@@ -117,7 +119,7 @@ end
 end
 
 function initSnakeYaml
-snakeYamlFile = fullfile(fileparts(mfilename('fullpath')), 'snakeyaml', 'snakeyaml-1.30.jar');
+snakeYamlFile = fullfile(fileparts(mfilename('fullpath')), 'snakeyaml');
 if ~ismember(snakeYamlFile, javaclasspath('-dynamic'))
     javaaddpath(snakeYamlFile);
 end

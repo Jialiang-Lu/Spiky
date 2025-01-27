@@ -324,6 +324,7 @@ classdef Events
             end
             arguments
                 options.allowStep logical = true
+                options.plot logical = false
             end
             if (obj.Length<2)||(obj2.Length<2)
                 error("Not enough events to synchronize.")
@@ -347,13 +348,15 @@ classdef Events
                 s = spiky.core.Sync(name, f, @(y) (y<=f.a*f.c-f.b+f.d).*(y-f.d+f.b)./f.a+...
                     (y>f.a*f.c-f.b+f.d).*(y-f.d-f.b)./f.a, f.a, f.d-f.b, gof);
             end
-            spiky.plot.fig
-            plot(t1, td-td(1), "ro", t1, f(t1)-t1-td(1), "b.-");
-            xlabel("t1");
-            ylabel('td-td(1)');
-            legend(["Data", "Fit"]);
-            title(name);
-            spiky.plot.fixfig
+            if options.plot
+                spiky.plot.fig
+                plot(t1, td-td(1), "ro", t1, f(t1)-t1-td(1), "b.-");
+                xlabel("t1");
+                ylabel('td-td(1)');
+                legend(["Data", "Fit"]);
+                title(name);
+                spiky.plot.fixfig
+            end
         end
     end
 end

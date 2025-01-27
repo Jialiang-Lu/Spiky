@@ -154,7 +154,14 @@ classdef MinosInfo < spiky.core.Metadata
             asset.x_source = stimulusSource(asset.x_source+1);
             asset.x_setType = stimulusSourceType(asset.x_setType+1);
             if strcmp(asset.x_source, "Internal") % internal
-                ims = cell2mat(asset.x_images.value);
+                switch asset.x_type
+                    case "Image"
+                        ims = cell2mat(asset.x_images.value);
+                    case "Video"
+                        ims = cell2mat(asset.x_videos.value);
+                    case "GameObject"
+                        ims = cell2mat(asset.x_gameObjects.value);
+                end
                 guids = [ims.guid]';
                 [~, idc] = ismember(guids, [assets.Guid]);
                 for ii = length(idc):-1:1

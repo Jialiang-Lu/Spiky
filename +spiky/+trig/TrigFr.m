@@ -1,55 +1,90 @@
-classdef TrigFr
+classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
     % TRIGFR Firing rate triggered by events
 
     properties
-        Neuron spiky.core.Neuron
-        Data spiky.core.TimeTable
-        Time (1, :) double
         Options struct
     end
 
     methods
-        function obj = TrigFr(neuron, data, time, options)
+        function obj = TrigFr(spikes, events, window, options)
             arguments
-                neuron spiky.core.Neuron = spiky.core.Neuron.empty
-                data spiky.core.TimeTable = spiky.core.TimeTable.empty
-                time (1, :) double = []
-                options struct = struct
+                spikes spiky.core.Spikes = spiky.core.Spikes.empty
+                events = [] % (n, 1) double or spiky.core.Events
+                window double {mustBeVector} = [0, 1]
+                options.halfWidth double {mustBePositive} = 0.1
+                options.kernel string {mustBeMember(options.kernel, ["gaussian", "box"])} = "gaussian"
             end
-            obj.Neuron = neuron;
-            obj.Data = data;
-            obj.Time = time;
+            if nargin==0 || isempty(spikes)
+                return
+            end
+            if isa(events, "spiky.core.Events")
+                events = events.Time;
+            end
+            events = events(:);
+            t = window(:)';
+            nEvents = numel(events);
+            nT = numel(t);
+            res = t(2)-t(1);
+            wAdd = round(options.halfWidth*3/res);
+            idcAdd = wAdd+1:wAdd+nT;
+            tWide = t(1)-wAdd*res:res:t(end)+wAdd*res+eps;
+            windowWide = tWide([1 end]);
+            edges = [tWide-res/2, tWide(end)+res/2];
+            switch options.kernel
+                case "gaussian"
+                    kernel = exp(-0.5.*(tWide-(tWide(1)+tWide(end))/2).^2./options.halfWidth.^2)./...
+                        (sqrt(2*pi)*options.halfWidth);
+                case "box"
+                    kernel = zeros(size(tWide));
+                    idx = find(tWide-(tWide(1)+tWide(end))/2>=options.halfWidth, 1, "first");
+                    idc = idx:idx+options.halfWidth*2/res-1;
+                    kernel(idc) = 1/options.halfWidth/2;
+                otherwise
+                    error("Unknown kernel %s", options.kernel);
+            end
+            nNeurons = numel(spikes);
+            fr = cell(1, nEvents, nNeurons);
+            tr = spikes.trig(events, windowWide);
+            tr = tr.Data;
+            % pb = spiky.plot.ProgressBar(nEvents*nNeurons, "Analyzing fr", parallel=true);
+            parfor kk = 1:nEvents*nNeurons
+                sp = tr{kk};
+                spWide = histcounts(sp, edges);
+                spWide = conv(spWide, kernel, "same");
+                fr{kk} = spWide(idcAdd)';
+                % pb.step
+            end
+            fr = cell2mat(fr);
+            obj.Start_ = t(1);
+            obj.Step_ = res;
+            obj.N_ = nT;
+            obj.Data = fr;
+            obj.EventDim = 2;
+            obj.Events_ = events;
+            obj.Window = window;
+            obj.Neuron = [spikes.Neuron]';
             obj.Options = options;
         end
 
-        function [m, se] = getFr(obj, window)
-            % GETFR Get mean and standard error of the firing rate in a window
+        function [m, sd] = getFr(obj, window)
+            % GETFR Get mean and standard deviation of the firing rate in a window
             arguments
                 obj spiky.trig.TrigFr
                 window double = []
             end
 
-            if isempty(obj(1).Data)
+            if isempty(obj.Data)
                 m = [];
-                se = [];
+                sd = [];
                 return
             end
             if isempty(window)
-                window = obj(1).Time([1 end]);
+                window = obj.Time([1 end]);
             end
             is = obj(1).Time>=window(1) & obj(1).Time<=window(2);
-            nT = sum(is);
-            n = height(obj(1).Data);
-            m = zeros(numel(obj), nT);
-            if nargout>1
-                se = zeros(numel(obj), nT);
-            end
-            for ii = 1:numel(obj)
-                m(ii, :) = mean(obj(ii).Data.Fr(:, is), 1);
-                if nargout>1
-                    se(ii, :) = std(obj(ii).Data.Fr(:, is), 0, 1)./sqrt(n);
-                end
-            end
+            data = obj.Data(is, :, :);
+            m = squeeze(mean(data, [1 2]));
+            sd = squeeze(std(data, 0, [1 2]));
         end
 
         function [h, hError] = plotFr(obj, cats, lineSpec, plotOps, options)
@@ -84,7 +119,7 @@ classdef TrigFr
             if isempty(fg)
                 spiky.plot.fig
             end
-            n = obj.Data.Length;
+            n = obj.NEvents;
             idcEvents = options.IdcEvents;
             if isempty(idcEvents)
                 idcEvents = 1:n;
@@ -92,7 +127,7 @@ classdef TrigFr
             if islogical(idcEvents)
                 idcEvents = find(idcEvents);
             end
-            data = obj.Data.Fr(idcEvents, :);
+            data = obj.Data(:, idcEvents)';
             if ~isempty(cats)
                 cats = cats(:);
                 if numel(cats)==n
@@ -122,10 +157,10 @@ classdef TrigFr
             if options.FaceAlpha>0
                 plotOps.FaceAlpha = options.FaceAlpha;
                 plotArgs = namedargs2cell(plotOps);
-                [h1, hError1] = spiky.plot.plotError(obj.Time, m, se, lineSpec, plotArgs{:});
+                [h1, hError1] = spiky.plot.plotError(obj.Time', m, se, lineSpec, plotArgs{:});
             else
                 plotArgs = namedargs2cell(plotOps);
-                h1 = plot(obj.Time, m, lineSpec, plotArgs{:});
+                h1 = plot(obj.Time', m, lineSpec, plotArgs{:});
             end
             box off
             xlim(obj.Time([1 end]));
@@ -147,26 +182,30 @@ classdef TrigFr
             % TTEST Perform t-test on the firing rate in a window
             arguments
                 obj spiky.trig.TrigFr
-                baseline double
+                baseline double = []
                 window double = []
             end
 
+            nUnits = size(obj, 3);
+            if isempty(obj.Data)
+                baseline = obj.Window([1 end]);
+            end
             if isequal(size(baseline), [1, 2])
                 % baseline is a window
                 m = mean(obj.getFr(baseline), 2);
-            elseif ~isequal(size(baseline), size(obj))
-                error("Baseline must be a window or have the same size as the object")
+            elseif ~isequal(size(baseline), nUnits)
+                error("Baseline must be a window or equal to the number of neurons")
             else
                 m = baseline;
             end
             if isempty(window)
-                window = obj(1).Time([1 end]);
+                window = obj.Window([1 end]);
             end
-            is = obj(1).Time>=window(1) & obj(1).Time<=window(2);
+            is = obj.Time>=window(1) & obj.Time<=window(2);
             nT = sum(is);
-            p = NaN(numel(obj), nT);
-            for ii = 1:numel(obj)
-                [~, p(ii, :)] = ttest(obj(ii).Data.Fr(:, is), m(ii));
+            p = NaN(nT, nUnits);
+            for ii = 1:nUnits
+                [~, p(:, ii)] = ttest(obj.Data(is, :, ii), m(ii), Dim=2);
             end
         end
 
@@ -192,30 +231,22 @@ classdef TrigFr
                 options.ClassNames = []
             end
 
-            if isempty(obj(1).Data)
-                mdls = [];
-                return
-            end
             if isempty(window)
-                window = obj(1).Time([1 end]);
+                window = obj.Time([1 end]);
             end
-            is = obj(1).Time>=window(1) & obj(1).Time<=window(2);
+            is = obj.Time>=window(1) & obj(1).Time<=window(2);
             nT = sum(is);
-            n = height(obj(1).Data);
             if isempty(idcEvents)
-                idcEvents = true(n, 1);
+                idcEvents = true(obj.NEvents, 1);
             end
             labels = labels(idcEvents);
             n = numel(labels);
-            X = zeros(numel(obj), n, nT);
-            for ii = 1:numel(obj)
-                X(ii, :, :) = permute(obj(ii).Data.Fr(idcEvents, is), [3 1 2]);
-            end
+            X = permute(obj.Data(is, idcEvents, :), [3 2 1]);
             % if isempty(options.ClassNames)
             %     options.ClassNames = unique(labels);
             % end
             mdls = cell(nT, 1);
-            %spiky.plot.timedWaitbar(0, "Fitting models");
+            pb = spiky.plot.ProgressBar(nT, "Fitting models", parallel=true);
             parfor ii = 1:nT
                 if isempty(options.KFold)
                     mdls{ii} = fitcecoc(X(:, :, ii), labels, Coding=options.Coding, ObservationsIn="columns", ...
@@ -224,10 +255,31 @@ classdef TrigFr
                     mdls{ii} = fitcecoc(X(:, :, ii), labels, Coding=options.Coding, ObservationsIn="columns", ...
                         ClassNames=options.ClassNames, KFold=options.KFold, Options=statset(UseParallel=true));
                 end
-                %spiky.plot.timedWaitbar(ii/nT);
-                fprintf("Fitting model %d\n", ii);
+                pb.step
             end
-            %spiky.plot.timedWaitbar([]);
+        end
+
+        function varargout = subsref(obj, s)
+            if strcmp(s(1).type, '()')
+                s1 = s(1);
+                s2 = s(1);
+                switch length(s1.subs)
+                    case 1
+                        s(1).subs = [{':', ':'}, s1.subs];
+                        s2.subs = {':'};
+                    case 2
+                        s1.subs = {1};
+                        s2.subs = s2.subs(2);
+                    case 3
+                        s1.subs = s1.subs(3);
+                        s2.subs = s2.subs(2);
+                    otherwise
+                        error("Too many indices")
+                end
+                obj.Neuron = builtin("subsref", obj.Neuron, s1);
+                obj.Events_ = builtin("subsref", obj.Events_, s2);
+            end
+            [varargout{1:nargout}] = subsref@spiky.core.TimeTable(obj, s);
         end
     end
 end

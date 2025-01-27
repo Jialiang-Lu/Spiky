@@ -41,6 +41,6 @@ arguments
 end
 
 content = string(fileread(filePath));
-result = yaml.load(content, "ConvertToArray", options.ConvertToArray);
+result = spiky.utils.yaml.load(content, "ConvertToArray", options.ConvertToArray);
 
 end

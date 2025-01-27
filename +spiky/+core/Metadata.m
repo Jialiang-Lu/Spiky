@@ -9,6 +9,9 @@ classdef Metadata
                 return
             end
             s.Value = struct;
+            if isempty(obj)
+                return
+            end
             mc = metaclass(obj);
             props = {mc.PropertyList.Name}';
             props = props(~[mc.PropertyList.Dependent] & ...

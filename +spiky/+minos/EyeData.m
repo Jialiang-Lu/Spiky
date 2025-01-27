@@ -11,6 +11,36 @@ classdef EyeData < spiky.core.Metadata
         Time double
     end
 
+    methods
+        function time = get.Time(obj)
+            time = obj.Data.Time;
+        end
+
+        function vp = getViewport(obj, height, width)
+            % GETVIEWPORT Get viewport
+            %
+            %   vp = getViewport(obj, height, width)
+            %
+            %   obj: eye data object
+            %   height: height of the screen in degrees of view angle
+            %   width: width of the screen in degrees of view angle
+            %
+            %   vp: viewport, (0, 0) is the left top corner, (1, 1) is the right bottom corner
+
+            arguments
+                obj spiky.minos.EyeData
+                height (1, 1) double
+                width (1, 1) double = NaN
+            end
+            if isnan(width)
+                width = height/9*16;
+            end
+            gaze = double(obj.Data.Convergence);
+            vp = spiky.core.TimeTable(obj.Time, [gaze(:, 1)./gaze(:, 3)./tand(width/2).*0.5+0.5...
+                gaze(:, 2)./gaze(:, 3)./tand(height/2).*0.5+0.5]);
+        end
+    end
+
     methods (Static)
         function obj = load(fdir, func, fiveDot)
             % LOAD Load eye data from a directory

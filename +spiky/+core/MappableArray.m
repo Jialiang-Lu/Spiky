@@ -66,7 +66,7 @@ classdef (Abstract) MappableArray
                         use = true;
                     end
                 case '.'
-                    is = strcmp(s(1).subs, [obj.Key]);
+                    is = s(1).subs==[obj.Key];
                     if any(is)
                         s.type = '()';
                         s.subs = {is};

@@ -15,23 +15,42 @@ classdef Spikes < spiky.core.Events
             obj.Time = time(:);
         end
 
-        function spikes = filter(obj, propArgs)
+        function [spikes, idc] = filter(obj, propArgs)
             % FILTER Filter spikes by metadata
             %
-            %   var: metadata variable
             %   propArgs: property filters from spiky.core.Spikes
             arguments
                 obj spiky.core.Spikes
-                propArgs.?spiky.core.Neuron
+                propArgs.Group
+                propArgs.Id
+                propArgs.Region
+                propArgs.Ch
+                propArgs.ChInGroup
+                propArgs.Label
+                propArgs.Waveform
+                propArgs.Amplitude
             end
             isValid = true(numel(obj), 1);
             names = string(fieldnames(propArgs));
             neurons = [obj.Neuron]';
             for ii = 1:numel(names)
-                isValid = isValid & ismember([neurons.(names(ii))]', ...
-                    propArgs.(names(ii)));
+                if isempty(propArgs.(names(ii)))
+                    continue;
+                end
+                if isstring(propArgs.(names(ii)))
+                    isValid = isValid & ismember([neurons.(names(ii))]', ...
+                        propArgs.(names(ii)));
+                elseif isnumeric(propArgs.(names(ii)))
+                    isValid = isValid & ismember([neurons.(names(ii))]', ...
+                        propArgs.(names(ii)));
+                elseif isa(propArgs.(names(ii)), "function_handle")
+                    isValid = isValid & propArgs.(names(ii))([neurons.(names(ii))]');
+                end
             end
             spikes = obj(isValid);
+            if nargout>1
+                idc = find(isValid);
+            end
         end
 
         function trigSpikes = trig(obj, events, window)
@@ -46,14 +65,7 @@ classdef Spikes < spiky.core.Events
                 events % (n, 1) double or spiky.core.Events
                 window double = [0 1]
             end
-            if isa(events, "spiky.core.Events")
-                events = events.Time;
-            end
-            events = events(:);
-            trigSpikes(numel(obj), 1) = spiky.trig.TrigSpikes();
-            parfor ii = 1:numel(obj)
-                trigSpikes(ii, 1) = spiky.trig.TrigSpikes(obj(ii), events, window);
-            end
+            trigSpikes = spiky.trig.TrigSpikes(obj, events, window);
         end
 
         function fr = trigFr(obj, events, window, options)
@@ -71,54 +83,8 @@ classdef Spikes < spiky.core.Events
                 options.halfWidth double {mustBePositive} = 0.1
                 options.kernel string {mustBeMember(options.kernel, ["gaussian", "box"])} = "gaussian"
             end
-            if isa(events, "spiky.core.Events")
-                events = events.Time;
-            end
-            events = events(:);
-            t = window(:)';
-            nRows = numel(events);
-            nT = numel(t);
-            res = t(2)-t(1);
-            wAdd = round(options.halfWidth*3/res);
-            idcAdd = wAdd+1:wAdd+nT;
-            tWide = t(1)-wAdd*res:res:t(end)+wAdd*res+eps;
-            windowWide = tWide([1 end]);
-            edges = [tWide-res/2, tWide(end)+res/2];
-            switch options.kernel
-                case "gaussian"
-                    kernel = exp(-0.5.*(tWide-(tWide(1)+tWide(end))/2).^2./options.halfWidth.^2)./...
-                        (sqrt(2*pi)*options.halfWidth);
-                case "box"
-                    kernel = zeros(size(tWide));
-                    idx = find(tWide-(tWide(1)+tWide(end))/2>=options.halfWidth, 1, "first");
-                    idc = idx:idx+options.halfWidth*2/res-1;
-                    kernel(idc) = 1/options.halfWidth/2;
-                otherwise
-                    error("Unknown kernel %s", options.kernel);
-            end
-            % if numel(obj)>1
-            %     spiky.plot.timedWaitbar(0, "Analyzing spikes");
-            % end
-            fr(numel(obj), 1) = spiky.trig.TrigFr;
-            parfor ii = 1:numel(obj)
-                fr1 = zeros(nRows, nT);
-                tr = obj(ii).trig(events, windowWide);
-                for jj = nRows:-1:1
-                    sp = tr.Data{jj};
-                    spWide = histcounts(sp, edges);
-                    spWide = conv(spWide, kernel, "same");
-                    fr1(jj, :) = spWide(idcAdd);
-                end
-                fr(ii, 1) = spiky.trig.TrigFr(obj(ii).Neuron, ...
-                    spiky.core.TimeTable(events, table(fr1, VariableNames="Fr")), ...
-                    t, options);
-                % if numel(obj)>1
-                %     spiky.plot.timedWaitbar((numel(obj)-ii+1)/numel(obj));
-                % end
-            end
-            % if numel(obj)>1
-            %     spiky.plot.timedWaitbar([]);
-            % end
+            optionsCell = namedargs2cell(options);
+            fr = spiky.trig.TrigFr(obj, events, window, optionsCell{:});
         end
     end
 

@@ -118,6 +118,9 @@ classdef Data
                                     ti.Bytes-tbl.Bytes(ii))';
                                 if info1(ii).Type=="logical"
                                     tmp = logical(tmp);
+                                elseif info1(ii).Type=="char"
+                                    tmp = cellfun(@(x) string(native2unicode(x)), num2cell(tmp, 2));
+                                    tmp = strip(tmp, char(0));
                                 end
                                 if ~isempty(info1(ii).Constants)
                                     tmp = info1(ii).decode(tmp);

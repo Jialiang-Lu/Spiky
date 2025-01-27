@@ -9,6 +9,7 @@ classdef Neuron
         ChInGroup double
         Label string
         Waveform spiky.lfp.Lfp
+        Amplitude double
     end
 
     properties (Dependent)
@@ -35,6 +36,11 @@ classdef Neuron
             obj.ChInGroup = chInGroup;
             obj.Label = label;
             obj.Waveform = waveform;
+            if ~isempty(waveform)
+                obj.Amplitude = max(waveform.Data) - min(waveform.Data);
+            else
+                obj.Amplitude = 0;
+            end
         end
 
         function str = get.Str(obj)

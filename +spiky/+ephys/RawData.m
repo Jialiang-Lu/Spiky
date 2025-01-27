@@ -23,6 +23,7 @@ classdef RawData
                 tsStart int64 = 0
                 fs double = 30000
             end
+            channelNameSet = unique(channelNames);
             fi = spiky.core.FileInfo(fpth);
             events = spiky.ephys.RecEvents.empty;
             if exist(fpth, "dir")
@@ -42,12 +43,12 @@ classdef RawData
                         channelNames = repmat("", max(abs(st)), 1);
                     end
                     events = spiky.ephys.RecEvents(t, sn, spiky.ephys.ChannelType.Dig, ...
-                        abs(st), channelNames(abs(st)), st>0, "");
+                        abs(st), categorical(channelNames(abs(st)), channelNameSet), st>0, "");
                 else
                     % Network
                     txt = spiky.utils.npy.readNPY(fullfile(fpth, "text.npy"));
                     events = spiky.ephys.RecEvents(t, sn, spiky.ephys.ChannelType.Net, ...
-                        0, "", true, string(txt));
+                        0, [], true, string(txt));
                 end
             elseif exist(fpth, "file")
                 if fi.Name=="messages.events"
@@ -59,7 +60,7 @@ classdef RawData
                     ts = spiky.utils.str2int(tokens(:, 1))-tsStart;
                     t = double(ts)./fs;
                     events = spiky.ephys.RecEvents(t, ts, spiky.ephys.ChannelType.Net, ...
-                        0, "", true, tokens(:, 2));
+                        0, [], true, tokens(:, 2));
                 else
                     n = (fi.Bytes-1024)/16;
                     if n~=round(n)
@@ -77,7 +78,7 @@ classdef RawData
                     end
                     t = double(ts)./fs;
                     events = spiky.ephys.RecEvents(t, ts, spiky.ephys.ChannelType.Dig, ...
-                        ch, channelNames(ch), state>0, "");
+                        ch, categorical(channelNames(ch), channelNameSet), state>0, "");
                     fclose(fid);
                 end
             end
@@ -120,7 +121,7 @@ classdef RawData
             error("No raw data files found in %s", fdir);
         end
 
-        function eventGroups = getEvents(obj, channelNames)
+        function eventGroups = getEvents(obj, channelNames, options)
             % GETEVENTS Get events from the raw data
             %
             %   eventGroups = GETEVENTS(obj, channelNames)
@@ -132,8 +133,10 @@ classdef RawData
             arguments
                 obj spiky.ephys.RawData
                 channelNames string = string.empty
+                options.plot logical = true
             end
 
+            optionsCell = namedargs2cell(options);
             switch obj.Type
                 case "OpenEphys"
                     fi = spiky.core.FileInfo(fullfile(obj.Fdir, "*.events"));
@@ -184,14 +187,14 @@ classdef RawData
                         if nFiles>1
                             for ii = nFiles:-1:2
                                 [sync, events2] = events{1}.syncWith(events{ii}, ...
-                                    sprintf("probe1 to probe%d", ii));
+                                    sprintf("probe1 to probe%d", ii), optionsCell{:});
                                 eventGroups(ii, 1) = spiky.ephys.EventGroup(sprintf("Probe%d", ii), ...
                                     spiky.ephys.ChannelType.Neural, events2, tsRanges(ii, :), sync);
                             end
                         end
                         eventGroups(1, 1) = spiky.ephys.EventGroup("Probe1", ...
                             spiky.ephys.ChannelType.Neural, events{1}, tsRanges(1, :));
-                        sync = events{1}.syncWith(eventsAdc.Sync, "probe1 to adc");
+                        sync = events{1}.syncWith(eventsAdc.Sync, "probe1 to adc", optionsCell{:});
                         eventsAdc.Time = sync.Inv(eventsAdc.Time);
                         eventGroups(end+1, 1) = spiky.ephys.EventGroup("Adc", ...
                             spiky.ephys.ChannelType.Adc, eventsAdc, tsRangesAdc, sync);
@@ -202,7 +205,7 @@ classdef RawData
                     events1 = eventGroups(1).Events.Sync;
                     events1 = events1(events1.Rising, :);
                     events1 = events1(idcNet+1, :);
-                    sync = events1.syncWith(eventsSyncNet, "probe1 to net", 0.5);
+                    sync = events1.syncWith(eventsSyncNet, "probe1 to net", 0.5, optionsCell{:});
                     eventGroups(end+1, 1) = spiky.ephys.EventGroup("Net", ...
                         spiky.ephys.ChannelType.Net, eventsNet, tsRangesAdc, sync);
             end
@@ -367,7 +370,7 @@ classdef RawData
                 probes spiky.ephys.Probe
                 fsLfp double = 1000
                 resampleDat logical = false
-                resampleLfp logical = false
+                resampleLfp logical = true
                 syncs spiky.core.Sync = spiky.core.Sync.empty
             end
 
@@ -392,7 +395,7 @@ classdef RawData
                     rafile.setLength(nSamples*2*nCh);
                     rafile.close();
                     %%
-                    spiky.plot.timedWaitbar(0, "Resampling raw");
+                    pb = spiky.plot.ProgressBar(nChunks, "Resampling raw");
                     for ii = 1:nChunks
                         idxStart = (ii-1)*nSamplePerChunk+1;
                         idxEnd = min(ii*nSamplePerChunk, nSamples);
@@ -406,39 +409,41 @@ classdef RawData
                         clear mDat
                         mDat = memmapfile(fpthDat, Writable=true, Format={"int16", [nCh, nSamples], "m"});
                         mDat.Data.m(:, idxStart:idxEnd) = raw;
-                        spiky.plot.timedWaitbar(ii/nChunks);
+                        pb.step
                     end
                     %%
-                    spiky.plot.timedWaitbar(0, "Resampling lfp");
                     nSamplesLfp = ceil(nSamples/30000*fsLfp);
-                    nChPerGroup = 8;
-                    nGroups = ceil(nChNeural/nChPerGroup);
-                    lfp = zeros(nCh, nSamplesLfp, "int16");
-                    raw = zeros(nChPerGroup, nSamples, "int16");
-                    for ii = 1:nGroups
-                        idxStart = (ii-1)*nChPerGroup+1;
-                        idxEnd = min(ii*nChPerGroup, nChNeural);
-                        chRaw = map.oeMap(idxStart:idxEnd);
-                        parfor jj = 1:length(chRaw)
-                            raw(jj, :) = obj.getContinuous(chRaw(jj))';
-                            % fprintf("=");
+                    if resampleLfp
+                        nChPerGroup = 8;
+                        nGroups = ceil(nChNeural/nChPerGroup);
+                        lfp = zeros(nCh, nSamplesLfp, "int16");
+                        raw = zeros(nChPerGroup, nSamples, "int16");
+                        pb = spiky.plot.ProgressBar(nGroups, "Resampling LFP");
+                        for ii = 1:nGroups
+                            idxStart = (ii-1)*nChPerGroup+1;
+                            idxEnd = min(ii*nChPerGroup, nChNeural);
+                            chRaw = map.oeMap(idxStart:idxEnd);
+                            parfor jj = 1:length(chRaw)
+                                raw(jj, :) = obj.getContinuous(chRaw(jj))';
+                                % fprintf("=");
+                            end
+                            % fprintf(newline);
+                            lfp(idxStart:idxEnd, :) = obj.resampleLfp(raw, 30000, fsLfp);
+                            pb.step
                         end
-                        % fprintf(newline);
-                        lfp(idxStart:idxEnd, :) = obj.resampleLfp(raw, 30000, fsLfp);
-                        spiky.plot.timedWaitbar(ii/nGroups);
-                    end
-                    if nCh>nChNeural
-                        chRaw = map.oeMap(nChNeural+1:end);
-                        parfor jj = 1:length(chRaw)
-                            raw(jj, :) = obj.getContinuous(chRaw(jj))';
-                            fprintf("=");
+                        if nCh>nChNeural
+                            chRaw = map.oeMap(nChNeural+1:end);
+                            parfor jj = 1:length(chRaw)
+                                raw(jj, :) = obj.getContinuous(chRaw(jj))';
+                                fprintf("=");
+                            end
+                            lfp(nChNeural+1:end, :) = obj.resampleLfp(raw, 30000, fsLfp, true);
+                            fprintf(newline);
                         end
-                        lfp(nChNeural+1:end, :) = obj.resampleLfp(raw, 30000, fsLfp, true);
-                        fprintf(newline);
+                        fidLfp = fopen(fpthLfp, "w");
+                        fwrite(fidLfp, lfp, "int16");
+                        fclose(fidLfp);
                     end
-                    fidLfp = fopen(fpthLfp, "w");
-                    fwrite(fidLfp, lfp, "int16");
-                    fclose(fidLfp);
                 case "Binary"
                     if obj.Source=="Npx"
                         if resampleDat
@@ -458,48 +463,50 @@ classdef RawData
                         nSamplesLfp = ceil(nSamplesRaw(1)/ratio);
                         nSamplesAdc = obj.DatFiles(end).Bytes/2/8;
                         nChAll = nProbes*384+8;
-                        lfp = zeros(nChAll, nSamplesLfp, "int16");
-                        mem = memory();
-                        groupSize = floor(mem.MaxPossibleArrayBytes*0.2/nSamplesRaw(1)/8);
-                        [nGroupPerProbe, groupSize] = spiky.utils.equalDiv(384, groupSize);
-                        for ii = 1:nProbes
-                            spiky.plot.timedWaitbar(0, "Resampling LFP");
-                            mf = memmapfile(obj.LfpFiles(ii).Path, ...
-                                Format={"int16", [nChRaw nSamplesRaw(ii)], "m"});
-                            if ii>1
-                                idcK = syncs(ii-1).Fit((0:nSamplesRaw(1)-1)./2500).*2500+1;
-                                idcK2 = round(idcK(1)-3):round(idcK(end)+3);
-                                idcK2(idcK2<=0) = [];
-                                idcK2(idcK2>nSamplesRaw(ii)) = [];
-                                idcKOff = idcK-idcK2(1)+1; % make loaded lfp start from 1 for interpolation
-                            end
-                            for jj = 1:nGroupPerProbe
-                                idcCh = (1:groupSize)+(jj-1)*groupSize;
-                                idcInGroup = probes(ii).ChanMap(idcCh);
-                                idcInOut = idcCh+(ii-1)*384;
-                                if ii==1
-                                    tmp = double(mf.Data.m(idcInGroup, :))';
-                                else
-                                    tmp = interp1(double(mf.Data.m(idcInGroup, idcK2)'), idcKOff, "linear", 0);
+                        if resampleLfp
+                            lfp = zeros(nChAll, nSamplesLfp, "int16");
+                            mem = memory();
+                            groupSize = floor(mem.MaxPossibleArrayBytes*0.2/nSamplesRaw(1)/8);
+                            [nGroupPerProbe, groupSize] = spiky.utils.equalDiv(384, groupSize);
+                            pb = spiky.plot.ProgressBar(nGroupPerProbe*nProbes, "Resampling LFP");
+                            for ii = 1:nProbes
+                                mf = memmapfile(obj.LfpFiles(ii).Path, ...
+                                    Format={"int16", [nChRaw nSamplesRaw(ii)], "m"});
+                                if ii>1
+                                    idcK = syncs(ii-1).Fit((0:nSamplesRaw(1)-1)./2500).*2500+1;
+                                    idcK2 = round(idcK(1)-3):round(idcK(end)+3);
+                                    idcK2(idcK2<=0) = [];
+                                    idcK2(idcK2>nSamplesRaw(ii)) = [];
+                                    idcKOff = idcK-idcK2(1)+1; % make loaded lfp start from 1 for interpolation
                                 end
-                                lfp(idcInOut, :) = int16(resample(tmp, p, q))';
-                                spiky.plot.timedWaitbar(((ii-1)*nGroupPerProbe+jj)/(nGroupPerProbe*nProbes));
+                                for jj = 1:nGroupPerProbe
+                                    idcCh = (1:groupSize)+(jj-1)*groupSize;
+                                    idcInGroup = probes(ii).ChanMap(idcCh);
+                                    idcInOut = idcCh+(ii-1)*384;
+                                    if ii==1
+                                        tmp = double(mf.Data.m(idcInGroup, :))';
+                                    else
+                                        tmp = interp1(double(mf.Data.m(idcInGroup, idcK2)'), idcKOff, "linear", 0);
+                                    end
+                                    lfp(idcInOut, :) = int16(resample(tmp, p, q))';
+                                    pb.step
+                                end
                             end
+                            mf = memmapfile(obj.DatFiles(end).Path, Format={"int16", [8 nSamplesAdc], "m"});
+                            tmp = double(mf.Data.m)';
+                            tmp = medfilt1(tmp, ceil(30000/fsLfp));
+                            idcK = syncs(end).Fit((0:nSamplesLfp-1)./fsLfp).*30000+1;
+                            idcK2 = round(idcK(1)-3):round(idcK(end)+3);
+                            idcK2(idcK2<=0) = [];
+                            idcK2(idcK2>nSamplesAdc) = [];
+                            idcKOff = idcK-idcK2(1)+1; % make loaded lfp start from 1 for interpolation
+                            tmp = interp1(tmp, idcKOff, "linear", 0);
+                            lfp(end-8+1:end, :) = int16(tmp)';
+                            fidLfp = fopen(fpthLfp, "w");
+                            fwrite(fidLfp, lfp, "int16");
+                            fclose(fidLfp);
                         end
-                        mf = memmapfile(obj.DatFiles(end).Path, Format={"int16", [8 nSamplesAdc], "m"});
-                        tmp = double(mf.Data.m)';
-                        tmp = medfilt1(tmp, ceil(30000/fsLfp));
-                        idcK = syncs(end).Fit((0:nSamplesLfp-1)./fsLfp).*30000+1;
-                        idcK2 = round(idcK(1)-3):round(idcK(end)+3);
-                        idcK2(idcK2<=0) = [];
-                        idcK2(idcK2>nSamplesAdc) = [];
-                        idcKOff = idcK-idcK2(1)+1; % make loaded lfp start from 1 for interpolation
-                        tmp = interp1(tmp, idcKOff, "linear", 0);
-                        lfp(end-8+1:end, :) = int16(tmp)';
-                        fidLfp = fopen(fpthLfp, "w");
-                        fwrite(fidLfp, lfp, "int16");
-                        fclose(fidLfp);
-                        else
+                    else
                         error("Not implemented")
                     end
                 fpthDat = [obj.DatFiles(1:end-1).Path]';

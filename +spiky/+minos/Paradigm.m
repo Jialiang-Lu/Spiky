@@ -5,6 +5,7 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
         Name string
         Periods spiky.core.Periods
         Trials spiky.core.TimeTable
+        TrialInfo spiky.core.TimeTable
         Vars spiky.core.Parameter
     end
 
@@ -42,12 +43,20 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
                 @(s) all(~ismember(s, ...
                 ["ParadigmStart", "ParadigmStop"])), "Event");
             numbers = unique(trials.Values.Number, "stable");
+            singleInfo = numel(trialInfo.Values.Number)==numel(unique(trialInfo.Values.Number));
             [~, idcInfo] = ismember(numbers, trialInfo.Values.Number(end:-1:1));
             idcInfo = length(trialInfo.Values.Number)-idcInfo+1;
             n = length(numbers);
             varNames = reshape([eventNames'; eventNames'+"_Type"], [], 1);
-            data = [trialInfo.Values(idcInfo, :) array2table(NaN(n, ...
-                length(varNames)), "VariableNames", varNames)];
+            if singleInfo
+                data = [trialInfo.Values(idcInfo, :) array2table(NaN(n, ...
+                    length(varNames)), "VariableNames", varNames)];
+                info = spiky.core.TimeTable.empty;
+            else
+                data = [trialInfo.Values(idcInfo, ["Timestamp" "Number"]) array2table(NaN(n, ...
+                    length(varNames)), "VariableNames", varNames)];
+                info = spiky.core.TimeTable(func(double(trialInfo.Timestamp)/1e7), trialInfo.Values);
+            end
             t = func(double(trials.Values.Timestamp)/1e7);
             nEvents = length(eventNames);
             if ~isempty(photodiode)
@@ -86,21 +95,23 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
                 end
             end
             obj = spiky.minos.Paradigm(name, periods, spiky.core.TimeTable(...
-                func(double(data.Timestamp)/1e7), data), log.getParameters(func));
+                func(double(data.Timestamp)/1e7), data), info, log.getParameters(func));
         end
     end
 
     methods
-        function obj = Paradigm(name, periods, trials, vars)
+        function obj = Paradigm(name, periods, trials, trialInfo, vars)
             arguments
                 name string = ""
                 periods spiky.core.Periods = spiky.core.Periods.empty
                 trials spiky.core.TimeTable = spiky.core.TimeTable.empty
+                trialInfo spiky.core.TimeTable = spiky.core.TimeTable.empty
                 vars spiky.core.Parameter = spiky.core.Parameter.empty
             end
             obj.Name = name;
             obj.Periods = periods;
             obj.Trials = trials;
+            obj.TrialInfo = trialInfo;
             obj.Vars = vars;
         end
 

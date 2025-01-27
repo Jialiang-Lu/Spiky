@@ -4,7 +4,7 @@ classdef RecEvents < spiky.core.TimeTable & spiky.core.MappableArray
         Timestamp int64
         Type spiky.ephys.ChannelType
         Channel int16
-        ChannelName string
+        ChannelName categorical
         Rising logical
         Message string
     end
@@ -18,7 +18,7 @@ classdef RecEvents < spiky.core.TimeTable & spiky.core.MappableArray
                 timestamp int64 = []
                 type spiky.ephys.ChannelType = spiky.ephys.ChannelType.empty
                 channel int16 = []
-                name string = string.empty
+                name categorical = categorical.empty
                 rising logical = logical.empty
                 message string = string.empty
             end
@@ -37,7 +37,9 @@ classdef RecEvents < spiky.core.TimeTable & spiky.core.MappableArray
                 if isscalar(channel)
                     channel = repmat(channel, size(time));
                 end
-                if isscalar(name)
+                if isempty(name)
+                    name = categorical(strings(size(time)));
+                elseif isscalar(name)
                     name = repmat(name, size(time));
                 end
                 if isscalar(rising)
@@ -70,6 +72,7 @@ classdef RecEvents < spiky.core.TimeTable & spiky.core.MappableArray
                 name string
                 tol double = 0.02
                 options.allowStep logical = true
+                options.plot logical = true
             end
 
             t1 = spiky.core.Events(obj.Time);

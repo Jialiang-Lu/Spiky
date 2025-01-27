@@ -6,7 +6,7 @@ classdef Trig < spiky.core.TimeTable
     
     properties
         EventDim (1, 1) double = 1
-        Window (:, 2) double
+        Window (:, :) double
     end
 
     properties (Dependent)
@@ -31,15 +31,16 @@ classdef Trig < spiky.core.TimeTable
             end
         end
 
-        function varargout = subsref(obj, s)
-            [varargout{1:nargout}] = builtin("subsref", obj, s);
-        end
+        % function varargout = subsref(obj, s)
+        %     [varargout{1:nargout}] = builtin("subsref", obj, s);
+        % end
 
-        function obj = subsasgn(obj, s, varargin)
-            obj = builtin("subsasgn", obj, s, varargin{:});
-        end
-        function varargout = size(obj, varargin)
-            [varargout{1:nargout}] = builtin("size", obj, varargin{:});
-        end
+        % function obj = subsasgn(obj, s, varargin)
+        %     obj = builtin("subsasgn", obj, s, varargin{:});
+        % end
+
+        % function varargout = size(obj, varargin)
+        %     [varargout{1:nargout}] = builtin("size", obj, varargin{:});
+        % end
     end
 end

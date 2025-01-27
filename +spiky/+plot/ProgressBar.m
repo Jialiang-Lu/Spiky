@@ -33,8 +33,8 @@ classdef ProgressBar < handle
             end
         end
 
-        function add(obj)
-            %ADD Update the progress of the progress bar
+        function step(obj)
+            %STEP Update the progress of the progress bar
 
             if obj.Options.parallel
                 send(obj.DataQueue, 0);

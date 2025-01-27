@@ -2,9 +2,9 @@ classdef TypeInfo
     %TYPEINFO Info for (de-)serializing Minos struct
 
     properties (Constant, Hidden)
-        BuiltIns = dictionary(["logical", "char", "int8", "uint8", "int16", "uint16", ...
+        BuiltIns = dictionary(["logical", "char", "char", "int8", "uint8", "int16", "uint16", ...
             "int32", "uint32", "int64", "uint64", "single", "double"],...
-            ["b4", "c1", "i1", "u1", "i2", "u2", "i4", "u4", "i8", "u8", "f4", "f8"])
+            ["b4", "c1", "c2", "i1", "u1", "i2", "u2", "i4", "u4", "i8", "u8", "f4", "f8"])
         BasePattern = "(?<name>[a-zA-Z_][a-zA-Z0-9_]*)?:?(?<comment>\^?)"+...
             "(?<length>\d+)(?<descr>[buicfd\^]+)(?<bytes>\d+)";
         CommentPattern = "(?<name>[a-zA-Z_][a-zA-Z0-9_]*):?(?<value>[-\d]+)?";
@@ -294,7 +294,11 @@ classdef TypeInfo
                 if strcmp(t, "logical")
                     t = "int32";
                 elseif strcmp(t, "char")
-                    t = "uint8";
+                    if objs(k).Bytes==1
+                        t = "uint8";
+                    else
+                        t = "uint16";
+                    end
                 end
                 fmt{k, 1} = t;
                 fmt{k, 2} = double([1 objs(k).Length]);
@@ -326,6 +330,7 @@ classdef TypeInfo
                 for ii = 1:n
                     out(ii) = join(obj.Constants.name(isCode(:, ii)), "_");
                 end
+                out = categorical(out);
             elseif obj.EnumType=="Enum"
                 isCode = values'==obj.Constants.value;
                 if ~all(any(isCode, 1))
@@ -333,6 +338,7 @@ classdef TypeInfo
                 end
                 [~, idc] = max(isCode, [], 1);
                 out = obj.Constants.name(idc');
+                out = categorical(out, obj.Constants.name);
             else
                 out = values;
             end

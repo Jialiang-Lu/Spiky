@@ -244,6 +244,9 @@ end
 if nargout>0
     map = map1;
 else
-    colormap(map1);
+    colormap(gca, map1);
+    if qualitative
+        clim(gca, [0.5, n+0.5]);
+    end
 end
 end

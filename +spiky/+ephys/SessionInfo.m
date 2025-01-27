@@ -9,11 +9,19 @@ classdef SessionInfo < spiky.core.Metadata
         NSamplesLfp double
         Duration double
         Precision string
-        FpthDat string
-        FpthLfp string
         ChannelGroups spiky.ephys.ChannelGroup
         EventGroups spiky.ephys.EventGroup
         Options struct
+    end
+
+    properties (Dependent)
+        FpthDat string
+        FpthLfp string
+    end
+
+    properties (Hidden)
+        FpthDatRel string
+        FpthLfpRel string
     end
 
     methods
@@ -45,11 +53,37 @@ classdef SessionInfo < spiky.core.Metadata
             obj.NSamplesLfp = nSamplesLfp;
             obj.Duration = duration;
             obj.Precision = precision;
-            obj.FpthDat = fpthDat;
-            obj.FpthLfp = fpthLfp;
+            if ~startsWith(fpthDat(1), "Raw")
+                obj.FpthDatRel = "Raw"+extractAfter(fpthDat, "Raw");
+            else
+                obj.FpthDatRel = fpthDat;
+            end
+            if ~startsWith(fpthLfp(1), "Raw")
+                obj.FpthLfpRel = "Raw"+extractAfter(fpthLfp, "Raw");
+            else
+                obj.FpthLfpRel = fpthLfp;
+            end
             obj.ChannelGroups = channelGroups;
             obj.EventGroups = eventGroups;
             obj.Options = options;
+        end
+
+        function fpth = get.FpthDat(obj)
+            fpth = fullfile(obj.Session.Fdir, obj.FpthDatRel);
+        end
+
+        function fpth = get.FpthLfp(obj)
+            fpth = fullfile(obj.Session.Fdir, obj.FpthLfpRel);
+        end
+
+        function obj = updateFields(obj, s)
+            % Update fields of the object from a struct of older version
+            if isfield(s, "FpthDat")
+                obj.FpthDatRel = "Raw"+extractAfter(s.FpthDat, "Raw");
+            end
+            if isfield(s, "FpthLfp")
+                obj.FpthLfpRel = "Raw"+extractAfter(s.FpthLfp, "Raw");
+            end
         end
 
         function data = loadBinary(obj, ch, period, options)
@@ -99,7 +133,7 @@ classdef SessionInfo < spiky.core.Metadata
                 [ch, chGroup] = obj.ChannelGroups.getChannel(ch, false);
                 groups = unique(chGroup);
                 nGroups = length(groups);
-                data = zeros(length(ch), length(idc), options.precision);
+                data = zeros(length(idc), length(ch), options.precision);
                 chIdx = 0;
                 for ii = 1:nGroups
                     group = groups(ii);
@@ -113,36 +147,36 @@ classdef SessionInfo < spiky.core.Metadata
                         if group==1
                             idc1 = idc;
                         else
-                            idc1 = obj.EventGroups(group).Sync((idc-1)./fs).fs+1;
+                            idc1 = obj.EventGroups(group).Sync.Fit((idc-1)./fs).*fs+1;
                             idc2 = round(idc1(1)-3):round(idc1(end)+3);
                             idc2(idc2<=0) = [];
                             idc2(idc2>nSample1) = [];
-                            idcOff = idcK-idc2(1)+1; % make loaded lfp start from 1 for interpolation
+                            idcOff = idc1-idc2(1)+1; % make loaded lfp start from 1 for interpolation
                         end
                         if group==1
-                            data(idcGroupOut, :) = cast(m.Data.m(idcGroup, idc1), options.precision)*...
-                                obj.ChannelGroups(group).BitVolts*obj.ChannelGroups(group).ToMv*1000;
+                            data(:, idcGroupOut) = cast(m.Data.m(idcGroup, idc1)', options.precision).*...
+                                [obj.ChannelGroups(group).BitVolts].*[obj.ChannelGroups(group).ToMv]*1000;
                         else
-                            data(idcGroupOut, :) = cast(interp1(double(m.Data.m(idcGroup, idc2)), ...
-                                idcOff, "linear", 0), options.precision)*...
-                                obj.ChannelGroups(group).BitVolts*obj.ChannelGroups(group).ToMv*1000;
+                            data(:, idcGroupOut) = cast(interp1(double(m.Data.m(idcGroup, idc2))', ...
+                                idcOff, "linear", 0), options.precision).*...
+                                [obj.ChannelGroups(group).BitVolts].*[obj.ChannelGroups(group).ToMv]*1000;
                         end
                     else
-                        data(idcGroupOut, :) = cast(m.Data.m(idcGroup, idc), options.precision)*...
-                            obj.ChannelGroups(group).BitVolts*obj.ChannelGroups(group).ToMv*1000;
+                        data(:, idcGroupOut) = cast(m.Data.m(idcGroup, idc)', options.precision).*...
+                            [obj.ChannelGroups(group).BitVolts].*[obj.ChannelGroups(group).ToMv]*1000;
                     end
                 end
-                data = spiky.lfp.Lfp(0, fs, data');
+                data = spiky.lfp.Lfp(0, fs, data);
                 return
             end
             m = memmapfile(fpth, Format={"int16", [obj.NChannels, nSample], "m"});
-            data = m.Data.m(ch, idc);
+            data = m.Data.m(ch, idc)';
             if options.precision~="int16"
                 [~, idxGroup] = obj.ChannelGroups.getChannel(ch);
-                data = cast(data, options.precision)*obj.ChannelGroups(idxGroup).BitVolts*...
-                    obj.ChannelGroups(idxGroup).ToMv;
+                data = cast(data, options.precision).*[obj.ChannelGroups(idxGroup).BitVolts].*...
+                    [obj.ChannelGroups(idxGroup).ToMv].*1000;
             end
-            data = spiky.lfp.Lfp(0, fs, data');
+            data = spiky.lfp.Lfp(0, fs, data);
         end
 
         function spikeSort(obj, options)
@@ -183,6 +217,7 @@ classdef SessionInfo < spiky.core.Metadata
                 options.minAmplitude double = 10
                 options.minFr double = 0.2
                 options.maxCv double = 0.5
+                options.extractWaveforms logical = false
             end
 
             switch options.method
@@ -388,9 +423,9 @@ classdef SessionInfo < spiky.core.Metadata
             chInAll = ch+chOffset;
             edges = 0:100:obj.Duration;
             if isempty(idxGroup)
-                spiky.plot.timedWaitbar(0, "Extracting");
+                pb = spiky.plot.ProgressBar(n, "Extracting");
             else
-                spiky.plot.timedWaitbar(0, sprintf("Extracting probe %d", idxGroup));
+                pb = spiky.plot.ProgressBar(n, sprintf("Extracting probe %d", idxGroup));
             end
             for ii = 1:n
                 idc = clu==data.id(ii);
@@ -401,19 +436,20 @@ classdef SessionInfo < spiky.core.Metadata
                 % sc = mean(scaling(idc));
                 % data.waveform(ii, :) = sc.*tmpl(ii, :, ch(ii));
                 % data.amplitude(ii) = sc.*amplitude(ii);
-                spiky.plot.timedWaitbar(ii/n);
+                pb.step
             end
-            spiky.plot.timedWaitbar([]);
             %%
             period = obj.EventGroups(idxGroup).NSamples;
             period = period-200*obj.Fs:period;
+            pb = spiky.plot.ProgressBar(1, "Loading binary for waveforms");
             raw = obj.loadBinary(obj.ChannelGroups.getGroupIndices(idxGroup), period, type="dat", ...
-                periodType="index").filter([1 3000]);
+                periodType="index");
+            pb.step
             %%
             if isempty(idxGroup)
-                spiky.plot.timedWaitbar(0, "Reading waveforms");
+                pb = spiky.plot.ProgressBar(n, "Reading waveforms");
             else
-                spiky.plot.timedWaitbar(0, sprintf("Reading waveforms probe %d", idxGroup));
+                pb = spiky.plot.ProgressBar(n, sprintf("Reading waveforms probe %d", idxGroup));
             end
             for ii = 1:n
                 idc = round(data.ts{ii}*obj.Fs)+1;
@@ -424,9 +460,8 @@ classdef SessionInfo < spiky.core.Metadata
                 wav = mean(reshape(wav, nT, []), 2);
                 data.waveform(ii, :) = wav';
                 data.amplitude(ii) = max(wav)-min(wav);
-                spiky.plot.timedWaitbar(ii/n);
+                pb.step
             end
-            spiky.plot.timedWaitbar([]);
     
             %%
             isGood = ismember(data.label, options.labels) & data.cv<options.maxCv & ...
