@@ -71,8 +71,8 @@ classdef RecEvents < spiky.core.TimeTable & spiky.core.MappableArray
                 obj2 spiky.ephys.RecEvents
                 name string
                 tol double = 0.02
-                options.allowStep logical = true
-                options.plot logical = true
+                options.AllowStep logical = true
+                options.Plot logical = true
             end
 
             t1 = spiky.core.Events(obj.Time);

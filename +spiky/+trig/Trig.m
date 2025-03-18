@@ -1,6 +1,6 @@
 classdef Trig < spiky.core.TimeTable
 
-    properties (Access=protected, Hidden)
+    properties (Hidden)
         Events_ (:, 1) double
     end
     

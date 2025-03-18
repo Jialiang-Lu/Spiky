@@ -323,8 +323,8 @@ classdef Events
                 varargin
             end
             arguments
-                options.allowStep logical = true
-                options.plot logical = false
+                options.AllowStep logical = true
+                options.Plot logical = false
             end
             if (obj.Length<2)||(obj2.Length<2)
                 error("Not enough events to synchronize.")
@@ -336,7 +336,7 @@ classdef Events
             t2 = obj2.Time;
             td = t2-t1;
             d = diff(td);
-            if sum(abs(d-mean(d))/std(d)>10)==0 || ~options.allowStep
+            if sum(abs(d-mean(d))/std(d)>10)==0 || ~options.AllowStep
                 [f, gof] = fit(t1, t2, "poly1", "Robust", "Bisquare", varargin{:});
                 s = spiky.core.Sync(name, f, @(y) (y-f.p2)/f.p1, f.p1, f.p2, gof);
             else
@@ -348,7 +348,7 @@ classdef Events
                 s = spiky.core.Sync(name, f, @(y) (y<=f.a*f.c-f.b+f.d).*(y-f.d+f.b)./f.a+...
                     (y>f.a*f.c-f.b+f.d).*(y-f.d-f.b)./f.a, f.a, f.d-f.b, gof);
             end
-            if options.plot
+            if options.Plot
                 spiky.plot.fig
                 plot(t1, td-td(1), "ro", t1, f(t1)-t1-td(1), "b.-");
                 xlabel("t1");

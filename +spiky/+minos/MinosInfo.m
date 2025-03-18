@@ -14,10 +14,9 @@ classdef MinosInfo < spiky.core.Metadata
     end
 
     methods (Static)
-        function obj = load(fdir, info, options)
+        function obj = load(info, options)
             % LOAD Load Minos info from a directory
             %
-            %   fdir: directory containing the Minos info
             %   info: SessionInfo object
             %   options: 
             %       minPhotodiodeGap: minimum photodiode gap in seconds
@@ -25,40 +24,42 @@ classdef MinosInfo < spiky.core.Metadata
             %   obj: Minos info object
 
             arguments
-                fdir (1, 1) string {mustBeFolder}
                 info spiky.ephys.SessionInfo = spiky.ephys.SessionInfo.empty
-                options.minPhotodiodeGap double = 0.05
+                options.MinPhotodiodeGap double = 0.05
+                options.Plot = true
             end
             if isempty(info)
                 error("Not implemented")
             end
+            fdir = info.Session.getFdir("Minos");
             log = spiky.minos.Data(fullfile(fdir, "Log.txt"));
             sync1 = spiky.minos.Data(fullfile(fdir, "Sync.bin"));
-            n = height(sync1.Values);
-            syncEvents = spiky.ephys.RecEvents(double(sync1.Values.timestamp)./1e7, ...
-                sync1.Values.timestamp, spiky.ephys.ChannelType.Stim, ...
+            % n = height(sync1.Data);
+            syncEvents = spiky.ephys.RecEvents(double(sync1.Data.timestamp)./1e7, ...
+                sync1.Data.timestamp, spiky.ephys.ChannelType.Stim, ...
                 int16(1), "Sync", true, "");
             events = info.EventGroups(1).Events.Sync;
             if isempty(events)
                 events = info.EventGroups(1).Events;
             end
             events = events(events.Rising, :);
-            [sync, eventsSync] = events.syncWith(syncEvents, "probe1 to minos", allowStep=false);
-            idcStart = find(startsWith(log.Values.Value, "Start Paradigm"));
-            idcStop = find(startsWith(log.Values.Value, "Pause Paradigm"));
+            [sync, eventsSync] = events.syncWith(syncEvents, "probe1 to minos", ...
+                allowStep=false, Plot=options.Plot);
+            idcStart = find(startsWith(log.Data.Value, "Start Paradigm"));
+            idcStop = find(startsWith(log.Data.Value, "Pause Paradigm"));
             if length(idcStart)~=length(idcStop)
                 error("Start and stop paradigm events do not match")
             end
-            parPeriods = sync.Inv(double([log.Values.Timestamp(idcStart) ...
-                log.Values.Timestamp(idcStop)])/1e7);
-            parPeriodsNames = strrep(extractAfter(log.Values.Value(idcStart), ...
+            parPeriods = sync.Inv(double([log.Data.Timestamp(idcStart) ...
+                log.Data.Timestamp(idcStop)])/1e7);
+            parPeriodsNames = strrep(extractAfter(log.Data.Value(idcStart), ...
                 "Paradigm "), " ", "");
             fiPars = spiky.core.FileInfo(fdir+filesep);
             fiPars = fiPars([fiPars.IsDir] & [fiPars.Name]~="Assets");
             parNamesSpace = [fiPars.Name]';
             parNames = strrep(parNamesSpace, " ", "");
             photodiode = info.EventGroups.Adc.Events.Photodiode;
-            [~, idc] = photodiode.findContinuous(options.minPhotodiodeGap);
+            [~, idc] = photodiode.findContinuous(options.MinPhotodiodeGap);
             idc = unique(cell2mat(cellfun(@(x) x([1 end])', idc, UniformOutput=false)));
             tPhotodiode = photodiode(idc, :).Time;
 
@@ -81,27 +82,105 @@ classdef MinosInfo < spiky.core.Metadata
             obj.Paradigms = pars;
             obj.Sync = spiky.ephys.EventGroup("Stim", ...
                 spiky.ephys.ChannelType.Stim, eventsSync, ...
-                double(log.Values{[1 end], 1})', sync);
-            obj.Eye = spiky.minos.EyeData.load(fdir, sync.Inv);
+                double(log.Data{[1 end], 1})', sync);
+            tr = obj.getTransform();
+            obj.Eye = spiky.minos.EyeData.load(fdir, sync.Inv, [], tr, ...
+                obj.Vars.DisplayFov.Data.Data(1));
             obj.Player = spiky.core.TimeTable(...
-                sync.Inv(double(player.Values.Timestamp)/1e7), ...
-                player.Values);
+                sync.Inv(double(player.Data.Timestamp)/1e7), ...
+                player.Data);
             obj.Display = spiky.core.TimeTable(...
-                sync.Inv(double(display.Values.Timestamp)/1e7), ...
-                display.Values);
+                sync.Inv(double(display.Data.Timestamp)/1e7), ...
+                display.Data);
             obj.Input = spiky.core.TimeTable(...
-                sync.Inv(double(input.Values.Timestamp)/1e7), ...
-                input.Values);
+                sync.Inv(double(input.Data.Timestamp)/1e7), ...
+                input.Data);
             obj.ExperimenterInput = spiky.core.TimeTable(...
-                sync.Inv(double(experimenterInput.Values.Timestamp)/1e7), ...
-                experimenterInput.Values);
+                sync.Inv(double(experimenterInput.Data.Timestamp)/1e7), ...
+                experimenterInput.Data);
             obj.Reward = spiky.core.TimeTable(...
-                sync.Inv(double(reward.Values.Timestamp)/1e7), ...
-                reward.Values);
+                sync.Inv(double(reward.Data.Timestamp)/1e7), ...
+                reward.Data);
         end
     end
 
     methods
+        function data = loadData(obj, name1, name2)
+            % LOADDATA Load data from Minos info
+            %
+            %   data = loadData(obj, filename)
+            %   data = loadData(obj, folder, filename)
+            arguments
+                obj spiky.minos.MinosInfo
+                name1 string
+                name2 string = ""
+            end
+            if nargin==2 || isempty(name2) || name2==""
+                fpth = obj.Session.getFdir("Minos", name1);
+            else
+                fpth = obj.Session.getFdir("Minos", name1, name2);
+            end
+            if ~exist(fpth, "file")
+                error("File %s not found", fpth);
+            end
+            data = spiky.minos.Data(fpth);
+        end
+
+        function tr = getTransform(obj)
+            % GETTRANSFORM Get the object transform
+            fpthTransform = obj.Session.getFpth("spiky.minos.Transform.mat");
+            if exist(fpthTransform, "file")
+                tr = obj.Session.loadData("spiky.minos.Transform.mat");
+                return
+            end
+            if ~exist(obj.Session.getFdir("Minos", "TransformRecord.bin"), "file")
+                tr = spiky.minos.Transform.empty;
+                return
+            end
+            nr = obj.loadData("NameRecord.bin");
+            data = obj.loadData("TransformRecord.bin");
+            t = obj.Sync.Sync.Inv(double(data.Timestamp)/1e7);
+            [objs, ~, idcObj] = unique(data.Data(:, ["Id" "NameIndex"]), "rows", "stable");
+            nObjs = height(objs);
+            pb = spiky.plot.ProgressBar(nObjs, "Calculating transforms", Parallel=true);
+            parfor ii = 1:nObjs
+                idc = idcObj==ii;
+                t1 = t(idc);
+                data1 = spiky.core.TimeTable(t1, table(Size=[sum(idc) 5], ...
+                    VariableTypes=["int64" "logical" "single" "single" "single"], ...
+                    VariableNames=["Trial" "Active" "Pos" "Rot" "Proj"]));
+                data1.Trial = data.Trial(idc);
+                data1.Active = data.Active(idc);
+                if isnan(data.HeadPos(find(idc, 1), 1))
+                    % non-human
+                    data1.Pos = data.RootPos(idc, :);
+                    data1.Rot = data.RootRot(idc, :);
+                    data1.Proj = data.RootProj(idc, :);
+                else
+                    % human
+                    data1.Pos = reshape(data.Data{idc, 6:3:end}, [], 3, 12);
+                    data1.Rot = reshape(data.Data{idc, 7:3:end}, [], 3, 12);
+                    data1.Proj = reshape(data.Data{idc, 8:3:end}, [], 3, 12);
+                end
+                tr(ii, 1) = spiky.minos.Transform(nr.Name(objs.NameIndex(ii)+1), ...
+                    objs.Id(ii), data1);
+                pb.step;
+            end
+            obj.Session.saveMetaData(tr);
+        end
+
+        function fix = getFixation(obj)
+            % GETFIXATION Get the fixation data
+            fpthFixation = obj.Session.getFpth("spiky.minos.Fixation.mat");
+            if exist(fpthFixation, "file")
+                fix = obj.Session.loadData("spiky.minos.Fixation.mat");
+                return
+            end
+            fix = spiky.minos.Fixation.load(...
+                obj.Session.getFdir("Minos", "Fixation.bin"));
+            obj.Session.saveMetaData(fix);
+        end
+
         function assets = getAssets(obj)
             % GETASSETS Get the assets of the Minos info
             %

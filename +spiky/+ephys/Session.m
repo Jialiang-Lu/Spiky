@@ -72,53 +72,58 @@ classdef Session < spiky.core.Metadata
             % GETMINOS Get the minos of the session.
             minos = obj.loadData("spiky.minos.MinosInfo.mat");
         end
+
+        function tr = getTransform(obj)
+            % GETTRANSFORM Get the transform of the session.
+            tr = obj.loadData("spiky.minos.Transform.mat");
+        end
         
         function info = processRaw(obj, options)
             arguments
                 obj spiky.ephys.Session
-                options.fsLfp (1, 1) double = 1000
-                options.period (1, 2) double = [0 Inf]
-                options.brainRegions string = "brain"
-                options.channelConfig = []
-                options.probe = "NP1030"
-                options.mainProbe (1, 1) double = 1
-                options.resampleDat (1, 1) logical = false
-                options.resampleLfp (1, 1) logical = true
-                options.plot (1, 1) logical = true
+                options.FsLfp (1, 1) double = 1000
+                options.Period (1, 2) double = [0 Inf]
+                options.BrainRegions string = "brain"
+                options.ChannelConfig = []
+                options.Probe = "NP1030"
+                options.MainProbe (1, 1) double = 1
+                options.ResampleDat (1, 1) logical = false
+                options.ResampleLfp (1, 1) logical = true
+                options.Plot (1, 1) logical = true
             end
             
             %% Load configuration
-            if ~isa(options.channelConfig, "spiky.ephys.ChannelConfig")
+            if ~isa(options.ChannelConfig, "spiky.ephys.ChannelConfig")
                 configs = spiky.config.loadConfig("channelConfig");
-                if isempty(options.channelConfig)
+                if isempty(options.ChannelConfig)
                     names = fieldnames(configs);
-                    options.channelConfig = spiky.ephys.ChannelConfig.read(configs.(names{end}));
-                elseif isnumeric(options.channelConfig)
-                    options.channelConfig = spiky.ephys.ChannelConfig.read(configs.(sprintf("v%d", ...
-                        options.channelConfig)));
-                elseif isstring(options.channelConfig)
-                    options.channelConfig = spiky.ephys.ChannelConfig.read(configs.(options.channelConfig));
+                    options.ChannelConfig = spiky.ephys.ChannelConfig.read(configs.(names{end}));
+                elseif isnumeric(options.ChannelConfig)
+                    options.ChannelConfig = spiky.ephys.ChannelConfig.read(configs.(sprintf("v%d", ...
+                        options.ChannelConfig)));
+                elseif isstring(options.ChannelConfig)
+                    options.ChannelConfig = spiky.ephys.ChannelConfig.read(configs.(options.ChannelConfig));
                 else
                     names = fieldnames(configs);
-                    options.channelConfig = spiky.ephys.ChannelConfig.read(configs.(names{end}));
+                    options.ChannelConfig = spiky.ephys.ChannelConfig.read(configs.(names{end}));
                 end
             end
-            if ~isa(options.probe, "spiky.ephys.Probe")
-                options.probe = spiky.config.loadProbe(options.probe);
+            if ~isa(options.Probe, "spiky.ephys.Probe")
+                options.Probe = spiky.config.loadProbe(options.Probe);
             end
-            options.brainRegions = options.brainRegions(:);
-            if isscalar(options.probe)&&~isscalar(options.brainRegions)
-                options.probe = repmat(options.probe, length(options.brainRegions), 1);
+            options.BrainRegions = options.BrainRegions(:);
+            if isscalar(options.Probe)&&~isscalar(options.BrainRegions)
+                options.Probe = repmat(options.Probe, length(options.BrainRegions), 1);
             end
 
             %% Load Raw
             rawData = spiky.ephys.RawData(obj.getFdir("Raw"));
-            eventGroups = rawData.getEvents(options.channelConfig.Dig, plot=options.plot);
-            channelGroups = rawData.getChannels(options.brainRegions, options.probe, ...
-                options.channelConfig.Adc);
+            eventGroups = rawData.getEvents(options.ChannelConfig.Dig, plot=options.Plot);
+            channelGroups = rawData.getChannels(options.BrainRegions, options.Probe, ...
+                options.ChannelConfig.Adc);
             [nSamples, nSamplesLfp, fpthDat] = rawData.resampleRaw(obj.getFpth("dat"), obj.getFpth("lfp"), ...
-                options.probe, options.fsLfp, options.resampleDat, options.resampleLfp, [eventGroups(1:end-1).Sync]);
-            info = spiky.ephys.SessionInfo(obj, sum([channelGroups.NChannels]), 30000, options.fsLfp, ...
+                options.Probe, options.FsLfp, options.ResampleDat, options.ResampleLfp, [eventGroups(1:end-1).Sync]);
+            info = spiky.ephys.SessionInfo(obj, sum([channelGroups.NChannels]), 30000, options.FsLfp, ...
                 nSamples, nSamplesLfp, nSamples/30000, "int16", fpthDat, ...
                 obj.getFpth("lfp"), channelGroups, eventGroups, options);
             info.createNsXml();

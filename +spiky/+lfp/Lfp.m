@@ -130,23 +130,23 @@ classdef Lfp < spiky.core.TimeTable
             %   swr = findRipples(obj, options)
             %
             %   obj: Lfp object
-            %   options.freqBand: frequency band of the ripple
-            %   options.threshold: threshold for ripple detection
-            %   options.minThreshold: minimum threshold for ripple detection
-            %   options.minCycles: minimum number of cycles for a ripple
-            %   options.filterClass: class of IIR filter, for now either cheby2 or butter
-            %   options.filterOrder: filter order
-            %   options.periods: periods to analyze
+            %   options.FreqBand: frequency band of the ripple
+            %   options.Threshold: threshold for ripple detection
+            %   options.MinThreshold: minimum threshold for ripple detection
+            %   options.MinCycles: minimum number of cycles for a ripple
+            %   options.FilterClass: class of IIR filter, for now either cheby2 or butter
+            %   options.FilterOrder: filter order
+            %   options.Periods: periods to analyze
 
             arguments
                 obj spiky.lfp.Lfp
-                options.freqBand (1, 2) double = [70 180]
-                options.threshold (1, 1) double = 5
-                options.minThreshold (1, 1) double = 3
-                options.minCycles (1, 1) double = 3
-                options.filterClass (1, 1) string {mustBeMember(options.filterClass, ["butter" "cheby2"])} = "butter"
-                options.filterOrder (1, 1) double = 3
-                options.periods = [] % (:, 2) double or spiky.core.Period
+                options.FreqBand (1, 2) double = [70 180]
+                options.Threshold (1, 1) double = 5
+                options.MinThreshold (1, 1) double = 3
+                options.MinCycles (1, 1) double = 3
+                options.FilterClass (1, 1) string {mustBeMember(options.FilterClass, ["butter" "cheby2"])} = "butter"
+                options.FilterOrder (1, 1) double = 3
+                options.Periods = [] % (:, 2) double or spiky.core.Period
             end
 
             if ~obj.IsUniform
@@ -155,10 +155,10 @@ classdef Lfp < spiky.core.TimeTable
             if ~isvector(obj.Data)
                 obj.Data = obj.Data(:, 1);
             end
-            if isa(options.periods, "spiky.core.Period")
-                options.periods = options.periods.Time;
+            if isa(options.Periods, "spiky.core.Period")
+                options.Periods = options.Periods.Time;
             end
-            filt = obj.filter(options.freqBand, options.filterClass, options.filterOrder);
+            filt = obj.filter(options.FreqBand, options.FilterClass, options.FilterOrder);
             swrEnv = abs(hilbert(filt.Data));
             sigma = 0.1;
             kernelsize = 0.1*obj.Fs; % 100ms
@@ -167,21 +167,21 @@ classdef Lfp < spiky.core.TimeTable
             swrEnv = conv(swrEnv, gaussFilter, "same");
             meanVol = mean(obj.Data);
             stdVol = std(obj.Data);
-            if ~isempty(options.periods)
-                [~, idc] = obj.inPeriods(options.periods);
+            if ~isempty(options.Periods)
+                [~, idc] = obj.inPeriods(options.Periods);
             else
                 idc = 1:obj.Length;
             end
             meanPower = mean(swrEnv(idc));
             stdPower = std(swrEnv(idc));
-            thr = meanPower + options.threshold*stdPower;
+            thr = meanPower + options.Threshold*stdPower;
             % maxThr = meanPower + 30*stdPower;
-            minThr = meanPower + options.minThreshold*stdPower;
+            minThr = meanPower + options.MinThreshold*stdPower;
             %%
             [amp, t] = findpeaks(swrEnv, obj.Fs, MinPeakDistance=0.05, MinPeakHeight=thr, ...
                 MinPeakProminence=thr-meanPower);
-            if ~isempty(options.periods)
-                [~, idc] = spiky.core.Events(t).inPeriods(options.periods);
+            if ~isempty(options.Periods)
+                [~, idc] = spiky.core.Events(t).inPeriods(options.Periods);
                 amp = amp(idc);
                 t = t(idc);
             end
@@ -209,7 +209,7 @@ classdef Lfp < spiky.core.TimeTable
                 onset(ii) = t(ii)-(251-idx1)/obj.Fs;
                 offset(ii) = t(ii)+(idx2-251)/obj.Fs;
                 [~, ts] = findpeaks(-lfp.Data(:, 1, ii), obj.Fs, ...
-                    MinPeakDistance=1/options.freqBand(2), MinPeakHeight=0);
+                    MinPeakDistance=1/options.FreqBand(2), MinPeakHeight=0);
                 ts = spiky.core.Events(t(ii)-0.25+ts).inPeriods([onset(ii) offset(ii)]);
                 % [~, idx] = min(lfp.Data(round(ts*obj.Fs), 1, ii)); % Find the deepest trough
                 [~, idx] = min(abs(ts-t(ii))); % Find the closest trough
@@ -221,7 +221,7 @@ classdef Lfp < spiky.core.TimeTable
                 t1(ii) = ts(idx);
                 f(ii) = 1/mean(diff(ts));
             end
-            isValid = cycles>=options.minCycles;
+            isValid = cycles>=options.MinCycles;
             swr = spiky.lfp.Swr(t1(isValid), onset(isValid), offset(isValid), cycles(isValid), ...
                 f(isValid), amp(isValid), ampNorm(isValid), troughs(isValid), options);
         end

@@ -4,7 +4,7 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
     %   to the neurons.
 
     properties (Dependent)
-        Fr double
+        Fr
     end
     
     methods
@@ -37,7 +37,7 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
                 s = spikes.inPeriods([events+window(1), events+window(end)], true, window(1));
             else
                 s = cell(length(events), nNeurons);
-                parfor ii = 1:nNeurons
+                for ii = 1:nNeurons
                     s(:, ii) = spikes(ii).inPeriods([events+window(1), events+window(end)], true, window(1));
                 end
             end
@@ -48,10 +48,10 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
         end
 
         function fr = get.Fr(obj)
-            fr = obj.getFr();
+            fr = cellfun(@(x) numel(x)./diff(obj.Window), obj.Data);
         end
 
-        function fr = getFr(obj, window, cats)
+        function fr = getFr(obj, window, cats, options)
             %GETFR Get firing rate in a window
             %
             %   fr = getFr(obj, window)
@@ -59,6 +59,8 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             %   obj: triggered spikes object
             %   window: window for the analysis
             %   cats: categories for the events
+            %   options: additional arguments
+            %       Normalize: normalize the firing rate
             %
             %   fr: [nCats, nNeurons] firing rate
 
@@ -66,6 +68,7 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
                 obj spiky.trig.TrigSpikes
                 window double = []
                 cats (:, 1) categorical = categorical.empty
+                options.Normalize logical = false
             end
             if isempty(obj.Data)
                 fr = [];
@@ -77,18 +80,42 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             if isempty(cats)
                 cats = (1:height(obj.Data))';
                 nCats = numel(cats);
+                events = cats;
             elseif isscalar(cats)
                 cats = zeros(height(obj.Data), 1);
                 nCats = 1;
+                events = 0;
             else
-                nCats = numel(categories(cats));
+                events = categories(cats, OutputType="string");
+                nCats = numel(events);
             end
             if numel(cats)~=height(obj.Data)
                 error("Number of categories must match the number of events");
             end
             w = diff(window);
-            fr1 = cellfun(@(x) sum(x>=window(1) & x<=window(2))/w, obj.Data);
-            fr = groupsummary(fr1, cats, @mean, IncludeEmptyGroups=true);
+            % fr1 = cellfun(@(x) sum(x>=window(1) & x<window(2))/w, obj.Data);
+            % fr2 = groupsummary(fr1, cats, @mean, IncludeEmptyGroups=true);
+            fr2 = zeros(nCats, width(obj));
+            data = obj.Data;
+            parfor ii = 1:nCats
+                fr1 = cellfun(@(x) sum(x>=window(1) & x<window(2))/w, data(cats==events(ii), :));
+                % fr2(ii, :) = mean(fr1(cats==events(ii), :), 1);
+                fr2(ii, :) = mean(fr1, 1);
+            end
+            if options.Normalize
+                frMean = mean(cellfun(@numel, obj.Data), 1)./diff(obj.Window);
+                fr2 = (fr2-frMean)./sqrt(frMean./w);
+            end
+            fr = spiky.trig.TrigFr;
+            fr.Start_ = window(1);
+            fr.Step_ = w;
+            fr.N_ = 1;
+            fr.Data = permute(fr2, [3 1 2]);
+            fr.EventDim = 2;
+            fr.Events_ = events;
+            fr.Window = window;
+            fr.Neuron = obj.Neuron;
+            fr.Options = options;
         end
 
         function mdl = fitcecoc(obj, labels, window, idcEvents, options)
@@ -200,7 +227,7 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
                 yticklabels(categories(cats));
                 ax = gca;
                 ax.YAxis.FontSize = 10;
-                yline(edges, "k", LineWidth=0.5);
+                yline(edges, LineWidth=0.5);
             end
             if nargout>0
                 h = h1;

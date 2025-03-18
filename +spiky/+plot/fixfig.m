@@ -1,11 +1,24 @@
-function fixfig(h)
+function fixfig(h, options)
 % FIXFIG fix figure appearance
 %
 %   h: figure handle
+arguments
+    h = []
+    options.Theme = []
+    options.Save string = ""
+    options.ContentType string = "image"
+    options.Resolution double = 200
+    options.Append logical = false
+    options.BackgroudColor = "current"
+end
 
-if ~exist("h", "var") || isempty(h)
+if isempty(h)
     h = gcf;
 end
+if ~isa(h, "matlab.ui.Figure")
+    error("The input must be a figure handle")
+end
+%%
 c = get(groot, "DefaultAxesColor");
 c1 = get(groot, "DefaultAxesXColor");
 c2 = get(groot, "DefaultAxesYColor");
@@ -54,5 +67,11 @@ for k = 1:length(h.Children)
         sg.FontWeight = "bold";
     end
 end
-drawnow
+%%
+if ~isempty(options.Theme)
+    theme(h, options.Theme);
+end
+if ~isempty(options.Save)
+    exportgraphics(h, options.Save, ContentType=options.ContentType, Resolution=options.Resolution, ...
+        Append=options.Append, BackgroundColor=options.BackgroudColor);
 end

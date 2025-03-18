@@ -133,7 +133,7 @@ classdef RawData
             arguments
                 obj spiky.ephys.RawData
                 channelNames string = string.empty
-                options.plot logical = true
+                options.Plot logical = true
             end
 
             optionsCell = namedargs2cell(options);

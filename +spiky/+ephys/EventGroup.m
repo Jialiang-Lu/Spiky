@@ -4,7 +4,7 @@ classdef EventGroup < spiky.core.Metadata & spiky.core.MappableArray
     properties %(SetAccess = {?spiky.core.Metadata, ?spiky.ephys.EventGroup})
         Name string
         Type spiky.ephys.ChannelType
-        Events spiky.ephys.RecEvents
+        Events spiky.ephys.RecEvents = spiky.ephys.RecEvents
         TsRange (1, 2) double
         Sync spiky.core.Sync
     end
@@ -20,9 +20,9 @@ classdef EventGroup < spiky.core.Metadata & spiky.core.MappableArray
             arguments
                 name string = ""
                 type spiky.ephys.ChannelType = spiky.ephys.ChannelType.Neural
-                events spiky.ephys.RecEvents = spiky.ephys.RecEvents.empty
+                events spiky.ephys.RecEvents = spiky.ephys.RecEvents
                 tsRange (1, 2) double = [0, 0]
-                sync spiky.core.Sync = spiky.core.Sync.empty
+                sync spiky.core.Sync = spiky.core.Sync
             end
             
             obj.Name = name;

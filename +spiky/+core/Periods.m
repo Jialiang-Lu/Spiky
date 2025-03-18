@@ -1,11 +1,8 @@
-classdef Periods < matlab.mixin.CustomDisplay
+classdef Periods < spiky.core.ArrayTable
     % PERIODS Class representing time periods, left closed and right open
 
-    properties
-        Time (:, 2) double % start and end in seconds
-    end
-
     properties (Dependent)
+        Time
         Length
         Duration
         Start
@@ -13,6 +10,25 @@ classdef Periods < matlab.mixin.CustomDisplay
     end
 
     methods (Static)
+        % function periods = cat(varargin)
+        %     % CAT Concatenate periods
+        %     if nargin==1
+        %         periods = varargin{1};
+        %         return
+        %     end
+        %     for ii = 1:nargin
+        %         if isa(varargin{ii}, "spiky.core.Periods")
+        %             varargin{ii} = varargin{ii}.Time;
+        %         elseif size(varargin{ii}, 2)~=2
+        %             error("Time must have two columns.")
+        %         elseif ~isnumeric(varargin{ii})
+        %             error("Wrong input type %s.", class(varargin{ii}))
+        %         end
+        %     end
+        %     periods = cell2mat(varargin');
+        %     periods = spiky.core.Periods(periods);
+        % end
+
         function periods = union(varargin)
             % UNION Union of periods
             if nargin==1
@@ -80,12 +96,25 @@ classdef Periods < matlab.mixin.CustomDisplay
         function obj = Periods(time)
             % Constructor for Periods class
             arguments
-                time double = double.empty(0, 2)
+                time (:, 2) double = double.empty(0, 2)
             end
             if size(time, 2)~=2
                 error("Time must have two columns.")
             end
             obj.Time = time;
+        end
+
+        function time = get.Time(obj)
+            % Getter for Time property
+            time = obj.Data;
+        end
+
+        function obj = set.Time(obj, time)
+            % Setter for Time property
+            if size(time, 2)~=2
+                error("Time must have two columns.")
+            end
+            obj.Data = time;
         end
 
         function len = get.Length(obj)
@@ -106,6 +135,12 @@ classdef Periods < matlab.mixin.CustomDisplay
         function ed = get.End(obj)
             % Getter for End property
             ed = obj.Time(:, 2);
+        end
+
+        function [obj, idc] = sort(obj)
+            % SORT Sort periods
+            [~, idc] = sort(obj.Time(:, 1));
+            obj.Data = obj.Time(idc, :);
         end
 
         function periods = unionWith(obj, periods)
@@ -237,6 +272,13 @@ classdef Periods < matlab.mixin.CustomDisplay
             h1 = patch(ax, x, y, c, plotOps{:});
             if nargout>0
                 h = h1;
+            end
+        end
+
+        function obj = updateFields(obj, s)
+            % Update fields of the object from a struct of older version
+            if isfield(s, "Time")
+                obj.Data = s.Time;
             end
         end
     end

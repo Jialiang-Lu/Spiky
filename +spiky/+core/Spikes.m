@@ -68,6 +68,24 @@ classdef Spikes < spiky.core.Events
             trigSpikes = spiky.trig.TrigSpikes(obj, events, window);
         end
 
+        function fr = fr(obj, events, window, options)
+            % FR Firing rate by events
+            %
+            %   events: event times
+            %   window: [start end] window around events
+            %   options: options for spiky.trig.TrigFr
+            %
+            %   fr: firing rate
+            arguments
+                obj spiky.core.Spikes
+                events % (n, 1) double or spiky.core.Events
+                window (1, 2) double
+                options.Normalize logical = false
+            end
+            fr = spiky.trig.TrigFr(obj, events, mean(window), HalfWidth=diff(window)/2, ...
+                Kernel="box", Normalize=options.Normalize);
+        end
+
         function fr = trigFr(obj, events, window, options)
             % TRIGFR Trigger firing rate by events
             %
@@ -80,8 +98,9 @@ classdef Spikes < spiky.core.Events
                 obj spiky.core.Spikes
                 events % (n, 1) double or spiky.core.Events
                 window double {mustBeVector}
-                options.halfWidth double {mustBePositive} = 0.1
-                options.kernel string {mustBeMember(options.kernel, ["gaussian", "box"])} = "gaussian"
+                options.HalfWidth double {mustBePositive} = 0.1
+                options.Kernel string {mustBeMember(options.Kernel, ["gaussian", "box"])} = "box"
+                options.Normalize logical = false
             end
             optionsCell = namedargs2cell(options);
             fr = spiky.trig.TrigFr(obj, events, window, optionsCell{:});

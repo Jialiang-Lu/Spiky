@@ -28,40 +28,41 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
             log = spiky.minos.Data(fullfile(fdir, "Log.txt"));
             trials = spiky.minos.Data(fullfile(fdir, "Trials.bin"));
             trialInfo = spiky.minos.Data(fullfile(fdir, "TrialInfo.bin"));
-            eventNames = unique(trials.Values.Event, "stable");
+            eventNames = unique(trials.Data.Event, "stable");
             eventNames = eventNames(~ismember(eventNames, ...
-                ["ParadigmStart", "ParadigmStop", "Loading"]));
-            eventsCount = groupsummary(trials.Values, "Event", ...
+                ["ParadigmStart", "ParadigmStop"]));
+            eventNames = string(eventNames);
+            eventsCount = groupsummary(trials.Data, "Event", ...
                 @(x) sum(x==mode(x)), "Number");
             eventsCount = eventsCount(~ismember(eventsCount.Event, ...
-                ["ParadigmStart", "ParadigmStop", "Loading"]), :);
+                ["ParadigmStart", "ParadigmStop"]), :);
             eventsCount = eventsCount.fun1_Number;
             if any(eventsCount>1)
                 error("Not implemented")
             end
-            trials.Values = groupfilter(trials.Values, "Number", ...
+            trials.Data = groupfilter(trials.Data, "Number", ...
                 @(s) all(~ismember(s, ...
                 ["ParadigmStart", "ParadigmStop"])), "Event");
-            numbers = unique(trials.Values.Number, "stable");
-            singleInfo = numel(trialInfo.Values.Number)==numel(unique(trialInfo.Values.Number));
-            [~, idcInfo] = ismember(numbers, trialInfo.Values.Number(end:-1:1));
-            idcInfo = length(trialInfo.Values.Number)-idcInfo+1;
+            numbers = unique(trials.Data.Number, "stable");
+            singleInfo = numel(trialInfo.Data.Number)==numel(unique(trialInfo.Data.Number));
+            [~, idcInfo] = ismember(numbers, trialInfo.Data.Number(end:-1:1));
+            idcInfo = length(trialInfo.Data.Number)-idcInfo+1;
             n = length(numbers);
             varNames = reshape([eventNames'; eventNames'+"_Type"], [], 1);
             if singleInfo
-                data = [trialInfo.Values(idcInfo, :) array2table(NaN(n, ...
+                data = [trialInfo.Data(idcInfo, :) array2table(NaN(n, ...
                     length(varNames)), "VariableNames", varNames)];
                 info = spiky.core.TimeTable.empty;
             else
-                data = [trialInfo.Values(idcInfo, ["Timestamp" "Number"]) array2table(NaN(n, ...
+                data = [trialInfo.Data(idcInfo, ["Timestamp" "Number"]) array2table(NaN(n, ...
                     length(varNames)), "VariableNames", varNames)];
-                info = spiky.core.TimeTable(func(double(trialInfo.Timestamp)/1e7), trialInfo.Values);
+                info = spiky.core.TimeTable(func(double(trialInfo.Timestamp)/1e7), trialInfo.Data);
             end
-            t = func(double(trials.Values.Timestamp)/1e7);
+            t = func(double(trials.Data.Timestamp)/1e7);
             nEvents = length(eventNames);
             if ~isempty(photodiode)
                 for ii = 1:nEvents
-                    isEvent1 = trials.Values.Event==eventNames(ii);
+                    isEvent1 = trials.Data.Event==eventNames(ii);
                     t1 = t(isEvent1);
                     p1 = spiky.core.Periods([t1 t1+0.15]);
                     e1 = p1.haveEvents(photodiode, true);
@@ -84,14 +85,14 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
             for ii = 1:n
                 id = numbers(ii);
                 for jj = 1:length(eventNames)
-                    idx = find(trials.Values.Number==id & ...
-                        trials.Values.Event==eventNames(jj), 1);
+                    idx = find(trials.Data.Number==id & ...
+                        trials.Data.Event==eventNames(jj), 1);
                     if isempty(idx)
                         continue
                     end
                     data{ii, eventNames(jj)} = t(idx);
                     data{ii, eventNames(jj)+"_Type"} = ...
-                        double(trials.Values.Type(idx));
+                        double(trials.Data.Type(idx));
                 end
             end
             obj = spiky.minos.Paradigm(name, periods, spiky.core.TimeTable(...

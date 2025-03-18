@@ -101,23 +101,23 @@ classdef SessionInfo < spiky.core.Metadata
                 obj
                 ch double = []
                 period double = []
-                options.type string {mustBeMember(options.type, ["dat", "lfp"])} = "lfp"
-                options.precision string = "double"
-                options.periodType string {mustBeMember(options.periodType, ["time", "index"])} = "time"
+                options.Type string {mustBeMember(options.Type, ["dat", "lfp"])} = "lfp"
+                options.Precision string = "double"
+                options.PeriodType string {mustBeMember(options.PeriodType, ["time", "index"])} = "time"
             end
 
             if isempty(ch)
                 ch = 1:obj.NChannels;
             end
-            fpth = obj.Session.getFpth(options.type);
-            if options.type=="dat"
+            fpth = obj.Session.getFpth(options.Type);
+            if options.Type=="dat"
                 nSample = obj.NSamples;
                 fs = obj.Fs;
             else
                 nSample = obj.NSamplesLfp;
                 fs = obj.FsLfp;
             end
-            if options.periodType=="time"
+            if options.PeriodType=="time"
                 if isempty(period)
                     period = [0 nSample/fs-1];
                 elseif isscalar(period)
@@ -129,11 +129,11 @@ classdef SessionInfo < spiky.core.Metadata
             else
                 idc = period;
             end
-            if options.type=="dat" && ~obj.Options.resampleDat
+            if options.Type=="dat" && ~obj.Options.ResampleDat
                 [ch, chGroup] = obj.ChannelGroups.getChannel(ch, false);
                 groups = unique(chGroup);
                 nGroups = length(groups);
-                data = zeros(length(idc), length(ch), options.precision);
+                data = zeros(length(idc), length(ch), options.Precision);
                 chIdx = 0;
                 for ii = 1:nGroups
                     group = groups(ii);
@@ -143,7 +143,7 @@ classdef SessionInfo < spiky.core.Metadata
                     fpth = obj.FpthDat(group);
                     m = memmapfile(fpth, Format={"int16", ...
                         [obj.ChannelGroups(group).NChannels, nSample1], "m"});
-                    if options.periodType=="time"
+                    if options.PeriodType=="time"
                         if group==1
                             idc1 = idc;
                         else
@@ -154,15 +154,15 @@ classdef SessionInfo < spiky.core.Metadata
                             idcOff = idc1-idc2(1)+1; % make loaded lfp start from 1 for interpolation
                         end
                         if group==1
-                            data(:, idcGroupOut) = cast(m.Data.m(idcGroup, idc1)', options.precision).*...
+                            data(:, idcGroupOut) = cast(m.Data.m(idcGroup, idc1)', options.Precision).*...
                                 [obj.ChannelGroups(group).BitVolts].*[obj.ChannelGroups(group).ToMv]*1000;
                         else
                             data(:, idcGroupOut) = cast(interp1(double(m.Data.m(idcGroup, idc2))', ...
-                                idcOff, "linear", 0), options.precision).*...
+                                idcOff, "linear", 0), options.Precision).*...
                                 [obj.ChannelGroups(group).BitVolts].*[obj.ChannelGroups(group).ToMv]*1000;
                         end
                     else
-                        data(:, idcGroupOut) = cast(m.Data.m(idcGroup, idc)', options.precision).*...
+                        data(:, idcGroupOut) = cast(m.Data.m(idcGroup, idc)', options.Precision).*...
                             [obj.ChannelGroups(group).BitVolts].*[obj.ChannelGroups(group).ToMv]*1000;
                     end
                 end
@@ -171,9 +171,9 @@ classdef SessionInfo < spiky.core.Metadata
             end
             m = memmapfile(fpth, Format={"int16", [obj.NChannels, nSample], "m"});
             data = m.Data.m(ch, idc)';
-            if options.precision~="int16"
+            if options.Precision~="int16"
                 [~, idxGroup] = obj.ChannelGroups.getChannel(ch);
-                data = cast(data, options.precision).*[obj.ChannelGroups(idxGroup).BitVolts].*...
+                data = cast(data, options.Precision).*[obj.ChannelGroups(idxGroup).BitVolts].*...
                     [obj.ChannelGroups(idxGroup).ToMv].*1000;
             end
             data = spiky.lfp.Lfp(0, fs, data);
@@ -184,24 +184,24 @@ classdef SessionInfo < spiky.core.Metadata
 
             arguments
                 obj
-                options.method string {mustBeMember(options.method, ["kilosort3", "kilosort4"])} = ...
+                options.Method string {mustBeMember(options.Method, ["kilosort3", "kilosort4"])} = ...
                     "kilosort3"
             end
 
             nProbes = length(obj.FpthDat);
             idcNeural = find([obj.ChannelGroups.ChannelType]==spiky.ephys.ChannelType.Neural);
-            resampled = obj.Options.resampleDat;
+            resampled = obj.Options.ResampleDat;
             if resampled
-                fprintf("Running %s on resampled data\n", options.method);
+                fprintf("Running %s on resampled data\n", options.Method);
                 spiky.ephys.SpikeSorter(obj.FpthDat, ...
                     obj.ChannelGroups(idcNeural).Probe.toStruct(obj.NChannels, true), ...
-                    options.method).run();
+                    options.Method).run();
             else
                 for ii = 1:nProbes
-                    fprintf("Running %s on probe %d\n", options.method, ii);
+                    fprintf("Running %s on probe %d\n", options.Method, ii);
                     spiky.ephys.SpikeSorter(obj.FpthDat(ii), ...
                         obj.ChannelGroups(ii).Probe.toStruct(obj.ChannelGroups(ii).NChannels), ...
-                        options.method).run();
+                        options.Method).run();
                 end
             end
         end
@@ -211,25 +211,25 @@ classdef SessionInfo < spiky.core.Metadata
 
             arguments
                 obj
-                options.method string {mustBeMember(options.method, ["kilosort3", "kilosort4"])} = ...
+                options.Method string {mustBeMember(options.Method, ["kilosort3", "kilosort4"])} = ...
                     "kilosort3"
-                options.labels string {mustBeMember(options.labels, ["", "good", "mua"])} = ""
-                options.minAmplitude double = 10
-                options.minFr double = 0.2
-                options.maxCv double = 0.5
-                options.extractWaveforms logical = false
+                options.Labels string {mustBeMember(options.Labels, ["", "good", "mua"])} = ""
+                options.MinAmplitude double = 10
+                options.MinFr double = 0.2
+                options.MaxCv double = 0.5
+                options.ExtractWaveforms logical = false
             end
 
-            switch options.method
+            switch options.Method
                 case {"kilosort3", "kilosort4"}
-                    if options.labels==""
-                        if options.method=="kilosort3"
-                            options.labels = ["good", "mua"];
+                    if options.Labels==""
+                        if options.Method=="kilosort3"
+                            options.Labels = ["good", "mua"];
                         else
-                            options.labels = "good";
+                            options.Labels = "good";
                         end
                     end
-                    if obj.Options.resampleDat
+                    if obj.Options.ResampleDat
                         spikes = obj.loadSpikesFolder(obj.Session.getFdir("Kilosort3"), options);
                     else % multiple files
                         nProbes = length(obj.FpthDat);
@@ -242,14 +242,14 @@ classdef SessionInfo < spiky.core.Metadata
                                 sync = [];
                             end
                             fpth = obj.FpthDat(ii);
-                            fdir = fullfile(fileparts(fpth), options.method);
+                            fdir = fullfile(fileparts(fpth), options.Method);
                             spikes{ii} = obj.loadSpikesFolder(fdir, options, sum(nChs(1:ii-1)), sync, ii);
                         end
                         spikes = vertcat(spikes{:});
                     end
                     si = spiky.ephys.SpikeInfo(spikes, options);
                 otherwise
-                    error("Method %s not recognized", options.method)
+                    error("Method %s not recognized", options.Method)
             end
             obj.Session.saveMetaData(si);
         end
@@ -259,11 +259,11 @@ classdef SessionInfo < spiky.core.Metadata
 
             arguments
                 obj
-                options.minPhotodiodeGap double = 0.05
+                options.MinPhotodiodeGap double = 0.05
             end
+            options.Plot = ~exist(obj.Session.getFpth("spiky.minos.MinosInfo.mat"), "file");
             optionsCell = namedargs2cell(options);
-            fdir = obj.Session.getFdir("Minos");
-            minos = spiky.minos.MinosInfo.load(fdir, obj, optionsCell{:});
+            minos = spiky.minos.MinosInfo.load(obj, optionsCell{:});
             obj.Session.saveMetaData(minos);
             if ~exist(obj.Session.getFpth("spiky.minos.Asset.mat"), "file")
                 minos.getAssets();
@@ -464,8 +464,8 @@ classdef SessionInfo < spiky.core.Metadata
             end
     
             %%
-            isGood = ismember(data.label, options.labels) & data.cv<options.maxCv & ...
-                data.fr>options.minFr & data.amplitude>options.minAmplitude;
+            isGood = ismember(data.label, options.Labels) & data.cv<options.MaxCv & ...
+                data.fr>options.MinFr & data.amplitude>options.MinAmplitude;
             idcGood = find(isGood);
             %%
             if isempty(idxGroup)

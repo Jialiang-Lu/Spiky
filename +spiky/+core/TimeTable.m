@@ -1,9 +1,5 @@
-classdef TimeTable < spiky.core.Events & matlab.mixin.CustomDisplay
+classdef TimeTable < spiky.core.Events & spiky.core.ArrayTable & matlab.mixin.CustomDisplay
     % TIMETABLE Represents data indexed by time points in seconds
-
-    properties
-        Data
-    end
 
     methods
         function obj = TimeTable(varargin)
@@ -48,199 +44,6 @@ classdef TimeTable < spiky.core.Events & matlab.mixin.CustomDisplay
             end
         end
 
-        function obj = apply(obj, fun, varargin)
-            %APPLY Apply a function to the data
-            %
-            %   obj = apply(obj, fun, varargin)
-            %   fun: function handle
-            %   varargin: additional arguments passed to fun
-
-            obj.Data = fun(obj.Data, varargin{:});
-        end
-
-        function S = sum(obj, varargin)
-            %SUM Compute the sum of the signal
-            %
-            %   S = sum(obj, varargin)
-            %   varargin: additional arguments passed to sum
-
-            S = sum(obj.Data, varargin{:});
-        end
-
-        function M = mean(obj, varargin)
-            %MEAN Compute the mean of the signal
-            %
-            %   M = mean(obj, varargin)
-            %   varargin: additional arguments passed to mean
-
-            M = mean(obj.Data, varargin{:});
-        end
-
-        function M = median(obj, varargin)
-            %MEDIAN Compute the median of the signal
-            %
-            %   M = median(obj, varargin)
-            %   varargin: additional arguments passed to median
-
-            M = median(obj.Data, varargin{:});
-        end
-
-        function obj = plus(obj, obj2)
-            %PLUS Add two signals
-            %
-            %   obj = plus(obj, obj2)
-            %   obj2: Lfp object
-
-            if isa(obj2, "spiky.core.TimeTable")
-                obj2 = obj2.Data;
-            end
-            obj.Data = obj.Data+obj2;
-        end
-
-        function obj = minus(obj, obj2)
-            %MINUS Subtract two signals
-            %
-            %   obj = minus(obj, obj2)
-            %   obj2: Lfp object
-
-            if isa(obj2, "spiky.core.TimeTable")
-                obj2 = obj2.Data;
-            end
-            obj.Data = obj.Data-obj2;
-        end
-
-        function obj = times(obj, obj2)
-            %TIMES Multiply two signals
-            %
-            %   obj = times(obj, obj2)
-            %   obj2: Lfp object
-
-            if isa(obj2, "spiky.core.TimeTable")
-                obj2 = obj2.Data;
-            end
-            obj.Data = obj.Data.*obj2;
-        end
-
-        function obj = rdivide(obj, obj2)
-            %RDIVIDE Divide two signals
-            %
-            %   obj = rdivide(obj, obj2)
-            %   obj2: Lfp object
-
-            if isa(obj2, "spiky.core.TimeTable")
-                obj2 = obj2.Data;
-            end
-            obj.Data = obj.Data./obj2;
-        end
-
-        function obj = ldivide(obj, obj2)
-            %LDIVIDE Divide two signals
-            %
-            %   obj = ldivide(obj, obj2)
-            %   obj2: Lfp object
-
-            if isa(obj2, "spiky.core.TimeTable")
-                obj2 = obj2.Data;
-            end
-            obj.Data = obj2./obj.Data;
-        end
-
-        function obj = gt(obj, obj2)
-            %GT Greater than comparison
-            %
-            %   obj = gt(obj, obj2)
-            %   obj2: Lfp object
-
-            if isa(obj2, "spiky.core.TimeTable")
-                obj2 = obj2.Data;
-            end
-            obj.Data = obj.Data>obj2;
-        end
-
-        function obj = ge(obj, obj2)
-            %GE Greater than or equal comparison
-            %
-            %   obj = ge(obj, obj2)
-            %   obj2: Lfp object
-
-            if isa(obj2, "spiky.core.TimeTable")
-                obj2 = obj2.Data;
-            end
-            obj.Data = obj.Data>=obj2;
-        end
-
-        function obj = lt(obj, obj2)
-            %LT Less than comparison
-            %
-            %   obj = lt(obj, obj2)
-            %   obj2: Lfp object
-
-            if isa(obj2, "spiky.core.TimeTable")
-                obj2 = obj2.Data;
-            end
-            obj.Data = obj.Data<obj2;
-        end
-
-        function obj = le(obj, obj2)
-            %LE Less than or equal comparison
-            %
-            %   obj = le(obj, obj2)
-            %   obj2: Lfp object
-
-            if isa(obj2, "spiky.core.TimeTable")
-                obj2 = obj2.Data;
-            end
-            obj.Data = obj.Data<=obj2;
-        end
-
-        function obj = eq(obj, obj2)
-            %EQ Equal comparison
-            %
-            %   obj = eq(obj, obj2)
-            %   obj2: Lfp object
-
-            if isa(obj2, "spiky.core.TimeTable")
-                obj2 = obj2.Data;
-            end
-            obj.Data = obj.Data==obj2;
-        end
-
-        function obj = ne(obj, obj2)
-            %NE Not equal comparison
-            %
-            %   obj = ne(obj, obj2)
-            %   obj2: Lfp object
-
-            if isa(obj2, "spiky.core.TimeTable")
-                obj2 = obj2.Data;
-            end
-            obj.Data = obj.Data~=obj2;
-        end
-
-        function obj = and(obj, obj2)
-            %AND Logical AND
-            %
-            %   obj = and(obj, obj2)
-            %   obj2: Lfp object
-
-            if isa(obj2, "spiky.core.TimeTable")
-                obj2 = obj2.Data;
-            end
-            obj.Data = obj.Data & obj2;
-        end
-
-        function obj = or(obj, obj2)
-            %OR Logical OR
-            %
-            %   obj = or(obj, obj2)
-            %   obj2: Lfp object
-
-            if isa(obj2, "spiky.core.TimeTable")
-                obj2 = obj2.Data;
-            end
-            obj.Data = obj.Data | obj2;
-        end
-
         function [obj, idc] = sort(obj, direction)
             %SORT Sort data by time
             %
@@ -257,37 +60,48 @@ classdef TimeTable < spiky.core.Events & matlab.mixin.CustomDisplay
             obj.Data = obj.Data(idc, :);
         end
 
-        function out = interp(obj, t, method, varargin)
+        function out = interp(obj, t, method, extrap, options)
             %INTERP Interpolate the data at specific time points
             %
             %   out = interp(obj, t, varargin)
+            %
+            %   obj: TimeTable
             %   t: time points
             %   method: interpolation method
-            %   varargin: additional arguments passed to interp1
+            %   extrap: extrapolation method
+            %   options: options
+            %       AsTimeTable: return as TimeTable
+            %
+            %   out: interpolated data
+
             arguments
                 obj spiky.core.TimeTable
                 t
                 method string {mustBeMember(method, ["linear" "nearest" "next" "previous" "pchip" ...
-                    "cubic" "v5cubic" "makima" "spline"])} = "linear"
-            end
-            arguments (Repeating)
-                varargin
+                    "cubic" "v5cubic" "makima" "spline"])} = "nearest"
+                extrap = "extrap"
+                options.AsTimeTable (1, 1) logical = false
             end
             
+            t = t(:);
             if height(obj)==1
                 out = obj.Data;
                 return
             end
-            if isempty(varargin)
-                varargin = {"extrap"};
-            end
             if ismember(method, ["nearest" "next" "previous"])
-                idc = interp1(obj.Time, 1:height(obj), t, method, varargin{:});
-                out = obj.Data(idc, :, :);
+                idc = interp1(obj.Time, 1:height(obj), t, method, extrap);
+                if ndims(obj.Data)==3
+                    out = obj.Data(idc, :, :);
+                else
+                    out = obj.Data(idc, :);
+                end
             elseif isnumeric(obj.Data)
-                out = interp1(obj.Time, obj.Data, t, method, varargin{:});
+                out = interp1(obj.Time, obj.Data, t, method, extrap);
             else
                 error("Method %s is not supported for non-numeric data", method)
+            end
+            if options.AsTimeTable
+                out = spiky.core.TimeTable(t, out);
             end
         end
 
@@ -350,136 +164,24 @@ classdef TimeTable < spiky.core.Events & matlab.mixin.CustomDisplay
                 return
             end
             switch s(1).type
-                case '.'
-                    if istable(obj.Data) && ismember(s(1).subs, ...
-                        obj.Data.Properties.VariableNames)
-                        obj = obj.Data;
-                    end
                 case '()'
                     sd = s(1);
                     st = sd;
                     st.subs = sd.subs(1);
-                    obj1 = obj;
-                    obj1.T_ = subsref(obj.Time, st);
-                    obj1.Data = subsref(obj.Data, sd);
-                    obj = obj1;
-                    if isscalar(s)
-                        varargout{1} = obj;
-                    else
-                        [varargout{1:nargout}] = subsref(obj, s(2:end));
-                    end
-                    return
-                case '{}'
-                    s.type = '()';
-                    [varargout{1:nargout}] = subsref(obj.Data, s);
-                    return
+                    obj.Time = subsref(obj.Time, st);
             end
-            [varargout{1:nargout}] = builtin("subsref", obj, s);
+            [varargout{1:nargout}] = subsref@spiky.core.ArrayTable(obj, s);
         end
 
         function obj = subsasgn(obj, s, varargin)
-            if isequal(obj, [])
-                obj = spiky.core.TimeTable.empty;
-            end
+            obj = subsasgn@spiky.core.ArrayTable(obj, s, varargin{:});
             switch s(1).type
-                case '.'
-                    if istable(obj.Data) && ismember(s(1).subs, ...
-                        obj.Data.Properties.VariableNames)
-                        obj1 = obj.Data;
-                        obj1 = builtin("subsasgn", obj1, s, varargin{:});
-                        obj.Data = obj1;
-                        return
-                    end
                 case '()'
                     sd = s(1);
                     st = sd;
                     st.subs = sd.subs(1);
                     obj1 = varargin{1};
                     obj.Time = subsasgn(obj.Time, st, obj1.Time);
-                    obj.Data = subsasgn(obj.Data, sd, obj1.Data);
-                    return
-                case '{}'
-                    s.type = '()';
-                    obj1 = obj.Data;
-                    obj1 = builtin("subsasgn", obj1, s, varargin{:});
-                    obj.Data = obj1;
-                    return
-            end
-            obj = builtin("subsasgn", obj, s, varargin{:});
-        end
-
-        function n = numArgumentsFromSubscript(obj, s, indexingContext)
-            switch s(1).type
-                case '{}'
-                    s(1).type = '()';
-            end
-            if isscalar(s)
-                n = builtin("numArgumentsFromSubscript", obj, s, indexingContext);
-            else
-                obj = subsref(obj, s(1));
-                n = numArgumentsFromSubscript(obj, s(2:end), indexingContext);
-            end
-        end
-
-        function varargout = size(obj, varargin)
-            [varargout{1:nargout}] = size(obj.Data, varargin{:});
-        end
-
-        function b = isempty(obj)
-            b = numel(obj.Data)==0;
-        end
-
-        function obj = cat(dim, varargin)
-            n = numel(varargin);
-            if n==0
-                obj = spiky.core.TimeTable.empty;
-                return
-            end
-            obj = varargin{1};
-            if n==1
-                return
-            end
-            c = class(obj);
-            for ii = 2:n
-                assert(isa(varargin{ii}, c), "All inputs must be of the same class")
-                assert(isequal(class(obj.Data), class(varargin{ii}.Data)), ...
-                    "All inputs must have the same data type")
-                switch dim
-                    case 1
-                        assert(isequal(size(obj.Data, 2), size(varargin{ii}.Data, 2)), ...
-                            "All inputs must have the same size")
-                        obj.Data = [obj.Data; varargin{ii}.Data];
-                        if ~obj.IsUniform
-                            obj.T_ = [obj.T_; varargin{ii}.Time];
-                        end
-                    case 2
-                        assert(isequal(size(obj.Data, 1), size(varargin{ii}.Data, 1)), ...
-                            "All inputs must have the same size")
-                        obj.Data = [obj.Data varargin{ii}.Data];
-                    case 3
-                        assert(isequal(size(obj.Data, 1:2), size(varargin{ii}.Data, 1:2)), ...
-                            "All inputs must have the same size")
-                        obj.Data = cat(3, obj.Data, varargin{ii}.Data);
-                    otherwise
-                        error("Invalid dimension")
-                end
-            end
-        end
-
-        function obj = horzcat(varargin)
-            obj = cat(2, varargin{:});
-        end
-
-        function obj = vertcat(varargin)
-            obj = cat(1, varargin{:});
-        end
-
-        function ind = end(obj,k,n)
-            sz = size(obj);
-            if k < n
-                ind = sz(k);
-            else
-                ind = prod(sz(k:end));
             end
         end
     end

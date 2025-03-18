@@ -1,15 +1,14 @@
-classdef Parameter < spiky.core.MappableArray & spiky.core.Metadata & spiky.core.ArrayDisplay
+classdef Parameter < spiky.core.MappableArray
     % PARAMETER A parameter that can be changed during an experiment
 
     properties
         Name string
         Type string
-        Values spiky.core.TimeTable
+        Data spiky.core.TimeTable
     end
 
     properties (Dependent)
         Time
-        Data
     end
 
     methods
@@ -22,23 +21,15 @@ classdef Parameter < spiky.core.MappableArray & spiky.core.Metadata & spiky.core
             end
             obj.Name = name;
             obj.Type = type;
-            obj.Values = spiky.core.TimeTable(time, values);
+            obj.Data = spiky.core.TimeTable(time, values);
         end
 
         function t = get.Time(obj)
-            t = obj.Values.Time;
+            t = obj.Data.Time;
         end
 
         function obj = set.Time(obj, time)
-            obj.Values.Time = time;
-        end
-
-        function d = get.Data(obj)
-            d = obj.Values.Data;
-        end
-
-        function obj = set.Data(obj, data)
-            obj.Values.Data = data;
+            obj.Data.Time = time;
         end
 
         function value = get(obj, time)
@@ -56,7 +47,7 @@ classdef Parameter < spiky.core.MappableArray & spiky.core.Metadata & spiky.core
             else
                 periods = spiky.core.Periods([[-Inf; obj.Time(2:end)], [obj.Time(2:end); Inf]]);
                 [~, ~, idc] = periods.haveEvents(time);
-                value = obj.Values(idc).Data;
+                value = obj.Data(idc).Data;
             end
         end
 
@@ -85,11 +76,11 @@ classdef Parameter < spiky.core.MappableArray & spiky.core.Metadata & spiky.core
             else
                 h = value;
             end
-            if iscell(obj.Data)
+            if iscell(obj.Data.Data)
                 h = @(c) cellfun(h, c);
             end
             n = length(obj.Time);
-            idc = find(h(obj.Data));
+            idc = find(h(obj.Data.Data));
             if isempty(idc)
                 periods = spiky.core.Periods.empty;
                 return

@@ -2,9 +2,9 @@ classdef TypeInfo
     %TYPEINFO Info for (de-)serializing Minos struct
 
     properties (Constant, Hidden)
-        BuiltIns = dictionary(["logical", "char", "char", "int8", "uint8", "int16", "uint16", ...
+        BuiltIns = dictionary(["logical", "char", "int8", "uint8", "int16", "uint16", ...
             "int32", "uint32", "int64", "uint64", "single", "double"],...
-            ["b4", "c1", "c2", "i1", "u1", "i2", "u2", "i4", "u4", "i8", "u8", "f4", "f8"])
+            ["b4", "c1", "i1", "u1", "i2", "u2", "i4", "u4", "i8", "u8", "f4", "f8"])
         BasePattern = "(?<name>[a-zA-Z_][a-zA-Z0-9_]*)?:?(?<comment>\^?)"+...
             "(?<length>\d+)(?<descr>[buicfd\^]+)(?<bytes>\d+)";
         CommentPattern = "(?<name>[a-zA-Z_][a-zA-Z0-9_]*):?(?<value>[-\d]+)?";
@@ -106,9 +106,9 @@ classdef TypeInfo
                     id = m.descr+m.bytes;
                     obj.Type = string(spiky.minos.TypeInfo.BuiltIns.keys{strcmp(id, ...
                         spiky.minos.TypeInfo.BuiltIns.values)});
-                    obj.Constants = table([cs.name]', spiky.utils.str2int([cs.value]', obj.Type), ...
-                        VariableNames=["name", "value"]);
-                    obj.EnumType = spiky.utils.ternary(obj.Constants.value(1)~=0, "EnumLike", "Enum");
+                    obj.Constants = table(categorical([cs.name]'), spiky.utils.str2int([cs.value]', obj.Type), ...
+                        VariableNames=["Name", "Value"]);
+                    obj.EnumType = spiky.utils.ternary(obj.Constants.Value(1)~=0, "EnumLike", "Enum");
                 end
                 if comment{1}(1)=='^'
                     obj.EnumType = "Flag";
@@ -326,19 +326,19 @@ classdef TypeInfo
             values = values(:);
             if obj.EnumType=="Flag"
                 out = strings(sz);
-                isCode = bitand(values', obj.Constants.value)>0;
+                isCode = bitand(values', obj.Constants.Value)>0;
                 for ii = 1:n
-                    out(ii) = join(obj.Constants.name(isCode(:, ii)), "_");
+                    out(ii) = join(string(obj.Constants.Name(isCode(:, ii))), "_");
                 end
                 out = categorical(out);
             elseif obj.EnumType=="Enum"
-                isCode = values'==obj.Constants.value;
+                isCode = values'==obj.Constants.Value;
                 if ~all(any(isCode, 1))
                     error("Undecodable value")
                 end
                 [~, idc] = max(isCode, [], 1);
-                out = obj.Constants.name(idc');
-                out = categorical(out, obj.Constants.name);
+                out = obj.Constants.Name(idc');
+                out = categorical(out, obj.Constants.Name);
             else
                 out = values;
             end
@@ -356,16 +356,55 @@ classdef TypeInfo
                 obj spiky.minos.TypeInfo
                 values
             end
-            sz = size(values);
-            n = numel(values);
-            values = values(:);
+            % sz = size(values);
+            % n = numel(values);
+            % values = values(:);
             if obj.EnumType=="Flag"
-                out = arrayfun(@(x) sum(obj.Constants.value(logical(sum(...
-                    split(x, "_")==obj.Constants.name', 1))), "native"), values);
+                out = arrayfun(@(x) sum(obj.Constants.Value(logical(sum(...
+                    split(x, "_")==string(obj.Constants.Name'), 1))), "native"), string(values));
             elseif obj.EnumType=="Enum"
-                out = arrayfun(@(x) obj.Constants.value(x==obj.Constants.name), values);
+                if ~isequal(string(obj.Constants.Name), categories(values, OutputType="string"))
+                    values = setcats(values, string(obj.Constants.Name));
+                end
+                idc = double(values);
+                out = obj.Constants.Value(idc);
             else
                 out = values;
+            end
+        end
+
+        function bytes = getBytes(obj, values)
+            %GETBYTES Get bytes
+            %
+            %   bytes = getBytes(obj, values)
+            %
+            %   obj: spiky.minos.TypeInfo
+            %   values: array
+
+            arguments
+                obj spiky.minos.TypeInfo
+                values
+            end
+            n = height(values);
+            values = obj.encode(values);
+            if iscategorical(values)
+                values = string(values);
+            end
+            if obj.Type=="char"
+                bytes = zeros(obj.Length, n, "uint8");
+                for ii = 1:n
+                    tmp = unicode2native(values(ii), "UTF-8");
+                    if numel(tmp)>obj.Length
+                        tmp = tmp(1:obj.Length);
+                    end
+                    bytes(1:numel(tmp), ii) = tmp;
+                end
+            else
+                if obj.Type=="logical"
+                    values = int32(values);
+                end
+                bytes = typecast(reshape(values', [], 1), "uint8");
+                bytes = reshape(bytes, obj.Length*obj.Bytes, n);
             end
         end
     end
@@ -386,13 +425,13 @@ function str = constants2str(t)
     n = height(t);
     c = strings(n, 1);
     for k = 1:n
-        c(k) = sprintf("%s:%d", t.name(k), t.value(k));
+        c(k) = sprintf("%s:%d", t.Name(k), t.Value(k));
     end
     str = join(c, ",");
 end
 
 function mustBeTableOfConstants(t)
-    if ~istable(t) || ~all(strcmpi(t.Properties.VariableNames, ["name", "value"]))
+    if ~istable(t) || ~all(strcmpi(t.Properties.VariableNames, ["Name", "Value"]))
         error("Not a table of constants")
     end
 end

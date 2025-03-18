@@ -36,7 +36,7 @@ classdef SpikeSorter
             arguments
                 obj
                 nChannels double = []
-                options.fs double = 30000
+                options.Fs double = 30000
             end
             fdir = fileparts(obj.Fpth);
             fdirSort = fullfile(fdir, "kilosort3");
@@ -81,7 +81,7 @@ classdef SpikeSorter
                 % main parameter changes from Kilosort2 to v2.5
                 ops.sig        = 20;  % spatial smoothness constant for registration
                 ops.nblocks    = 5; % blocks for registration. 0 turns it off, 1 does rigid registration. Replaces "datashift" option. 
-                ops.fs = options.fs; % sample rate
+                ops.fs = options.Fs; % sample rate
                 %% Run Kilosort3
                 ops.fbinary = obj.Fpth;
                 ops.NchanTOT = nChannels;

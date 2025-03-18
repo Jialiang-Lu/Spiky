@@ -119,7 +119,11 @@ end
 end
 
 function initSnakeYaml
-snakeYamlFile = fullfile(fileparts(mfilename('fullpath')), 'snakeyaml');
+snakeYamlFile = fullfile(fileparts(mfilename('fullpath')), 'snakeyaml', 'snakeyaml-1.30.jar');
+if ~ismember(snakeYamlFile, javaclasspath('-dynamic'))
+    javaaddpath(snakeYamlFile);
+end
+snakeYamlFile = fullfile(fileparts(mfilename('fullpath')), 'snakeyaml', 'CustomConstuctor.jar');
 if ~ismember(snakeYamlFile, javaclasspath('-dynamic'))
     javaaddpath(snakeYamlFile);
 end

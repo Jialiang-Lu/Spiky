@@ -1,4 +1,4 @@
-classdef Data
+classdef Data < spiky.core.ArrayTable
 
     properties (Constant, Hidden)
         LogPattern = "\[(?<timestamp>\d+)\] (?<name>[\w\.]+) \(?(?<type>.*?)\)? ?= (?<value>[^\r\n]*)";
@@ -11,7 +11,6 @@ classdef Data
     properties
         Path string
         Type {mustBeMember(Type, ["Binary", "Log"])} = "Binary"
-        Values table
         Info spiky.minos.TypeInfo
         Map
     end
@@ -103,7 +102,7 @@ classdef Data
                         else
                             value = table(Size=[0, length(info1)], VariableTypes=[fmt{:, 1}], ...
                                 VariableNames=[fmt{:, 3}]);
-                            obj.Values = value;
+                            obj.Data = value;
                         end
                     else
                         if ~memmapOnly
@@ -120,7 +119,8 @@ classdef Data
                                     tmp = logical(tmp);
                                 elseif info1(ii).Type=="char"
                                     tmp = cellfun(@(x) string(native2unicode(x)), num2cell(tmp, 2));
-                                    tmp = strip(tmp, char(0));
+                                    tmp = erase(tmp, char(0));
+                                    tmp = categorical(tmp);
                                 end
                                 if ~isempty(info1(ii).Constants)
                                     tmp = info1(ii).decode(tmp);
@@ -128,7 +128,7 @@ classdef Data
                                 value{ii} = tmp;
                             end
                             value = table(value{:}, VariableNames=tbl.Name');
-                            obj.Values = value;
+                            obj.Data = value;
                             fclose(fid);
                         else
                             m = memmapfile(fpth, Offset=offset, Format=fmt, ...
@@ -159,7 +159,7 @@ classdef Data
                 end
                 value.Timestamp = spiky.utils.str2int(value.Timestamp, "int64");
                 value.Name = strrep(value.Name, ".", "");
-                obj.Values = value;
+                obj.Data = value;
             else
                 error("Unsupported file extension %s", fext)
             end
@@ -185,25 +185,25 @@ classdef Data
                     fid = fopen(fpth, "w");
                     fwrite(fid, [2 66 73 78 1 0 typecast(uint16(length(header)), "uint8")], "uint8");
                     fwrite(fid, header, "char");
-                    nSamples = height(obj.Values);
+                    nSamples = height(obj.Data);
                     nBytesPerSample = obj.Info.Bytes*obj.Info.Length;
                     data = zeros(nBytesPerSample, nSamples, "uint8");
                     for ii = 1:height(tbl)
-                        value = typecast(info1(ii).encode(obj.Values.(tbl.Name{ii})), "uint8");
-                        value = reshape(value, [], nSamples);
-                        data(tbl.Offset(ii)+1:tbl.Offset(ii)+tbl.Bytes(ii), :) = value;
+                        values = obj.Data.(tbl.Name{ii});
+                        values = info1(ii).getBytes(values);
+                        data(tbl.Offset(ii)+1:tbl.Offset(ii)+tbl.Bytes(ii), :) = values;
                     end
                     fwrite(fid, data, "uint8");
                     fclose(fid);
                 case "Log"
                     txt = string.empty;
-                    n = height(obj.Values);
+                    n = height(obj.Data);
                     for ii = 1:n
-                        if obj.Values.type(ii)==""
-                            txt = [txt; sprintf("[%d] %s", obj.Values.Timestamp(ii), obj.Values.value(ii))];
+                        if obj.Data.type(ii)==""
+                            txt = [txt; sprintf("[%d] %s", obj.Data.Timestamp(ii), obj.Data.value(ii))];
                         else
-                            txt = [txt; sprintf("[%d] %s (%s) = %s", obj.Values.Timestamp(ii), obj.Values.name(ii), ...
-                                obj.Values.type(ii), obj.Values.value(ii))];
+                            txt = [txt; sprintf("[%d] %s (%s) = %s", obj.Data.Timestamp(ii), obj.Data.name(ii), ...
+                                obj.Data.type(ii), obj.Data.value(ii))];
                         end
                     end
                     txt = join(txt, newline)+newline;
@@ -228,7 +228,7 @@ classdef Data
                 func = []
             end
 
-            values = obj.Values(obj.Values.Name~="", :);
+            values = obj.Data(obj.Data.Name~="", :);
             ts = double(values.Timestamp)/1e7;
             [names, ~, idcName] = unique(values.Name, "stable");
             for ii = length(names):-1:1
@@ -245,30 +245,30 @@ classdef Data
             end
         end
 
-        function varargout = subsref(obj, s)
-            switch s(1).type
-                case '.'
-                    if ismember(s(1).subs, obj.Values.Properties.VariableNames)
-                        obj = obj.Values;
-                    end
-            end
-            [varargout{1:nargout}] = builtin("subsref", obj, s);
-        end
+        % function varargout = subsref(obj, s)
+        %     switch s(1).type
+        %         case '.'
+        %             if ismember(s(1).subs, obj.Data.Properties.VariableNames)
+        %                 obj = obj.Data;
+        %             end
+        %     end
+        %     [varargout{1:nargout}] = builtin("subsref", obj, s);
+        % end
 
-        function obj = subsasgn(obj, s, varargin)
-            if isequal(obj, [])
-                obj = spiky.core.TimeTable.empty;
-            end
-            switch s(1).type
-                case '.'
-                    if ismember(s(1).subs, obj.Values.Properties.VariableNames)
-                        obj1 = obj.Values;
-                        obj1 = builtin("subsasgn", obj1, s, varargin{:});
-                        obj.Values = obj1;
-                        return
-                    end
-            end
-            obj = builtin("subsasgn", obj, s, varargin{:});
-        end
+        % function obj = subsasgn(obj, s, varargin)
+        %     if isequal(obj, [])
+        %         obj = spiky.core.TimeTable.empty;
+        %     end
+        %     switch s(1).type
+        %         case '.'
+        %             if ismember(s(1).subs, obj.Data.Properties.VariableNames)
+        %                 obj1 = obj.Data;
+        %                 obj1 = builtin("subsasgn", obj1, s, varargin{:});
+        %                 obj.Data = obj1;
+        %                 return
+        %             end
+        %     end
+        %     obj = builtin("subsasgn", obj, s, varargin{:});
+        % end
     end
 end
