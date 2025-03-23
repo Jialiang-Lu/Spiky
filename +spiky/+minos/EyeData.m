@@ -123,7 +123,7 @@ classdef EyeData < spiky.core.Metadata
                             continue
                         end
                         idc1 = idcTr(is1);
-                        tr1 = transform(idc1).interp(fixations.Start(ii));
+                        tr1 = transform(idc1).interp(fixations.Start(ii)+0.01);
                         proj1 = {tr1.Proj};
                         proj1 = cellfun(oneFunc, proj1, UniformOutput=false);
                         proj1 = vertcat(proj1{:});

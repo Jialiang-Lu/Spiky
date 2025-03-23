@@ -473,7 +473,7 @@ classdef RawData
                                 mf = memmapfile(obj.LfpFiles(ii).Path, ...
                                     Format={"int16", [nChRaw nSamplesRaw(ii)], "m"});
                                 if ii>1
-                                    idcK = syncs(ii-1).Fit((0:nSamplesRaw(1)-1)./2500).*2500+1;
+                                    idcK = syncs(ii).Fit((0:nSamplesRaw(1)-1)./2500).*2500+1;
                                     idcK2 = round(idcK(1)-3):round(idcK(end)+3);
                                     idcK2(idcK2<=0) = [];
                                     idcK2(idcK2>nSamplesRaw(ii)) = [];

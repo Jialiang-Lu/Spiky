@@ -38,7 +38,7 @@ classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
             obj.Data = data;
         end
 
-        function [obj, indices] = interp(obj, time)
+        function [obj, indices] = interp(obj, time, method)
             %INTERP Interpolate the data to the given time points
             %
             % obj = INTERP(obj, time)
@@ -51,6 +51,7 @@ classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
             arguments
                 obj
                 time double
+                method string = "previous"
             end
             if isempty(obj)
                 return
@@ -64,7 +65,7 @@ classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
             end
             obj = obj(idcTr);
             for ii = 1:numel(obj)
-                obj(ii).Data = obj(ii).Data.interp(time, "previous", AsTimeTable=true);
+                obj(ii).Data = obj(ii).Data.interp(time, method, AsTimeTable=true);
             end
         end
 

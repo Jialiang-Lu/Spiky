@@ -5,7 +5,7 @@ function fixfig(h, options)
 arguments
     h = []
     options.Theme = []
-    options.Save string = ""
+    options.Save string = string.empty
     options.ContentType string = "image"
     options.Resolution double = 200
     options.Append logical = false

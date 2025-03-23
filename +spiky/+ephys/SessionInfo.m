@@ -213,7 +213,7 @@ classdef SessionInfo < spiky.core.Metadata
                 obj
                 options.Method string {mustBeMember(options.Method, ["kilosort3", "kilosort4"])} = ...
                     "kilosort3"
-                options.Labels string {mustBeMember(options.Labels, ["", "good", "mua"])} = ""
+                options.Labels string {mustBeMember(options.Labels, ["", "good", "mua"])} = ["good", "mua"]
                 options.MinAmplitude double = 10
                 options.MinFr double = 0.2
                 options.MaxCv double = 0.5
@@ -223,11 +223,7 @@ classdef SessionInfo < spiky.core.Metadata
             switch options.Method
                 case {"kilosort3", "kilosort4"}
                     if options.Labels==""
-                        if options.Method=="kilosort3"
-                            options.Labels = ["good", "mua"];
-                        else
-                            options.Labels = "good";
-                        end
+                        options.Labels = ["good", "mua"];
                     end
                     if obj.Options.ResampleDat
                         spikes = obj.loadSpikesFolder(obj.Session.getFdir("Kilosort3"), options);
