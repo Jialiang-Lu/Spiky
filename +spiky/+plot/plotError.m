@@ -1,5 +1,5 @@
 function [hLine, hError] = plotError(x, y, e, lineSpec, plotOps, options)
-% PLOTERROR Plot data with shaded error bars
+%PLOTERROR Plot data with shaded error bars
 %
 %   h = plotError(x, y, e, options)
 %

@@ -14,5 +14,6 @@ classdef SpikeInfo < spiky.core.Metadata
             obj.Spikes = spikes;
             obj.Options = options;
         end
+        
     end
 end

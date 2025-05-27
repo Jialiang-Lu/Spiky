@@ -160,7 +160,7 @@ classdef Events
         end
 
         function [events, idc, idcPeriods] = inPeriods(obj, periods, cellmode, offset, ...
-            rightClose, sorted)
+            rightClose, sorted, options)
             %INPERIODS Find events within periods
             %
             %   obj: events
@@ -183,6 +183,7 @@ classdef Events
                 offset double {mustBeScalarOrEmpty} = []
                 rightClose logical = false
                 sorted logical = true
+                options.KeepType logical = false
             end
             ts = obj.Time;
             periods = periods.Time;
@@ -201,9 +202,16 @@ classdef Events
                         idcPeriods(acc+1:acc+count) = ii;
                         acc = acc+count;
                     end
-                    events = ts(idc);
-                    if ~isempty(offset)
-                        events = events-periods(idcPeriods, 1)+offset;
+                    if ~options.KeepType
+                        events = ts(idc);
+                        if ~isempty(offset)
+                            events = events-periods(idcPeriods, 1)+offset;
+                        end
+                    else
+                        events = subsref(obj, substruct("()", {idc}));
+                        if ~isempty(offset)
+                            events.Time = events.Time-periods(idcPeriods, 1)+offset;
+                        end
                     end
                 else
                     idc = cell(size(periods, 1), 1);
@@ -217,13 +225,18 @@ classdef Events
                         end
                         idc1 = indices(ii):indices(ii)+count-1;
                         idc{ii} = idc1';
-                        if ~isempty(offset)
-                            events{ii} = ts(idc1)-periods(ii, 1)+offset;
+                        if ~options.KeepType
+                            if ~isempty(offset)
+                                events{ii} = ts(idc1)-periods(ii, 1)+offset;
+                            else
+                                events{ii} = ts(idc1);
+                            end
                         else
-                            events{ii} = ts(idc1);
+                            events{ii} = subsref(obj, substruct("()", {idc1}));
+                            if ~isempty(offset)
+                                events{ii}.Time = events{ii}.Time-periods(ii, 1)+offset;
+                            end
                         end
-                        idcPeriods(ii) = count;
-                        acc = acc+count;
                     end
                 end
                 return
@@ -237,11 +250,18 @@ classdef Events
                 tmp = tmp';
                 idcIn = find(tmp(:));
                 [idc, idcPeriods] = ind2sub(size(tmp), idcIn);
-                events = ts(idc);
-                if ~isempty(offset)
-                    events = events-periods(idcPeriods, 1)+offset;
+                if ~options.KeepType
+                    events = ts(idc);
+                    if ~isempty(offset)
+                        events = events-periods(idcPeriods, 1)+offset;
+                    end
+                else
+                    events = subsref(obj, substruct("()", {idc}));
+                    if ~isempty(offset)
+                        events.Time = events.Time-periods(idcPeriods, 1)+offset;
+                    end
                 end
-            else
+        else
                 idc = cell(size(tmp, 1), 1);
                 events = cell(size(tmp, 1), 1);
                 if ~isempty(offset)
@@ -251,7 +271,12 @@ classdef Events
                             continue
                         end
                         idc{ii} = idc1;
-                        events{ii} = ts(idc1)-periods(ii, 1)+offset;
+                        if ~options.KeepType
+                            events{ii} = ts(idc1)-periods(ii, 1)+offset;
+                        else
+                            events{ii} = subsref(obj, substruct("()", {idc1}));
+                            events{ii}.Time = events{ii}.Time-periods(ii, 1)+offset;
+                        end
                     end
                 else
                     for ii = 1:size(tmp, 1)
@@ -260,7 +285,11 @@ classdef Events
                             continue
                         end
                         idc{ii} = idc1;
-                        events{ii} = ts(idc1);
+                        if ~options.KeepType
+                            events{ii} = ts(idc1);
+                        else
+                            events{ii} = subsref(obj, substruct("()", {idc1}));
+                        end
                     end
                 end
                 if nargout>2
@@ -293,8 +322,12 @@ classdef Events
             isCross = dt>=minGap;
             idc = find(isCross);
             prd = [[1; idc(1:end-1)+1] idc];
-            periods = spiky.core.Periods(obj.Time(prd));
-            isValid = periods.Duration>=minPeriod;
+            prd0 = obj.Time(prd);
+            if iscolumn(prd0)
+                prd0 = prd0';
+            end
+            periods = spiky.core.Periods(prd0);
+            isValid = periods.ChunkDuration>=minPeriod;
             periods.Time = periods.Time(isValid, :);
             prd1 = prd(isValid, 1);
             prd2 = prd(isValid, 2);

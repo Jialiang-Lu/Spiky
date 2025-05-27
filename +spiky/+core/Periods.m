@@ -1,100 +1,95 @@
-classdef Periods < spiky.core.ArrayTable
-    % PERIODS Class representing time periods, left closed and right open
+classdef Periods
+    %PERIODS Class representing time periods, left closed and right open
+
+    properties
+        Time (:, 2) double = double.empty
+    end
 
     properties (Dependent)
-        Time
-        Length
-        Duration
-        Start
-        End
+        Length double
+        Duration double
+        ChunkDuration double
+        Start double
+        End double
+    end
+
+    methods (Static, Hidden)
+        function periods = combine(varargin, options)
+            arguments (Repeating)
+                varargin
+            end
+            arguments
+                options.Op string {mustBeMember(options.Op, ["Union", "Intersect"])}
+            end
+            for ii = 1:nargin
+                if isa(varargin{ii}, "spiky.core.Periods")
+                    varargin{ii} = varargin{ii}.Time;
+                elseif size(varargin{ii}, 2)~=2
+                    error("Time must have two columns.")
+                elseif ~isnumeric(varargin{ii})
+                    error("Wrong input type %s.", class(varargin{ii}))
+                end
+                varargin{ii} = varargin{ii}(diff(varargin{ii}, 1, 2)>0, :);
+            end
+            n = nargin;
+            t = cell2mat(varargin')';
+            d = zeros(size(t))+[1; -1];
+            t = t(:);
+            d = d(:);
+            [t, idc] = sort(t, "ascend");
+            d = d(idc);
+            d = cumsum(d);
+            c = spiky.core.TimeTable(1:numel(t), d);
+            switch options.Op
+                case "Union"
+                    thr = 0.5;
+                case "Intersect"
+                    thr = numel(varargin);
+                otherwise
+                    error("Unknown operation %s.", options.Op)
+            end
+            prds = c.findPeriods(thr, 1, 0);
+            prds = prds.Time+[0 1];
+            t = reshape(t(prds), height(prds), 2);
+            t = t(diff(t, 1, 2)>0, :);
+            periods = spiky.core.Periods(t);
+        end
     end
 
     methods (Static)
-        % function periods = cat(varargin)
-        %     % CAT Concatenate periods
-        %     if nargin==1
-        %         periods = varargin{1};
-        %         return
-        %     end
-        %     for ii = 1:nargin
-        %         if isa(varargin{ii}, "spiky.core.Periods")
-        %             varargin{ii} = varargin{ii}.Time;
-        %         elseif size(varargin{ii}, 2)~=2
-        %             error("Time must have two columns.")
-        %         elseif ~isnumeric(varargin{ii})
-        %             error("Wrong input type %s.", class(varargin{ii}))
-        %         end
-        %     end
-        %     periods = cell2mat(varargin');
-        %     periods = spiky.core.Periods(periods);
-        % end
+        function periods = concat(varargin)
+            %CONCAT Concatenate periods
+            %   periods = concat(obj) concatenates all periods into one period
+            arguments (Repeating)
+                varargin spiky.core.Periods
+            end
+            c = cellfun(@(x) vertcat(x.Time), varargin, UniformOutput=false);
+            c = c(:);
+            t = cell2mat(c);
+            periods = spiky.core.Periods(t);
+        end
 
         function periods = union(varargin)
-            % UNION Union of periods
+            %UNION Union of periods
             if nargin==1
                 periods = varargin{1};
                 return
             end
-            for ii = 1:nargin
-                if isa(varargin{ii}, "spiky.core.Periods")
-                    varargin{ii} = varargin{ii}.Time;
-                elseif size(varargin{ii}, 2)~=2
-                    error("Time must have two columns.")
-                elseif ~isnumeric(varargin{ii})
-                    error("Wrong input type %s.", class(varargin{ii}))
-                end
-            end
-            per = cell2mat(varargin');
-            per = per(diff(per, 1, 2)>0, :);
-            n = size(per, 1);
-            [edges, idc] = sort(reshape(per.', 1, []), 'ascend');
-            [~, idc2] = sort(idc);
-            idc2 = reshape(idc2, 2, []).';
-            intervals = zeros([1, n*2-1]);
-            for ii = 1:n
-                intervals(idc2(ii, 1):idc2(ii, 2)-1) = 1;
-            end
-            intervals = spiky.core.TimeTable(1, 1, intervals);
-            idcOut = intervals.findPeriods;
-            idcOut = idcOut.Time;
-            periods = [edges(idcOut(:, 1))' edges(idcOut(:, 2)+1)'];
-            periods = spiky.core.Periods(periods);
+            periods = spiky.core.Periods.combine(varargin{:}, Op="Union");
         end
 
         function periods = intersect(varargin)
-            % INTERSECT Intersection of periods
+            %INTERSECT Intersection of periods
             if nargin==1
                 periods = varargin{1};
                 return
             end
-            for ii = 1:nargin
-                if isa(varargin{ii}, "spiky.core.Periods")
-                    varargin{ii} = varargin{ii}.Time;
-                elseif size(varargin{ii}, 2)~=2
-                    error("Time must have two columns.")
-                elseif ~isnumeric(varargin{ii})
-                    error("Wrong input type %s.", class(varargin{ii}))
-                end
-            end
-            per = cell2mat(varargin');
-            per = per(diff(per, 1, 2)>0, :);
-            n = size(per, 1);
-            [edges, idc] = sort(reshape(per.', 1, []), "ascend");
-            [~, idc2] = sort(idc);
-            idc2 = reshape(idc2, 2, []).';
-            intervals = zeros([1, n*2-1]);
-            for ii = 1:n
-                intervals(idc2(ii, 1):idc2(ii, 2)-1) = 1;
-            end
-            idcOut = find(intervals==nargin);
-            periods = [edges(idcOut)' edges(idcOut+1)'];
-            periods = spiky.core.Periods(periods);
+            periods = spiky.core.Periods.combine(varargin{:}, Op="Intersect");
         end
     end
 
     methods
         function obj = Periods(time)
-            % Constructor for Periods class
             arguments
                 time (:, 2) double = double.empty(0, 2)
             end
@@ -104,47 +99,48 @@ classdef Periods < spiky.core.ArrayTable
             obj.Time = time;
         end
 
-        function time = get.Time(obj)
-            % Getter for Time property
-            time = obj.Data;
-        end
-
-        function obj = set.Time(obj, time)
-            % Setter for Time property
-            if size(time, 2)~=2
-                error("Time must have two columns.")
-            end
-            obj.Data = time;
-        end
-
         function len = get.Length(obj)
-            % Getter for Length property
             len = size(obj.Time, 1);
         end
 
         function dur = get.Duration(obj)
-            % Getter for Duration property
+            dur = sum(diff(obj.Time, 1, 2));
+        end
+
+        function dur = get.ChunkDuration(obj)
             dur = diff(obj.Time, 1, 2);
         end
 
         function start = get.Start(obj)
-            % Getter for Start property
             start = obj.Time(:, 1);
         end
 
         function ed = get.End(obj)
-            % Getter for End property
             ed = obj.Time(:, 2);
         end
 
+        function obj = sel(obj, idc)
+            %SEL Select periods by index
+            obj.Time = obj.Time(idc, :);
+        end
+
         function [obj, idc] = sort(obj)
-            % SORT Sort periods
+            %SORT Sort periods
             [~, idc] = sort(obj.Time(:, 1));
-            obj.Data = obj.Time(idc, :);
+            obj.Time = obj.Time(idc, :);
+        end
+
+        function periods = unionAll(obj)
+            %UNIONALL Union all periods
+            arguments
+                obj spiky.core.Periods
+            end
+            c = num2cell(obj);
+            periods = spiky.core.Periods.union(c{:});
         end
 
         function periods = unionWith(obj, periods)
-            % UNIONWITH Union with another periods object
+            %UNIONWITH Union with another periods object
             arguments
                 obj spiky.core.Periods
             end
@@ -155,16 +151,16 @@ classdef Periods < spiky.core.ArrayTable
         end
 
         function periods = and(obj, periods)
-            % AND Intersect with another periods object
+            %AND Intersect with another periods object
             arguments
                 obj spiky.core.Periods
                 periods spiky.core.Periods
             end
-            periods = spiky.core.Periods.intersect(obj, periods);
+            periods = spiky.utils.bsxfun(@spiky.core.Periods.intersect, obj, periods);
         end
 
         function periods = intersectWith(obj, periods)
-            % INTERSECTWITH Intersect with another periods object
+            %INTERSECTWITH Intersect with another periods object
             arguments
                 obj spiky.core.Periods
             end
@@ -175,16 +171,16 @@ classdef Periods < spiky.core.ArrayTable
         end
 
         function periods = or(obj, periods)
-            % OR Union with another periods object
+            %OR Union with another periods object
             arguments
                 obj spiky.core.Periods
                 periods spiky.core.Periods
             end
-            periods = spiky.core.Periods.union(obj, periods);
+            periods = spiky.utils.bsxfun(@spiky.core.Periods.union, obj, periods);
         end
 
         function periods = minus(obj, periods)
-            % MINUS Subtract another periods object
+            %MINUS Subtract another periods object
             arguments
                 obj spiky.core.Periods
                 periods spiky.core.Periods = spiky.core.Periods.empty()
@@ -211,7 +207,7 @@ classdef Periods < spiky.core.ArrayTable
         end
 
         function periods = complement(obj, period)
-            % COMPLEMENT Complement with respect to a period
+            %COMPLEMENT Complement with respect to a period
             arguments
                 obj spiky.core.Periods
                 period double = []
@@ -228,7 +224,7 @@ classdef Periods < spiky.core.ArrayTable
 
         function [events, idc, idcPeriods] = haveEvents(obj, events, cellmode, offset, ...
                 rightClose, sorted)
-            % HAVEEVENTS Find events within periods
+            %HAVEEVENTS Find events within periods
             %
             %   obj: periods
             %   periods: events object
@@ -245,7 +241,7 @@ classdef Periods < spiky.core.ArrayTable
             %       don't use for this purpose)
             arguments
                 obj spiky.core.Periods
-                events % double or spiky.core.Events
+                events %double or spiky.core.Events
                 cellmode logical = false
                 offset double {mustBeScalarOrEmpty} = []
                 rightClose logical = false
@@ -258,7 +254,7 @@ classdef Periods < spiky.core.ArrayTable
         end
 
         function h = plot(obj, c, plotOps)
-            % PLOT Plot periods
+            %PLOT Plot periods
             arguments
                 obj spiky.core.Periods
                 c
@@ -276,9 +272,9 @@ classdef Periods < spiky.core.ArrayTable
         end
 
         function obj = updateFields(obj, s)
-            % Update fields of the object from a struct of older version
-            if isfield(s, "Time")
-                obj.Data = s.Time;
+            %Update fields of the object from a struct of older version
+            if isfield(s, "Data")
+                obj.Time = s.Data;
             end
         end
     end

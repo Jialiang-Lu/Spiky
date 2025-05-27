@@ -60,7 +60,7 @@ classdef PCA < spiky.stat.GroupedStat
                 pcData{ii} = struct("Coeff", coeff, "Score", score, "Latent", latent, ...
                     "Tsquared", tsquared, "Explained", explained, "Mu", mu);
             end
-            obj@spiky.stat.GroupedStat(time, pcData, groups);
+            obj@spiky.stat.GroupedStat(time, pcData, groups, groupIndices);
         end
 
         function c = coeff(obj, indices)

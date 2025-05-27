@@ -83,8 +83,14 @@ classdef MinosInfo < spiky.core.Metadata
             obj.Sync = spiky.ephys.EventGroup("Stim", ...
                 spiky.ephys.ChannelType.Stim, eventsSync, ...
                 double(log.Data{[1 end], 1})', sync);
+            obj.getScreenCapture(photodiode(idc, :));
             tr = obj.getTransform();
-            obj.Eye = spiky.minos.EyeData.load(fdir, sync.Inv, [], tr, ...
+            if ismember("FiveDot", [obj.Paradigms.Name])
+                fiveDot = obj.Paradigms.FiveDot;
+            else
+                fiveDot = [];
+            end
+            obj.Eye = spiky.minos.EyeData.load(fdir, sync.Inv, fiveDot, tr, ...
                 obj.Vars.DisplayFov.Data.Data(1));
             obj.Player = spiky.core.TimeTable(...
                 sync.Inv(double(player.Data.Timestamp)/1e7), ...
@@ -139,6 +145,7 @@ classdef MinosInfo < spiky.core.Metadata
             end
             nr = obj.loadData("NameRecord.bin");
             data = obj.loadData("TransformRecord.bin");
+            hasVisibility = ismember("RootVisible", data.Data.Properties.VariableNames);
             t = obj.Sync.Sync.Inv(double(data.Timestamp)/1e7);
             [objs, ~, idcObj] = unique(data.Data(:, ["Id" "NameIndex"]), "rows", "stable");
             nObjs = height(objs);
@@ -146,27 +153,101 @@ classdef MinosInfo < spiky.core.Metadata
             parfor ii = 1:nObjs
                 idc = idcObj==ii;
                 t1 = t(idc);
-                data1 = spiky.core.TimeTable(t1, table(Size=[sum(idc) 5], ...
-                    VariableTypes=["int64" "logical" "single" "single" "single"], ...
-                    VariableNames=["Trial" "Active" "Pos" "Rot" "Proj"]));
+                data1 = spiky.core.TimeTable(t1, table(Size=[sum(idc) 6], ...
+                    VariableTypes=["int64" "logical" "logical" "single" "single" "single"], ...
+                    VariableNames=["Trial" "Active" "Visible" "Pos" "Rot" "Proj"]));
                 data1.Trial = data.Trial(idc);
                 data1.Active = data.Active(idc);
                 if isnan(data.HeadPos(find(idc, 1), 1))
                     % non-human
+                    if hasVisibility
+                        data1.Visible = data.RootVisible(idc, :);
+                    else
+                        data1.Visible = true(height(data1), 1);
+                    end
                     data1.Pos = data.RootPos(idc, :);
                     data1.Rot = data.RootRot(idc, :);
                     data1.Proj = data.RootProj(idc, :);
                 else
                     % human
-                    data1.Pos = reshape(data.Data{idc, 6:3:end}, [], 3, 12);
-                    data1.Rot = reshape(data.Data{idc, 7:3:end}, [], 3, 12);
-                    data1.Proj = reshape(data.Data{idc, 8:3:end}, [], 3, 12);
+                    if hasVisibility
+                        data1.Visible = reshape(data.Data{idc, 6:4:end}, [], 1, 12);
+                        data1.Pos = reshape(data.Data{idc, 7:4:end}, [], 3, 12);
+                        data1.Rot = reshape(data.Data{idc, 8:4:end}, [], 3, 12);
+                        data1.Proj = reshape(data.Data{idc, 9:4:end}, [], 3, 12);
+                    else
+                        data1.Visible = true(height(data1), 1, 12);
+                        data1.Pos = reshape(data.Data{idc, 6:3:end}, [], 3, 12);
+                        data1.Rot = reshape(data.Data{idc, 7:3:end}, [], 3, 12);
+                        data1.Proj = reshape(data.Data{idc, 8:3:end}, [], 3, 12);
+                    end
                 end
                 tr(ii, 1) = spiky.minos.Transform(nr.Name(objs.NameIndex(ii)+1), ...
                     objs.Id(ii), data1);
                 pb.step;
             end
             obj.Session.saveMetaData(tr);
+        end
+
+        function sc = getScreenCapture(obj, photodiode)
+            % GETSCREENCAPTURE Get the screen capture data
+            fpthScreenCapture = obj.Session.getFpth("spiky.minos.ScreenCapture.mat");
+            if exist(fpthScreenCapture, "file")
+                sc = obj.Session.loadData("spiky.minos.ScreenCapture.mat");
+                return
+            end
+            sc = spiky.minos.ScreenCapture;
+            sc.Session = obj.Session;
+            fpthVideo = obj.Session.getFpth("mkv");
+            if exist(fpthVideo, "file")
+                reader = VideoReader(fpthVideo);
+                n = reader.NumFrames;
+                sz = [reader.Height reader.Width];
+                pos = obj.Vars.DisplayPhotodiodePosition.Data{1};
+                switch pos
+                    case "TopLeft"
+                        pos = [0 0];
+                    case "TopRight"
+                        pos = [sz(2)-1 0];
+                    case "BottomLeft"
+                        pos = [1 sz(1)-1];
+                    case "BottomRight"
+                        pos = [sz(2)-1 sz(1)-1];
+                    otherwise
+                        error("Unknown display position %s", pos)
+                end
+                t = 0:1/reader.FrameRate:(n-1)/reader.FrameRate;
+                fpthCrop = obj.Session.getFpth("photodiode.rgb");
+                if ~exist(fpthCrop, "file")
+                    out = system(sprintf("ffmpeg -i %s -vf ""crop=1:1:%d:%d:exact=1"" " + ...
+                        "-c:v rawvideo -pix_fmt rgb24 %s", fpthVideo, pos(1), pos(2), fpthCrop));
+                    if out~=0
+                        error("Error cropping video %s", fpthVideo)
+                    end
+                end
+                fid = fopen(fpthCrop, "r");
+                c = fread(fid, [3 n], "uint8=>uint8");
+                fclose(fid);
+                c = mean(c, 1)';
+                c = c>127;
+                cd = diff(c);
+                idc = find(cd~=0);
+                tFlip = t(idc);
+                syncEvents = spiky.ephys.RecEvents(tFlip, ...
+                    tFlip.*1e7, spiky.ephys.ChannelType.Stim, ...
+                    int16(1), "Screen", cd(idc+1)>0, "");
+                try
+                   [sync, eventsSync] = photodiode.syncWith(syncEvents, "probe1 to screen", 0.1, ...
+                        allowStep=false);
+                    sc.Path = fpthVideo;
+                    sc.Sync = spiky.ephys.EventGroup("Screen", ...
+                        spiky.ephys.ChannelType.Stim, eventsSync, ...
+                        tFlip([1 end]).*1e7, sync);
+                catch me
+                    warning("Error occured during alignment:\n%s\n%s", me.identifier, me.message)
+                end
+            end
+            obj.Session.saveMetaData(sc);
         end
 
         function fix = getFixation(obj)

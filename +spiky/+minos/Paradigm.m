@@ -35,7 +35,7 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
             eventsCount = groupsummary(trials.Data, "Event", ...
                 @(x) sum(x==mode(x)), "Number");
             eventsCount = eventsCount(~ismember(eventsCount.Event, ...
-                ["ParadigmStart", "ParadigmStop"]), :);
+                ["ParadigmStart", "ParadigmStop", "Loading"]), :);
             eventsCount = eventsCount.fun1_Number;
             if any(eventsCount>1)
                 error("Not implemented")
@@ -52,12 +52,11 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
             if singleInfo
                 data = [trialInfo.Data(idcInfo, :) array2table(NaN(n, ...
                     length(varNames)), "VariableNames", varNames)];
-                info = spiky.core.TimeTable.empty;
             else
                 data = [trialInfo.Data(idcInfo, ["Timestamp" "Number"]) array2table(NaN(n, ...
                     length(varNames)), "VariableNames", varNames)];
-                info = spiky.core.TimeTable(func(double(trialInfo.Timestamp)/1e7), trialInfo.Data);
             end
+            info = spiky.core.TimeTable(func(double(trialInfo.Timestamp)/1e7), trialInfo.Data);
             t = func(double(trials.Data.Timestamp)/1e7);
             nEvents = length(eventNames);
             if ~isempty(photodiode)

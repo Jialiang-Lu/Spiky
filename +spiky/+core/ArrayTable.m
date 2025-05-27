@@ -4,6 +4,15 @@ classdef (Abstract) ArrayTable
         Data
     end
 
+    methods (Static)
+        function dimNames = getDimNames()
+            %GETDIMNAMES Get the dimension names of the ArrayTable
+            %
+            %   dimNames: dimension names
+            dimNames = string.empty;
+        end
+    end
+
     methods
         function obj = ArrayTable(data)
             arguments
@@ -29,6 +38,30 @@ classdef (Abstract) ArrayTable
             %   varargin: additional arguments passed to sum
 
             S = sum(obj.Data, varargin{:});
+        end
+
+        function M = max(obj, varargin)
+            %MAX Compute the maximum of the signal
+            %
+            %   M = max(obj, varargin)
+            %   varargin: additional arguments passed to max
+
+            if isempty(varargin)
+                varargin = {"all"};
+            end
+            M = max(obj.Data, [], varargin{:});
+        end
+
+        function M = min(obj, varargin)
+            %MIN Compute the minimum of the signal
+            %
+            %   M = min(obj, varargin)
+            %   varargin: additional arguments passed to min
+
+            if isempty(varargin)
+                varargin = {"all"};
+            end
+            M = min(obj.Data, [], varargin{:});
         end
 
         function M = mean(obj, varargin)
@@ -222,6 +255,20 @@ classdef (Abstract) ArrayTable
                         sd.subs{2} = ':';
                     end
                     obj.Data = subsref(obj.Data, sd);
+                    dn = feval(class(obj)+".getDimNames");
+                    for ii = 1:numel(dn)
+                        name = dn(ii);
+                        if name==""
+                            continue
+                        end
+                        sd1 = sd;
+                        sd1.subs = sd1.subs(ii);
+                        n = extract(name, alphanumericsPattern);
+                        for jj = 1:numel(n)
+                            n1 = n(jj);
+                            obj.(n1) = subsref(obj.(n1), sd1);
+                        end
+                    end
                     if isscalar(s)
                         varargout{1} = obj;
                     else
@@ -258,6 +305,20 @@ classdef (Abstract) ArrayTable
                     sd = s(1);
                     obj1 = varargin{1};
                     obj.Data = subsasgn(obj.Data, sd, obj1.Data);
+                    dn = feval(class(obj)+".getDimNames");
+                    for ii = 1:numel(dn)
+                        name = dn(ii);
+                        if name==""
+                            continue
+                        end
+                        sd1 = sd;
+                        sd1.subs = sd1.subs(ii);
+                        n = extract(name, alphanumericsPattern);
+                        for jj = 1:numel(n)
+                            n1 = n(jj);
+                            obj.(n1) = subsasgn(obj.(n1), sd1, obj1.(n1));
+                        end
+                    end
                     return
                 case '{}'
                     s.type = '()';

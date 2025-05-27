@@ -1,6 +1,15 @@
 classdef TimeTable < spiky.core.Events & spiky.core.ArrayTable & matlab.mixin.CustomDisplay
     % TIMETABLE Represents data indexed by time points in seconds
 
+    methods (Static)
+        function dimNames = getDimNames()
+            %GETDIMNAMES Get the dimension names of the TimeTable
+            %
+            %   dimNames: dimension names
+            dimNames = "Time";
+        end
+    end
+
     methods
         function obj = TimeTable(varargin)
             % TIMETABLE Create a new instance of TimeTable
@@ -138,7 +147,7 @@ classdef TimeTable < spiky.core.Events & spiky.core.ArrayTable & matlab.mixin.Cu
             end
             t = obj.Time;
             x = obj.Data;
-            isCross = x>thr;
+            isCross = x>=thr;
             if isscalar(t) && isscalar(isCross)
                 if isCross
                     periods = [t Inf];
@@ -158,31 +167,31 @@ classdef TimeTable < spiky.core.Events & spiky.core.ArrayTable & matlab.mixin.Cu
             periods = spiky.core.Periods(periods);
         end
 
-        function varargout = subsref(obj, s)
-            if isempty(obj)
-                [varargout{1:nargout}] = builtin("subsref", obj, s);
-                return
-            end
-            switch s(1).type
-                case '()'
-                    sd = s(1);
-                    st = sd;
-                    st.subs = sd.subs(1);
-                    obj.Time = subsref(obj.Time, st);
-            end
-            [varargout{1:nargout}] = subsref@spiky.core.ArrayTable(obj, s);
-        end
+        % function varargout = subsref(obj, s)
+        %     if isempty(obj)
+        %         [varargout{1:nargout}] = builtin("subsref", obj, s);
+        %         return
+        %     end
+        %     switch s(1).type
+        %         case '()'
+        %             sd = s(1);
+        %             st = sd;
+        %             st.subs = sd.subs(1);
+        %             obj.Time = subsref(obj.Time, st);
+        %     end
+        %     [varargout{1:nargout}] = subsref@spiky.core.ArrayTable(obj, s);
+        % end
 
-        function obj = subsasgn(obj, s, varargin)
-            obj = subsasgn@spiky.core.ArrayTable(obj, s, varargin{:});
-            switch s(1).type
-                case '()'
-                    sd = s(1);
-                    st = sd;
-                    st.subs = sd.subs(1);
-                    obj1 = varargin{1};
-                    obj.Time = subsasgn(obj.Time, st, obj1.Time);
-            end
-        end
+        % function obj = subsasgn(obj, s, varargin)
+        %     obj = subsasgn@spiky.core.ArrayTable(obj, s, varargin{:});
+        %     switch s(1).type
+        %         case '()'
+        %             sd = s(1);
+        %             st = sd;
+        %             st.subs = sd.subs(1);
+        %             obj1 = varargin{1};
+        %             obj.Time = subsasgn(obj.Time, st, obj1.Time);
+        %     end
+        % end
     end
 end

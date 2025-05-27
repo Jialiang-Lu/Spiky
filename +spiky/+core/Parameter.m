@@ -40,7 +40,7 @@ classdef Parameter < spiky.core.MappableArray
             %   value: value(s) of the parameter
             arguments
                 obj spiky.core.Parameter
-                time % double or spiky.core.Events
+                time = 0 % double or spiky.core.Events
             end
             if isempty(obj.Time)
                 value = [];

@@ -5,6 +5,15 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
         Options struct
     end
 
+    methods (Static)
+        function dimNames = getDimNames()
+            %GETDIMNAMES Get the dimension names of the TimeTable
+            %
+            %   dimNames: dimension names
+            dimNames = ["Time" "Events" "Neuron"];
+        end
+    end
+
     methods
         function obj = TrigFr(spikes, events, window, options)
             arguments
@@ -100,7 +109,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
         end
 
         function [h, hError] = plotFr(obj, cats, lineSpec, plotOps, options)
-            % PLOTFR Plot firing rate
+            %PLOTFR Plot firing rate
             % 
             %   h = plotFr(obj, idcEvents, cats, plotOps)
             %
@@ -108,10 +117,10 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             %   cats: categories of events
             %   idcEvents: indices of events to plot
             %   lineSpec: line specification
-            %   plotOps: options for the plot
-            %   options: additional options
+            %   Name-value arguments:
             %       IdcEvents: indices of events to plot
             %       SubSet: subset of categories to plot
+            %       Color, LineWidth, ...: options passed to plot() 
             %       FaceAlpha: face alpha for the error bars
             %
             %   h: handle to the plot
@@ -190,6 +199,134 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             end
         end
 
+        function [h, hMean] = plotScatter(obj, cats, sz, c, mkr, options, plotOps)
+            %PLOTSCATTER Plot scatter plot of firing rate
+            %
+            %   h = plotScatter(obj, cats, sz, c, mkr, plotOps)
+            %
+            %   obj: triggered firing rate object
+            %   cats: categories of events
+            %   sz: size of the markers, the second value is used for the mean
+            %   c: color of the markers, the second row is used for the mean
+            %   mkr: marker type, the second value is used for the mean
+            %   Name-value arguments:
+            %       PlotMean: plot the mean
+            %       IdcNeurons: indices of neurons to plot
+            %       IdcEvents: indices of events to plot
+            %       SubSet: subset of categories to plot
+            %       Subsample: two-element vector where the first value is the number of events in 
+            %           each subsample and the second value is the number of subsamples, e.g. [10 5]
+            %       LineWidth, ...: options passed to scatter()
+            %       Parent: parent axes for the plot
+            %
+            %   h: handle to the plot
+
+            arguments
+                obj spiky.trig.TrigFr
+                cats categorical = categorical.empty
+                sz double = 10
+                c = "w"
+                mkr string = "o"
+                options.PlotMean logical = true
+                options.IdcNeurons (1, 2) double = [1 2]
+                options.IdcEvents = []
+                options.SubSet = []
+                options.Subsample double = []
+                options.Parent matlab.graphics.axis.Axes = matlab.graphics.axis.Axes.empty
+                plotOps.?matlab.graphics.chart.primitive.Scatter
+            end
+
+            if isempty(options.Parent)
+                options.Parent = gca;
+            end
+            if isempty(c)
+                c = "w";
+            end
+            if ~isnumeric(c)
+                c = validatecolor(c, "multiple");
+            end
+            if options.PlotMean
+                if isscalar(sz)
+                    sz = [sz, sz*3];
+                end
+                if height(c)==1
+                    c = [c; c];
+                end
+                if isscalar(mkr)
+                    mkr = [mkr mkr];
+                end
+            end
+            plotArgs = namedargs2cell(plotOps);
+            n = size(obj, 2);
+            idcEvents = options.IdcEvents;
+            if isempty(idcEvents)
+                idcEvents = 1:n;
+            end
+            if islogical(idcEvents)
+                idcEvents = find(idcEvents);
+            end
+            data = permute(obj.Data(1, idcEvents, options.IdcNeurons), [2 3 1]);
+            if ~isempty(cats)
+                cats = cats(:);
+                if numel(cats)==n
+                    cats = cats(idcEvents);
+                elseif numel(cats)~=numel(idcEvents)
+                    error("Wrong size of categories")
+                end
+                if ~isempty(options.SubSet)
+                    idcEvents = ismember(cats, options.SubSet);
+                    data = data(idcEvents, :);
+                    cats = cats(idcEvents);
+                end
+                [idcGroups, groups] = findgroups(cats);
+                nCats = numel(groups);
+            else
+                cats = ones(height(data), 1);
+                nCats = 1;
+                [idcGroups, groups] = findgroups(cats);
+            end
+            if nCats>1
+                c1 = spiky.plot.colormap("tab10", nCats, true);
+                c2 = c1;
+            else
+                c1 = c(1, :);
+                c2 = c(2, :);
+            end
+            h1 = gobjects(nCats, 1);
+            np = get(options.Parent, "NextPlot");
+            hold(options.Parent, "on");
+            for ii = 1:nCats
+                data1 = data(idcGroups==ii, :);
+                if ~isempty(options.Subsample)
+                    nSub = options.Subsample(2);
+                    nEvents = options.Subsample(1);
+                    data1 = reshape(datasample(data1, nEvents*nSub, 1), nEvents, nSub, 2);
+                    data1 = permute(mean(data1, 1), [2 3 1]);
+                end
+                h1(ii) = scatter(options.Parent, data1(:, 1), data1(:, 2), sz(1), c1(ii, :), ...
+                    mkr(1), plotArgs{:});
+            end
+            if options.PlotMean
+                m = groupsummary(data, cats, @mean);
+                hMean1 = gobjects(nCats, 1);
+                for ii = 1:nCats
+                    data1 = m(ii, :);
+                    hMean1(ii) = scatter(options.Parent, data1(:, 1), data1(:, 2), sz(2), c2(ii, :), ...
+                        mkr(2), plotArgs{:});
+                end
+            end
+            if nCats>1
+                legend(h1, groups);
+            end
+            set(options.Parent, "NextPlot", np);
+            if nargout>0
+                h = h1;
+                if nargout>1
+                    hMean = hMean1;
+                end
+            end
+        end
+
         function tuning = tuning(obj, pos, binEdges)
             arguments
                 obj spiky.trig.TrigFr
@@ -254,8 +391,78 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             p = spiky.core.TimeTable(obj.Time(is), p);
         end
 
+        function [ss, proj] = getSubspaces(obj, groupIndices, groups, eventLabels, idcEvents, options)
+            %GETBASES Get subspaces for the firing rate
+            %
+            %   ss = getSubspaces(obj, groupIndices, groups, eventLabels, idcEvents, options)
+            %
+            %   obj: triggered firing rate object
+            %   groupIndices: indices of unit groups
+            %   groups: names of unit groups
+            %   eventLabels: labels of events, basis vector is calculated over average of each label
+            %   group
+            %   idcEvents: indices of events to use
+            %   Name-value arguments:
+            %       KFold: number of folds for cross-validation
+            %
+            %   ss: subspaces for the firing rate
+            %   proj: projection of the firing rate on the subspaces
+            arguments
+                obj spiky.trig.TrigFr
+                groupIndices = []
+                groups = []
+                eventLabels = []
+                idcEvents = []
+                options.KFold double = []
+            end
+            if isempty(idcEvents)
+                idcEvents = true(obj.NEvents, 1);
+            end
+            eventLabels = eventLabels(idcEvents);
+            nSubspaces = numel(unique(eventLabels));
+            obj.Data = obj.Data(:, idcEvents, :);
+            if isempty(options.KFold)
+                nFolds = 1;
+                indices = {1:numel(eventLabels)};
+                eventLabels = {eventLabels};
+            else
+                nFolds = options.KFold;
+                partition = cvpartition(eventLabels, KFold=nFolds);
+                indices = arrayfun(@(ii) partition.training(ii), 1:nFolds, UniformOutput=false);
+                eventLabels = cellfun(@(idc) eventLabels(idc), indices, UniformOutput=false);
+            end
+            nT = height(obj);
+            nNeurons = size(obj, 3);
+            if isempty(groupIndices)
+                groupIndices = ones(nNeurons, 1);
+            end
+            if isnumeric(groupIndices)
+                groupIndices = arrayfun(@(x) groupIndices==x, unique(groupIndices), UniformOutput=false);
+            end
+            nGroups = numel(groupIndices);
+            data = cell(nT, nGroups, nFolds);
+            for ii = 1:nT
+                for jj = 1:nGroups
+                    idcGroups = groupIndices{jj};
+                    for kk = 1:nFolds
+                        idcEvents = indices{kk};
+                        d = obj.Data(ii, idcEvents, idcGroups);
+                        d = permute(d, [2 3 1]);
+                        m = mean(d, 1);
+                        v = groupsummary(d, eventLabels{kk}, @mean)-m;
+                        data{ii, jj, kk} = spiky.stat.Coords(m', v');
+                    end
+                end
+            end
+            data = cell2mat(data);
+            ss = spiky.stat.Subspaces(obj.Time, data, groups, groupIndices);
+            if nargout>1
+                proj = ss.project(obj);
+            end
+        end
+
         function pc = pca(obj, groupIndices, groups, eventLabels, idcEvents, options)
-            % PCA Perform PCA on the firing rate
+            %PCA Perform PCA on the firing rate
             %
             %   pc = pca(obj, options)
             %
@@ -264,7 +471,8 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             %   groups: names of unit groups
             %   eventLabels: labels of events, PCA is peformed over average of each label group
             %   idcEvents: indices of events to use
-            %   options: options for PCA
+            %   Name-value arguments:
+            %       KFold: number of folds for cross-validation
             %
             %   pc: PCA object
             arguments
@@ -299,7 +507,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             pc = spiky.stat.PCA(obj.Time, data, groupIndices, groups, eventLabels);
         end
 
-        function stats = anova(obj, factors, idcEvents)
+        function stats = anova(obj, factors, idcEvents, options)
             % ANOVA Perform analysis of variance
             %
             %   stats = anova(obj, factors)
@@ -307,12 +515,15 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             %   obj: triggered firing rate object
             %   factors: factors for the input
             %   idcEvents: indices of subset of events to use
+            %   options: options for the analysis
+            %       Pool: pool the time points
             %
             %   stats: ANOVA models
             arguments
                 obj spiky.trig.TrigFr
                 factors
                 idcEvents = []
+                options.Pool = false
             end
 
             if isempty(idcEvents)
@@ -322,7 +533,15 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             if iscategorical(factors)
                 factors = removecats(factors);
             end
-            stats = spiky.stat.ANOVA(obj.Time, factors, obj.Data(:, idcEvents, :), [obj.Neuron]');
+            factors = factors(:);
+            t = obj.Time;
+            data = obj.Data(:, idcEvents, :);
+            if options.Pool
+                data = reshape(data, 1, numel(t)*numel(idcEvents), size(data, 3));
+                factors = reshape(repmat(factors', numel(t), 1), [], 1);
+                t = obj.Events(1);
+            end
+            stats = spiky.stat.ANOVA(t, factors, data, [obj.Neuron]');
         end
 
         function mdls = fitcecoc(obj, labels, window, idcEvents, options)
@@ -334,7 +553,15 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             %   labels: labels for the classes
             %   window: window for the analysis
             %   idcEvents: indices of subset of events to use
-            %   options: options for fitcecoc
+            %   Name-value arguments:
+            %       Learners: type of learners to use, e.g. "svm", "tree", "knn"
+            %       Coding: coding scheme, "onevsall" or "onevsone"
+            %       KFold: number of folds for cross-validation
+            %       ClassNames: names of the classes
+            %       GroupIndices: indices of groups of neurons to use, can be a numeric array or a
+            %           cell array
+            %       GroupNames: names of the groups of neurons, must be the same length as
+            %           GroupIndices
             %
             %   mdl: classification models
             arguments
@@ -363,8 +590,12 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             nUnits = size(obj, 3);
             if isempty(options.GroupIndices)
                 options.GroupIndices = {1:nUnits};
-            elseif isnumeric(options.GroupIndices)
-                options.GroupIndices = {options.GroupIndices};
+            elseif isnumeric(options.GroupIndices) || iscategorical(options.GroupIndices)
+                if isempty(options.GroupNames)
+                    options.GroupNames = unique(options.GroupIndices);
+                end
+                options.GroupIndices = arrayfun(@(x) find(x==options.GroupIndices), ...
+                    unique(options.GroupIndices), UniformOutput=false);
             elseif iscell(options.GroupIndices)
                 if ~all(cellfun(@isnumeric, options.GroupIndices))
                     error("GroupIndices must be numeric")
@@ -400,7 +631,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 end
                 pb.step
             end
-            mdls = spiky.stat.Classifier(t, mdls, options.GroupNames(:));
+            mdls = spiky.stat.Classifier(t, mdls, options.GroupNames(:), options.GroupIndices);
         end
 
         function mdls = fitglm(obj, factors, modelspec, window, idcEvents, options)
@@ -471,24 +702,8 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
         end
 
         function varargout = subsref(obj, s)
-            if strcmp(s(1).type, '()')
-                s1 = s(1);
-                s2 = s(1);
-                switch length(s1.subs)
-                    case 1
-                        s(1).subs = [{':', ':'}, s1.subs];
-                        s2.subs = {':'};
-                    case 2
-                        s1.subs = {1};
-                        s2.subs = s2.subs(2);
-                    case 3
-                        s1.subs = s1.subs(3);
-                        s2.subs = s2.subs(2);
-                    otherwise
-                        error("Too many indices")
-                end
-                obj.Neuron = builtin("subsref", obj.Neuron, s1);
-                obj.Events_ = builtin("subsref", obj.Events_, s2);
+            if strcmp(s(1).type, '()') && isscalar(s(1).subs)
+                s(1).subs = [{':', ':'}, s(1).subs];
             end
             [varargout{1:nargout}] = subsref@spiky.core.TimeTable(obj, s);
         end

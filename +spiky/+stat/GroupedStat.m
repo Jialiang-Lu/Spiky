@@ -6,6 +6,7 @@ classdef (Abstract) GroupedStat < spiky.core.TimeTable
 
     properties
         Groups (:, 1)
+        GroupIndices (:, 1) cell
     end
 
     properties (Dependent)
@@ -13,12 +14,22 @@ classdef (Abstract) GroupedStat < spiky.core.TimeTable
         NSamples double
     end
 
+    methods (Static)
+        function dimNames = getDimNames()
+            %GETDIMNAMES Get the dimension names of the TimeTable
+            %
+            %   dimNames: dimension names
+            dimNames = ["Time" "Groups,GroupIndices"];
+        end
+    end
+
     methods
-        function obj = GroupedStat(time, data, groups)
+        function obj = GroupedStat(time, data, groups, groupIndices)
             arguments
                 time double = []
-                data cell = {}
+                data = []
                 groups = []
+                groupIndices cell = {}
             end
             if isempty(time) && isempty(data) && isempty(groups)
                 return
@@ -26,12 +37,16 @@ classdef (Abstract) GroupedStat < spiky.core.TimeTable
             if width(data) ~= numel(groups)
                 error("The number of groups must be the same as the number of columns in the data")
             end
+            if width(data) ~= numel(groupIndices)
+                error("The number of group indices must be the same as the number of columns in the data")
+            end
             if height(data) ~= numel(time)
                 error("The number of time points and values must be the same")
             end
             obj.Time = time;
             obj.Data = data;
             obj.Groups = groups;
+            obj.GroupIndices = groupIndices;
         end
 
         function n = get.NGroups(obj)

@@ -7,13 +7,14 @@ classdef Classifier < spiky.stat.GroupedStat
     end
 
     methods
-        function obj = Classifier(time, data, groups)
+        function obj = Classifier(time, data, groups, groupIndices)
             arguments
                 time double = []
                 data cell = {}
                 groups string = ""
+                groupIndices cell = {}
             end
-            obj@spiky.stat.GroupedStat(time, data, groups);
+            obj@spiky.stat.GroupedStat(time, data, groups, groupIndices);
         end
 
         function b = get.IsCrossValidated(obj)
@@ -50,13 +51,18 @@ classdef Classifier < spiky.stat.GroupedStat
             if isa(x, "spiky.trig.TrigFr")
                 x = permute(x.Data, [3 2 1]);
             end
+            if isnumeric(groupIndices) || iscategorical(groupIndices)
+                groupIndices = arrayfun(@(x) find(x==groupIndices), unique(groupIndices), ...
+                    UniformOutput=false);
+            end
             groupIndices = groupIndices(:)';
             x = cellfun(@(idc) x(idc, :, :), groupIndices, UniformOutput=false);
             if ~obj.IsCrossValidated
                 func = @(c, x) 1-c.loss(x, y, ObservationsIn="columns");
                 acc = cellfun(func, obj.Data, x);
             else
-                func = @(c, x) cell2mat(cellfun(@(c1) 1-c1.loss(x, y, ObservationsIn="columns"), c.Trained, UniformOutput=false));
+                func = @(c, x) cell2mat(cellfun(@(c1) 1-c1.loss(x, y, ObservationsIn="columns"), ...
+                    c.Trained, UniformOutput=false));
                 acc = cellfun(func, obj.Data, x, UniformOutput=false);
             end
         end

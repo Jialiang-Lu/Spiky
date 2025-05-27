@@ -27,6 +27,9 @@ ct = get(groot, "DefaultTextColor");
 st = get(groot, "DefaultTextFontSize");
 ax = findall(h, "Type", "Axes");
 for k = 1:length(ax)
+    if strcmp(ax(k).Color, "none")
+        continue
+    end
     ax(k).Color = c;
     ax(k).XColor = c1;
     ax(k).YColor = c2;

@@ -14,12 +14,29 @@ classdef Trig < spiky.core.TimeTable
         NEvents (1, 1) double
     end
 
+    methods (Static)
+        function dimNames = getDimNames()
+            %GETDIMNAMES Get the dimension names of the TimeTable
+            %
+            %   dimNames: dimension names
+            dimNames = ["Time" "Events"];
+        end
+    end
+
     methods
         function t = get.Events(obj)
             if obj.EventDim == 1
                 t = obj.Time;
             else
                 t = obj.Events_;
+            end
+        end
+
+        function obj = set.Events(obj, t)
+            if obj.EventDim == 1
+                obj.Time = t;
+            else
+                obj.Events_ = t;
             end
         end
 

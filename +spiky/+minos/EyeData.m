@@ -12,39 +12,34 @@ classdef EyeData < spiky.core.Metadata
         Time double
     end
 
-    methods
-        function time = get.Time(obj)
-            time = obj.Data.Time;
-        end
-
-        function vp = getViewport(obj, height, width)
+    methods (Static)
+        function vp = getViewport(gaze, height, width)
             % GETVIEWPORT Get viewport
             %
-            %   vp = getViewport(obj, height, width)
+            %   vp = getViewport(gaze, height, width)
             %
-            %   obj: eye data object
+            %   gaze: gaze data
             %   height: height of the screen in degrees of view angle
             %   width: width of the screen in degrees of view angle
             %
             %   vp: viewport, (0, 0) is the left top corner, (1, 1) is the right bottom corner
-
             arguments
-                obj spiky.minos.EyeData
+                gaze (:, 3) double
                 height (1, 1) double
                 width (1, 1) double = NaN
             end
             if isnan(width)
-                width = height/9*16;
+                w = tand(height/2)*16/9;
+            else
+                w = tand(width/2);
             end
-            gaze = double(obj.Data.Convergence);
-            vp = [gaze(:, 1)./gaze(:, 3)./tand(width/2).*0.5+0.5...
-                gaze(:, 2)./gaze(:, 3)./tand(height/2).*0.5+0.5];
-            vp(gaze(:, 3)<=0, :) = NaN;
-            vp = spiky.core.TimeTable(obj.Time, vp);
+            h = tand(height/2);
+            z = Inf(size(gaze, 1), 1);
+            z(isnan(gaze(:, 1))) = NaN;
+            vp = [gaze(:, 1)./gaze(:, 3)./w.*0.5+0.5...
+                gaze(:, 2)./gaze(:, 3)./h.*0.5+0.5 z];
         end
-    end
 
-    methods (Static)
         function obj = load(fdir, func, fiveDot, transform, fov)
             % LOAD Load eye data from a directory
             %
@@ -70,16 +65,97 @@ classdef EyeData < spiky.core.Metadata
             data.RightPupil = data0.Data.RightPupil;
             data.RightGaze = data0.Data.RightGaze;
             data.Convergence = data0.Data.Convergence;
+            data.Convergence = data.Convergence./data.Convergence(:, 3);
             idcLeftClosed = data0.Data.LeftPupil==0;
             idcRightClosed = data0.Data.RightPupil==0;
             data.LeftGaze(idcLeftClosed, :) = NaN("single");
             data.RightGaze(idcRightClosed, :) = NaN("single");
             data = spiky.core.TimeTable(t, data);
             %%
+            if ~isempty(fiveDot)
+                % Calibrate with FiveDot
+                [pos, ~, idcPos] = unique(fiveDot.Trials.Pos, "rows", "sorted");
+                pos = pos./pos(:, 3);
+                nPos = size(pos, 1);
+                prdTrials = spiky.core.Periods([fiveDot.Trials.Start_Align fiveDot.Trials.End]);
+                
+                dataRaw = spiky.minos.Data(fullfile(fdir, "EyeRaw.bin"));
+                tRaw = func(double(dataRaw.Data.Timestamp)/1e7);
+                dataRaw = spiky.core.TimeTable(tRaw, dataRaw.Data);
+                data1 = dataRaw.inPeriods(prdTrials, KeepType=true);
+                angVel = [vecnorm(diff(data1.LeftGaze, 1, 1), 2, 2)./diff(data1.Time); 0];
+                isFix = angVel<5 & data1.LeftPupil>0 & data1.RightPupil>0;
+                data1 = data1(isFix, :);
+
+                leftGaze = ones(nPos, 3, "single");
+                rightGaze = ones(nPos, 3, "single");
+                for ii = 1:nPos
+                    % Find fixated periods
+                    isPos1 = idcPos==ii;
+                    pos1 = pos(ii, :);
+                    prd1 = prdTrials.Time(isPos1, :);
+                    dataTrial = data.inPeriods(prd1, KeepType=true);
+                    d1 = vecnorm(dataTrial.Convergence-pos1, 2, 2);
+                    tFix1 = dataTrial.Time(d1<0.1);
+                    prdFix1 = spiky.core.Events(tFix1).findContinuous(0.1, 0.1);
+                    % Filter data
+                    data2 = data1.inPeriods(prd1, KeepType=true);
+                    data2 = data2.inPeriods(prdFix1, KeepType=true);
+                    leftGaze(ii, 1:2) = median(data2.LeftGaze(:, 1:2), "omitnan");
+                    rightGaze(ii, 1:2) = median(data2.RightGaze(:, 1:2), "omitnan");
+                end
+
+                w = warning;
+                warning off
+                fitTypeX = fittype("poly22");
+                fitTypeY = fittype("poly22");
+                weights = exp(-vecnorm(pos(:, 1:2), 2, 2)*3);
+                leftFitX = fit(leftGaze(:, 1:2), pos(:, 1), fitTypeX, Weights=weights, ...
+                    Robust="off");
+                leftFitY = fit(leftGaze(:, 1:2), pos(:, 2), fitTypeY, Weights=weights, ...
+                    Robust="off");
+                rightFitX = fit(rightGaze(:, 1:2), pos(:, 1), fitTypeX, Weights=weights, ...
+                    Robust="off");
+                rightFitY = fit(rightGaze(:, 1:2), pos(:, 2), fitTypeY, Weights=weights, ...
+                    Robust="off");
+                warning(w);
+
+                leftGazeFitted = leftGaze;
+                leftGazeFitted(:, 1) = leftFitX(leftGaze(:, 1:2));
+                leftGazeFitted(:, 2) = leftFitY(leftGaze(:, 1:2));
+                rightGazeFitted = rightGaze;
+                rightGazeFitted(:, 1) = rightFitX(rightGaze(:, 1:2));
+                rightGazeFitted(:, 2) = rightFitY(rightGaze(:, 1:2));
+                spiky.plot.fig
+                scatter(pos(:, 1), pos(:, 2), 60, "g", "*")
+                hold on
+                scatter(leftGazeFitted(:, 1), leftGazeFitted(:, 2), 60, "r", "o")
+                scatter(rightGazeFitted(:, 1), rightGazeFitted(:, 2), 60, "y", "o")
+                legend(["Dot positions" "Left gaze" "Right gaze"], Location="best")
+                title("Five Dot Calibration")
+                xlabel("Azimuth")
+                ylabel("Elevation")
+
+                dataRaw.LeftGaze(:, 1) = leftFitX(dataRaw.LeftGaze(:, 1:2));
+                dataRaw.LeftGaze(:, 2) = leftFitY(dataRaw.LeftGaze(:, 1:2));
+                dataRaw.RightGaze(:, 1) = rightFitX(dataRaw.RightGaze(:, 1:2));
+                dataRaw.RightGaze(:, 2) = rightFitY(dataRaw.RightGaze(:, 1:2));
+
+                dataRaw.Data.Convergence = (dataRaw.LeftGaze+dataRaw.RightGaze)./2;
+                dataRaw.Convergence = dataRaw.Convergence./dataRaw.Convergence(:, 3);
+                idcLeftClosed = dataRaw.LeftPupil==0;
+                idcRightClosed = dataRaw.RightPupil==0;
+                dataRaw.LeftGaze(idcLeftClosed, :) = NaN("single");
+                dataRaw.RightGaze(idcRightClosed, :) = NaN("single");
+                dataRaw.Convergence(idcLeftClosed&idcRightClosed, :) = NaN("single");
+                dataRaw.Data.Proj = spiky.minos.EyeData.getViewport(dataRaw.Convergence, fov);
+                data = dataRaw;
+                t = data.Time;
+            end
+            %% Get eye events
             events = spiky.minos.Data(fullfile(fdir, "EyeLinkEvent.bin"));
             if ~isempty(events.Data)
                 %%
-                events = spiky.minos.Data(fullfile(fdir, "EyeLinkEvent.bin"));
                 fixations = spiky.core.Periods(func(...
                     spiky.minos.EyeData.extractPeriods(events.Data, "Fixation")));
                 saccades = spiky.core.Periods(func(...
@@ -89,19 +165,16 @@ classdef EyeData < spiky.core.Metadata
                 rightBlinks = spiky.core.Periods(func(...
                     spiky.minos.EyeData.extractPeriods(events.Data, "Blink", 1)));
                 blinks = leftBlinks|rightBlinks;
-                %%
+                %% Find fixation targets
                 if ~isempty(transform)
-                    nFixations = height(fixations);
-                    prds = vertcat(transform.Period);
+                    nFixations = height(fixations.Time);
+                    prds = spiky.core.Periods.concat(transform.Period);
                     [~, idcFix, idcTr] = prds.haveEvents(fixations.Start+0.01);
-                    gaze = double(data.Convergence);
-                    vp = [gaze(:, 1)./gaze(:, 3)./tand(fov/9*16/2)*0.5+0.5...
-                        gaze(:, 2)./gaze(:, 3)./tand(fov/2)*0.5+0.5 gaze(:, 3).*Inf];
-                    vp(gaze(:, 3)<=0, :) = NaN;
+                    gaze = data.Convergence;
+                    vp = spiky.minos.EyeData.getViewport(gaze, fov);
                     vp = single(vp);
                     proj = interp1(t, vp, fixations.Start+0.01);
                     gaze = interp1(t, gaze, fixations.Start+0.01);
-                    gaze = gaze./vecnorm(gaze, 2, 2);
                     %%
                     ids = zeros(nFixations, 1, "int32");
                     names = strings(nFixations, 1);
@@ -127,9 +200,9 @@ classdef EyeData < spiky.core.Metadata
                         proj1 = {tr1.Proj};
                         proj1 = cellfun(oneFunc, proj1, UniformOutput=false);
                         proj1 = vertcat(proj1{:});
-                        vec1 = (proj1-0.5)*2.*[tand(fov/9*16/2) tand(fov/2) 0]+[0 0 1];
+                        vec1 = (proj1-0.5)*2.*[tand(fov/2)/9*16 tand(fov/2) 0]+[0 0 1];
                         vec1 = vec1./vecnorm(vec1, 2, 2);
-                        ang1 = acosd(dot(vec1, gaze(ii, :).*ones(size(vec1)), 2));
+                        ang1 = acosd(dot(vec1, gaze(ii, :).*ones(size(vec1)), 2)./vecnorm(gaze(ii, :), 2));
                         [minAngle, idxMin] = min(ang1, [], "all");
                         [idxMinTr, idxMinPart] = ind2sub(size(ang1), idxMin);
                         trMin = tr1(idxMinTr);
@@ -148,13 +221,13 @@ classdef EyeData < spiky.core.Metadata
                     end
                     names = categorical(names);
                     %%
-                    fixationTargets = table(trials, ids, names, parts, single(gaze), proj, ...
+                    fixationTargets = table(trials, ids, names, parts, gaze, proj, ...
                         targetPos, targetProj, angles, VariableNames=["Trial" "Id" "Name" "Part" ...
                         "Gaze" "Proj" "TargetPos" "TargetProj" "MinAngle"]);
                 else
                     fixationTargets = table(Size=[0 9], VariableTypes=["int32" "int32" "string" ...
                         "spiky.minos.BodyPart" "single" "single" "single" "single" "single"], ...
-                        VaraibleNames=["Trial" "Id" "Name" "Part" ...
+                        VariableNames=["Trial" "Id" "Name" "Part" ...
                         "Gaze" "Proj" "TargetPos" "TargetProj" "MinAngle"]);
                 end
             else
@@ -172,7 +245,11 @@ classdef EyeData < spiky.core.Metadata
             obj.Fixations = fixations;
             obj.Saccades = saccades;
             obj.Blinks = blinks;
-            obj.FixationTargets = spiky.core.TimeTable(fixations.Start, fixationTargets);
+            if isempty(fixationTargets)
+                obj.FixationTargets = spiky.core.TimeTable([], fixationTargets);
+            else
+                obj.FixationTargets = spiky.core.TimeTable(fixations.Start, fixationTargets);
+            end
         end
 
         function periods = extractPeriods(events, type, eye)
@@ -194,6 +271,12 @@ classdef EyeData < spiky.core.Metadata
             end
             periods = double([events1.Timestamp(1:2:end), ...
                 events1.Timestamp(2:2:end)])./1e7;
+        end
+    end
+
+    methods
+        function time = get.Time(obj)
+            time = obj.Data.Time;
         end
     end
 end

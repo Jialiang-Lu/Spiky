@@ -7,6 +7,15 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
         Fr
     end
     
+    methods (Static)
+        function dimNames = getDimNames()
+            %GETDIMNAMES Get the dimension names of the TimeTable
+            %
+            %   dimNames: dimension names
+            dimNames = ["Time" "Events" "Neuron"];
+        end
+    end
+
     methods
         function obj = TrigSpikes(spikes, events, window)
             %TRIGSPIKES Create a new instance of TrigSpikes
@@ -167,7 +176,7 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             end
         end
 
-        function h = plotRaster(obj, sz, c, cats, rowDim, plotOps, saveOps)
+        function h = plotRaster(obj, sz, c, cats, rowDim, plotOps, options)
             % PLOTRASTER Plot raster of triggered spikes
             %
             %   h = plotRaster(obj, ...)
@@ -177,9 +186,8 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             %   c: color of the markers
             %   cats: categories for the events or neurons (if rowDim is "neuron")
             %   rowDim: dimension to plot, can be "neuron" or "event"
-            %   plotOps: additional arguments passed to scatter
-            %   saveOps: additional arguments
-            %       savePath: path to save the plot
+            %   Name-Value pairs:
+            %       Parent: parent axes for the plot
             %
             %   h: handle to the plot
 
@@ -190,61 +198,30 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
                 cats categorical = categorical.empty
                 rowDim {mustBeMember(rowDim, ["neuron", "event"])} = "event"
                 plotOps.?matlab.graphics.chart.primitive.Scatter
-                saveOps.savePath string = ""
+                options.Parent matlab.graphics.axis.Axes = matlab.graphics.axis.Axes.empty
             end
-            if exist(saveOps.savePath, "file")
-                delete(saveOps.savePath);
-            end
-            fg = findall(0, "Type", "Figure");
-            if isempty(fg)
-                spiky.plot.fig(800, 600)
+            if isempty(options.Parent)
+                options.Parent = gca;
             end
             plotOps = namedargs2cell(plotOps);
-            % if length(obj)>1
-            %     h1 = obj(1).plotRaster(sz, c, cats, plotOps{:});
-            %     for ii = 1:length(obj)
-            %         [t, r] = obj(ii).getRaster(1, cats);
-            %         h1.XData = t;
-            %         h1.YData = r;
-            %         title(sprintf("Neuron %d, %s ch %d", obj(ii).Neuron.Id, ...
-            %             obj(ii).Neuron.Region, obj(ii).Neuron.ChInGroup));
-            %         exportgraphics(gcf, saveOps.savePath, ContentType="image", Resolution=300, ...
-            %             Append=true);
-            %     end
-            %     return
-            % end
             [t, r, edges] = obj.getRaster(cats, rowDim);
             n = edges(end)-0.5;
             centers = (edges(1:end-1)+edges(2:end))./2;
-            h1 = scatter(t, r, sz, c, "filled", plotOps{:});
-            xlim(obj.Window);
-            ylim([0.5 n+0.5]);
-            set(gca, "YDir", "reverse");
-            xlabel("Time (s)");
+            h1 = scatter(options.Parent, t, r, sz, c, "filled", plotOps{:});
+            xlim(options.Parent, obj.Window);
+            ylim(options.Parent, [0.5 n+0.5]);
+            set(options.Parent, "YDir", "reverse");
+            xlabel(options.Parent, "Time (s)");
             if ~isempty(cats)
                 cats = removecats(cats);
-                yticks(centers);
-                yticklabels(categories(cats));
-                ax = gca;
-                ax.YAxis.FontSize = 10;
-                yline(edges, LineWidth=0.5);
+                yticks(options.Parent, centers);
+                yticklabels(options.Parent, categories(cats));
+                options.Parent.YAxis.FontSize = 10;
+                yline(options.Parent, edges, LineWidth=0.5);
             end
             if nargout>0
                 h = h1;
             end
-        end
-
-        function varargout = subsref(obj, s)
-            if strcmp(s(1).type, '()')
-                s1 = s(1);
-                if isscalar(s1.subs)
-                    s(1).subs = [{':'}, s1.subs];
-                else
-                    s1.subs = s1.subs(2);
-                end
-                obj.Neuron = builtin("subsref", obj.Neuron, s1);
-            end
-            [varargout{1:nargout}] = subsref@spiky.core.TimeTable(obj, s);
         end
 
         function [t, r, edges] = getRaster(obj, cats, rowDim)
@@ -294,6 +271,13 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             end
             counts = groupcounts(cats);
             edges = [0; cumsum(counts)]+0.5;
+        end
+
+        function varargout = subsref(obj, s)
+            if strcmp(s(1).type, '()') && isscalar(s(1).subs)
+                s(1).subs = [{':', ':'}, s(1).subs];
+            end
+            [varargout{1:nargout}] = subsref@spiky.core.TimeTable(obj, s);
         end
     end
 end

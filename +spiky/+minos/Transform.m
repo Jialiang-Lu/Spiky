@@ -12,6 +12,7 @@ classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
         Period spiky.core.Periods
         Trial double
         Active logical
+        Visible logical
         Pos double
         Rot double
         Proj double
@@ -25,13 +26,10 @@ classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
                 id int32 = 0
                 data spiky.core.TimeTable = spiky.core.TimeTable
             end
-            if ~isempty(data) && ~isequal(data.Data.Properties.VariableNames, ["Trial", "Active", "Pos", "Rot", "Proj"])
-                error("Invalid data properties.")
-            end
             if isempty(data)
-                data = spiky.core.TimeTable([], table(Size=[0 5], ...
-                    VariableTypes=["int64" "logical" "single" "single" "single"], ...
-                    VariableNames=["Trial" "Active" "Pos" "Rot" "Proj"]));
+                data = spiky.core.TimeTable([], table(Size=[0 6], ...
+                    VariableTypes=["int64" "logical" "logical" "single" "single" "single"], ...
+                    VariableNames=["Trial" "Active" "Visible" "Pos" "Rot" "Proj"]));
             end
             obj.Name = name;
             obj.Id = id;
@@ -56,7 +54,7 @@ classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
             if isempty(obj)
                 return
             end
-            prds = vertcat(obj.Period);
+            prds = spiky.core.Periods.concat(obj.Period);
             [~, idcTr] = prds.haveEvents(time, true);
             idcTr = ~cellfun(@isempty, idcTr);
             if ~any(idcTr)
@@ -67,6 +65,7 @@ classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
             for ii = 1:numel(obj)
                 obj(ii).Data = obj(ii).Data.interp(time, method, AsTimeTable=true);
             end
+            indices = idcTr;
         end
 
         function time = get.Time(obj)
@@ -79,6 +78,14 @@ classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
 
         function active = get.Active(obj)
             active = obj.Data.Active;
+        end
+
+        function visible = get.Visible(obj)
+            if ismember("Visible", obj.Data.Properties.VariableNames)
+                visible = obj.Data.Visible;
+            else
+                visible = true(height(obj.Data), 1, size(obj.Data.Active, 3));
+            end
         end
 
         function pos = get.Pos(obj)

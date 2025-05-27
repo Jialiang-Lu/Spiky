@@ -1,4 +1,4 @@
-classdef Metadata
+classdef (HandleCompatible) Metadata
     % Metadata
 
     methods (Static)
@@ -86,7 +86,7 @@ classdef Metadata
                         obj.(propName) = s1;
                     end
                 end
-                if isDiff && ismethod(obj, "updateFields")
+                if isDiff && ismethod(obj, "updateFields") && ~isempty(fieldnames(s.Value))
                     updated = true;
                     obj = obj.updateFields(s.Value);
                 end
