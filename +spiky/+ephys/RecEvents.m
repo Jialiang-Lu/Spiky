@@ -117,6 +117,42 @@ classdef RecEvents < spiky.core.TimeTable & spiky.core.MappableArray
             obj2.Time = sync.Inv(obj2.Time);
         end
 
+        function h = plot(obj, linespec, plotOps, options)
+            % PLOT Plot the events
+            %
+            %   h = obj.plot(plotOps, options)
+            %
+            %   plotOps: plotting options
+            %   options: additional options for the plot
+            %
+            %   h: handle to the plot object
+
+            arguments
+                obj spiky.ephys.RecEvents
+                linespec = "-"
+                plotOps.?matlab.graphics.chart.primitive.Line
+                options.Parent matlab.graphics.axis.Axes = gca
+            end
+
+            if isempty(obj.Time)
+                h = gobjects(0);
+                return;
+            end
+
+            plotArgs = namedargs2cell(plotOps);
+            n = height(obj);
+            x = reshape([obj.Time, obj.Time]', [], 1);
+            y = zeros(2*n, 1);
+            idc = (1:2:2*n)';
+            y(idc+obj.Data.Rising) = 1;
+            h1 = plot(options.Parent, x, y, linespec, plotArgs{:});
+            box off
+            ylim([-0.1, 1.1]);
+            if nargout>0
+                h = h1;
+            end
+        end
+
         function varargout = subsref(obj, s)
             s(1) = obj.useKey(s(1));
             [varargout{1:nargout}] = subsref@spiky.core.TimeTable(obj, s);

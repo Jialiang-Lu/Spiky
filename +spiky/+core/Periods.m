@@ -253,19 +253,19 @@ classdef Periods
             [events, idc, idcPeriods] = events.inPeriods(obj, cellmode, offset, rightClose, sorted);
         end
 
-        function h = plot(obj, c, plotOps)
+        function h = plot(obj, plotOps, options)
             %PLOT Plot periods
             arguments
                 obj spiky.core.Periods
-                c
-                plotOps.?matlab.graphics.primitive.Patch
+                plotOps.?matlab.graphics.chart.decoration.ConstantRegion
+                options.Parent matlab.graphics.axis.Axes = matlab.graphics.axis.Axes.empty
             end
-            plotOps = namedargs2cell(plotOps);
-            ax = gca;
-            yl = ax.YLim;
-            x = [obj.Time(:, 1)'; obj.Time(:, 2)'; obj.Time(:, 2)'; obj.Time(:, 1)'];
-            y = repmat([yl(1) yl(1) yl(2) yl(2)]', 1, obj.Length);
-            h1 = patch(ax, x, y, c, plotOps{:});
+            if isempty(options.Parent)
+                options.Parent = gca;
+            end
+            plotArgs = namedargs2cell(plotOps);
+            h1 = xregion(options.Parent, obj.Time(:, 1), obj.Time(:, 2), ...
+                plotArgs{:});
             if nargout>0
                 h = h1;
             end

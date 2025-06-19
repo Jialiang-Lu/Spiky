@@ -3,6 +3,10 @@ classdef SpikeRasterDrawer < spiky.app.Drawer
 
     properties
         Trig spiky.trig.TrigSpikes
+        Cats (:, 1) categorical
+        T (:, 1) double
+        R (:, 1) double
+        Edges (:, 1) double
     end
 
     methods (Static, Sealed)
@@ -12,18 +16,18 @@ classdef SpikeRasterDrawer < spiky.app.Drawer
     end
 
     methods (Sealed)
-        function obj = SpikeRasterDrawer(app, period)
-            %SPIKERASTERDRAWER Constructor for the SpikeRasterDrawer class
+        function obj = SpikeRasterDrawer(app, hCheckbox)
+            % SpikeRasterDrawer Constructor for the SpikeRasterDrawer class
             %
-            %   obj = SPIKERASTERDRAWER(app, period)
+            %   obj = SpikeRasterDrawer(app, hCheckbox, toggleType)
             %
             %   app: SessionViewer app instance
-            %   period: time period for the timer (default: 0.1 seconds)
+            %   hCheckbox: handle to the checkbox for visibility control
             arguments
                 app spiky.app.SessionViewer
-                period (1, 1) double = 0.1
+                hCheckbox = []
             end
-            obj@spiky.app.Drawer(app, period); % Call the superclass constructor
+            obj@spiky.app.Drawer(app, hCheckbox, "create");
         end
 
         function name = getName(obj)
@@ -42,10 +46,47 @@ classdef SpikeRasterDrawer < spiky.app.Drawer
             %
             %   h: handle to the plot object
             obj.Trig = obj.App.Spikes.trig(0, [0 obj.App.Info.Duration]);
-            h1 = obj.Trig.plotRaster(1, "w", [], "neuron", Parent=obj.HAxes);
+            cats = [obj.App.Spikes.Neuron]';
+            cats = [cats.Region]';
+            obj.Cats = categorical(cats);
+            [obj.T, obj.R, obj.Edges] = obj.Trig.getRaster(obj.Cats, "neuron");
+            [obj.T, idc] = sort(obj.T);
+            obj.R = obj.R(idc);
+            [t, r] = obj.getRaster(0);
+            h1 = scatter(obj.HAxes, t, r, 1, "w", "filled");
             xlim(obj.HAxes, [-1 2]);
-            h2 = xline(obj.HAxes, 0, "g", LineWidth=1);
+            ylim(obj.HAxes, obj.Edges([1 end]));
+            % xlabel(obj.HAxes, "Time (s)");
+            set(obj.HAxes, YDir="reverse");
+            h2 = yline(obj.HAxes, obj.Edges, "y", LineWidth=0.5);
             h = [h1; h2];
+        end
+
+        function filter(obj)
+            % filter Apply the current filter to the plot
+            %
+            %   obj.filter()
+            %
+            %   This method is called when the filter is updated.
+            if isempty(obj.Filter)
+                return
+            end
+            cond = true(width(obj.Trig), 1);
+            for ii = 1:length(obj.Filter)
+                if ~isempty(obj.Filter(ii).Indices) && obj.Filter(ii).Name=="Neuron"
+                    cond = cond & obj.Filter(ii).Indices;
+                end
+            end
+            trig = obj.Trig(1, cond);
+            cats = obj.Cats(cond);
+            [obj.T, obj.R, obj.Edges] = trig.getRaster(cats, "neuron");
+            [obj.T, idc] = sort(obj.T);
+            obj.R = obj.R(idc);
+            ylim(obj.HAxes, obj.Edges([1 end]));
+            obj.HPlot(2:end).delete;
+            h3 = yline(obj.HAxes, obj.Edges, "y", LineWidth=0.5);
+            obj.HPlot = [obj.HPlot(1); h3];
+            obj.onTimeUpdate(obj.App.CurrentTime);
         end
 
         function onTimeUpdate(obj, time)
@@ -54,9 +95,36 @@ classdef SpikeRasterDrawer < spiky.app.Drawer
             %   obj.onTimeUpdate(time)
             %
             %   time: current time in seconds
-            xlim(obj.HAxes, [time-1 time+2]);
-            obj.HPlot(2).Value = time;
-            fprintf("Time: %.2f\n", time);
+            [t, r] = obj.getRaster(time);
+            t = t - time;
+            set(obj.HPlot(1), XData=t, YData=r);
+            % xlim(obj.HAxes, time+[-1 2]);
+            % obj.HPlot(2).Value = time;
+        end
+
+        function [t, r] = getRaster(obj, time)
+            % GETRASTER Get the raster data for the specified time
+            %
+            %   [t, r] = obj.getRaster(time)
+            %   time: time point in seconds
+            %   
+            %   t: spike times
+            %   r: spike regions
+            idx1 = spiky.mex.binarySearch(obj.T, time-1);
+            idx2 = spiky.mex.binarySearch(obj.T, time+2);
+            if idx1 < 1
+                idx1 = 1;
+            end
+            if idx2 > length(obj.T)
+                idx2 = length(obj.T);
+            end
+            if idx1 <= idx2
+                t = obj.T(idx1:idx2);
+                r = obj.R(idx1:idx2);
+            else
+                t = [];
+                r = [];
+            end
         end
     end
 end

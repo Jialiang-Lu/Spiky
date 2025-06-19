@@ -12,7 +12,7 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             %GETDIMNAMES Get the dimension names of the TimeTable
             %
             %   dimNames: dimension names
-            dimNames = ["Time" "Events" "Neuron"];
+            dimNames = ["Time" "Neuron"];
         end
     end
 
@@ -34,20 +34,35 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             if nargin==0 || isempty(spikes)
                 return
             end
-            if isa(events, "spiky.core.Events")
-                events = events.Time;
-            end
-            events = events(:);
             if isscalar(window)
                 window = [0 window];
             end
+            if isa(events, "spiky.core.Events")
+                events = events.Time;
+                prds = [events+window(1), events+window(end)];
+            elseif isa(events, "spiky.core.Periods")
+                prds = events.Time;
+                events = events.Start;
+                window = prds;
+            elseif isnumeric(events)
+                if width(events)==2
+                    prds = events;
+                    events = events(:, 1);
+                    window = prds;
+                elseif isvector(events)
+                    events = events(:);
+                    prds = [events+window(1), events+window(end)];
+                else
+                    error("Events must be a vector or a 2-column matrix");
+                end
+            end
             nNeurons = numel(spikes);
             if nNeurons==1
-                s = spikes.inPeriods([events+window(1), events+window(end)], true, window(1));
+                s = spikes.inPeriods(prds, true, window(1));
             else
                 s = cell(length(events), nNeurons);
                 for ii = 1:nNeurons
-                    s(:, ii) = spikes(ii).inPeriods([events+window(1), events+window(end)], true, window(1));
+                    s(:, ii) = spikes(ii).inPeriods(prds, true, window(1));
                 end
             end
             obj.T_ = events;
@@ -176,7 +191,7 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             end
         end
 
-        function h = plotRaster(obj, sz, c, cats, rowDim, plotOps, options)
+        function [h, hLine] = plotRaster(obj, sz, c, cats, rowDim, plotOps, options)
             % PLOTRASTER Plot raster of triggered spikes
             %
             %   h = plotRaster(obj, ...)
@@ -187,9 +202,13 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             %   cats: categories for the events or neurons (if rowDim is "neuron")
             %   rowDim: dimension to plot, can be "neuron" or "event"
             %   Name-Value pairs:
+            %       IdcEvents: indices of events to plot
+            %       SubSet: subset of categories to plot
             %       Parent: parent axes for the plot
+            %       MarkerEdgeColor, ...: options passed to scatter()
             %
             %   h: handle to the plot
+            %   hLine: handle to the horizontal lines
 
             arguments
                 obj spiky.trig.TrigSpikes
@@ -198,16 +217,40 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
                 cats categorical = categorical.empty
                 rowDim {mustBeMember(rowDim, ["neuron", "event"])} = "event"
                 plotOps.?matlab.graphics.chart.primitive.Scatter
+                options.IdcEvents = []
+                options.SubSet = []
                 options.Parent matlab.graphics.axis.Axes = matlab.graphics.axis.Axes.empty
             end
             if isempty(options.Parent)
                 options.Parent = gca;
             end
-            plotOps = namedargs2cell(plotOps);
-            [t, r, edges] = obj.getRaster(cats, rowDim);
+            n = obj.NEvents;
+            idcEvents = options.IdcEvents;
+            if isempty(idcEvents)
+                idcEvents = 1:n;
+            end
+            if islogical(idcEvents)
+                idcEvents = find(idcEvents);
+            end
+            obj.Data = obj.Data(idcEvents, :);
+            if ~isempty(cats) && rowDim=="event"
+                cats = cats(:);
+                if numel(cats)==n
+                    cats = cats(idcEvents);
+                elseif numel(cats)~=numel(idcEvents)
+                    error("Wrong size of categories")
+                end
+                if ~isempty(options.SubSet)
+                    idcEvents = ismember(cats, options.SubSet);
+                    obj.Data = obj.Data(idcEvents, :);
+                    cats = cats(idcEvents);
+                end
+            end
+            plotArgs = namedargs2cell(plotOps);
+            [t, r, edges, catNames] = obj.getRaster(cats, rowDim);
             n = edges(end)-0.5;
             centers = (edges(1:end-1)+edges(2:end))./2;
-            h1 = scatter(options.Parent, t, r, sz, c, "filled", plotOps{:});
+            h1 = scatter(options.Parent, t, r, sz, c, "filled", plotArgs{:});
             xlim(options.Parent, obj.Window);
             ylim(options.Parent, [0.5 n+0.5]);
             set(options.Parent, "YDir", "reverse");
@@ -215,16 +258,21 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             if ~isempty(cats)
                 cats = removecats(cats);
                 yticks(options.Parent, centers);
-                yticklabels(options.Parent, categories(cats));
+                yticklabels(options.Parent, catNames);
                 options.Parent.YAxis.FontSize = 10;
-                yline(options.Parent, edges, LineWidth=0.5);
+                h2 = yline(options.Parent, edges, LineWidth=0.5);
+            else
+                h2 = gobjects(1);
             end
             if nargout>0
                 h = h1;
             end
+            if nargout>1
+                hLine = h2;
+            end
         end
 
-        function [t, r, edges] = getRaster(obj, cats, rowDim)
+        function [t, r, edges, cats] = getRaster(obj, cats, rowDim)
             arguments
                 obj spiky.trig.TrigSpikes
                 cats categorical = categorical.empty
@@ -270,12 +318,14 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
                 count = count+nSpikes(ii);
             end
             counts = groupcounts(cats);
+            cats = unique(cats);
+            cats = cats(1:numel(counts));
             edges = [0; cumsum(counts)]+0.5;
         end
 
         function varargout = subsref(obj, s)
             if strcmp(s(1).type, '()') && isscalar(s(1).subs)
-                s(1).subs = [{':', ':'}, s(1).subs];
+                s(1).subs = [{':'}, s(1).subs];
             end
             [varargout{1:nargout}] = subsref@spiky.core.TimeTable(obj, s);
         end

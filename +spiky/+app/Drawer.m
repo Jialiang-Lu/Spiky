@@ -3,16 +3,15 @@ classdef (Abstract) Drawer < handle & matlab.mixin.Heterogeneous
 
     properties
         App spiky.app.SessionViewer
-        Timer timer
-        CurrentTime double = 0
         HPlot matlab.graphics.Graphics
         HAxes matlab.graphics.axis.Axes
-        Target string {mustBeMember(Target, ["Stim", "Resp"])}
+        Target string {mustBeMember(Target, ["Stim", "Event", "Resp"])}
+        CurrentTime double = 0
+        Filter spiky.app.Filter = spiky.app.Filter.empty
+        Active logical = false
     end
 
     properties (Hidden)
-        StartTimestamp_ datetime = datetime("now")
-        StartTime_ double = 0
         Visible_ logical = true
     end
 
@@ -21,30 +20,61 @@ classdef (Abstract) Drawer < handle & matlab.mixin.Heterogeneous
     end
 
     methods
-        function obj = Drawer(app, period)
+        function obj = Drawer(app, hCheckbox, toggleType)
             % Drawer Constructor for the Drawer class
             %
             %   obj = Drawer(app, period)
             %
             %   app: SessionViewer app instance
-            %   target: target type ("Stim" or "Resp")
-            %   period: time period for the timer (default: 0.1 seconds)
+            %   hCheckbox: handle to the checkbox for visibility control
             arguments
                 app spiky.app.SessionViewer
-                period (1, 1) double = 0.1
+                hCheckbox = []
+                toggleType (1, 1) string {mustBeMember(toggleType, ["create", "show"])} = "show"
             end
             
             obj.App = app;
-            obj.Timer = timer(Period=period, ExecutionMode="fixedRate", ...
-                BusyMode="drop", TimerFcn=@(~, evt) obj.updateTime(evt.Data.time));
             obj.Target = obj.getTarget();
             switch obj.Target
                 case "Stim"
                     obj.HAxes = app.StimUIAxes;
+                case "Event"
+                    obj.HAxes = app.EventUIAxes;
                 case "Resp"
                     obj.HAxes = app.RespUIAxes;
             end
-            obj.HPlot = obj.onCreate();
+            if toggleType=="show"
+                obj.create();
+                if ~isempty(hCheckbox)
+                    hCheckbox.ValueChangedFcn = @(src, event) obj.toggleVisibility(event.Value);
+                end
+            elseif toggleType=="create"
+                obj.toggleCreation(hCheckbox.Value);
+                if ~isempty(hCheckbox)
+                    hCheckbox.ValueChangedFcn = @(src, event) obj.toggleCreation(event.Value);
+                end
+            end
+            obj.Active = hCheckbox.Value;
+        end
+
+        function toggleCreation(obj, value)
+            %TOGGLECREATION Toggle the creation of the drawer
+            %   obj.toggleCreation(value) creates or clears the drawer based on value
+            %   value: true to create, false to clear
+            if value
+                obj.create();
+            else
+                obj.clear();
+            end
+            obj.Active = value;
+        end
+
+        function toggleVisibility(obj, value)
+            %TOGGLEVISIBILITY Toggle the visibility of the drawer
+            %   obj.toggleVisibility(value) sets the visibility of the drawer
+            %   value: true to show, false to hide
+            obj.Visible = value;
+            obj.Active = value;
         end
 
         function v = get.Visible(obj)
@@ -68,81 +98,62 @@ classdef (Abstract) Drawer < handle & matlab.mixin.Heterogeneous
             end
         end
 
-        function start(obj, time)
-            %START Start the timer and update the time
-            arguments
-                obj spiky.app.Drawer
-                time double
+        function create(obj)
+            %CREATE Create the drawer and its plot
+            obj.HPlot = obj.onCreate();
+            set(obj.HPlot, "Visible", obj.Visible_);
+            obj.update(obj.App.CurrentTime);
+            if ~isempty(obj.Filter)
+                obj.filter();
             end
-            obj.CurrentTime = time;
-            obj.StartTimestamp_ = datetime("now");
-            obj.StartTime_ = time;
-            obj.Timer.start();
         end
-        
-        function pause(obj, time)
-            %PAUSE Pause the timer and update the time
-            arguments
-                obj spiky.app.Drawer
-                time double
+
+        function update(obj, time)
+            %UPDATE Update the drawer with the new time
+            %   obj.update(time) updates the drawer with the new time
+            %   time: new time point
+            if ~obj.Active
+                return
             end
             obj.CurrentTime = time;
-            obj.Timer.stop();
             obj.onTimeUpdate(time);
         end
 
-        function jump(obj, time)
-            %JUMP Jump to a specific time and update the plot
-            arguments
-                obj spiky.app.Drawer
-                time double
+        function clear(obj)
+            %CLEAR Clear the drawer and its plot
+            if isempty(obj.HPlot)
+                return
             end
-            running = obj.Timer.Running;
-            obj.pause(time);
-            if running=="on"
-                obj.start(time);
-            end
+            obj.HPlot.delete();
+            obj.HPlot = [];
         end
         
         function delete(obj)
-            obj.Timer.stop();
-            obj.Timer.delete();
+            % obj.Timer.stop();
+            % obj.Timer.delete();
             obj.HPlot.delete();
+        end
+
+        function filter(obj)
         end
     end
 
-    methods (Access=protected)
-        function updateTime(obj, timestamp)
-            arguments
-                obj spiky.app.Drawer
-                timestamp datetime
-            end
-            dur = timestamp - obj.StartTimestamp_;
-            obj.CurrentTime = obj.StartTime_ + seconds(dur);
-            if obj.getName()=="Spike Raster"
-                fprintf("Start time: %.2f\tCurrent time: %.2f\tDuration: %.2f\n", ...
-                    obj.StartTime_, obj.CurrentTime, seconds(dur));
-            end
-            obj.onTimeUpdate(obj.CurrentTime);
-        end
-    end
-    
     methods (Abstract, Static)
         target = getTarget()
-        % getTarget Get the target type of the drawer
-        %   target: target type ("Stim" or "Resp")
+        % GETTARGET Get the target type of the drawer
+        %   target: target type ("Stim" or "Event" or "Resp")
     end
     
     methods (Abstract)
         name = getName(obj)
-        % getName Get the name of the drawer
+        % GETNAME Get the name of the drawer
         %   name: name of the drawer
         h = onCreate(obj)
-        % onCreate Create the plot for the drawer
+        % ONCREATE Create the plot for the drawer
         %   h = obj.onCreate()
         %   h: handle to the plot object
         onTimeUpdate(obj, time)
-        % onTimeUpdate Update the drawer with the new time
+        % ONTIMEUPDATE Update the drawer with the new time
         %   obj.onTimeUpdate(time)
         %   time: new time point
     end

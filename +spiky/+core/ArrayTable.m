@@ -368,6 +368,7 @@ classdef (Abstract) ArrayTable
                 return
             end
             c = class(obj);
+            dn = feval(c+".getDimNames");
             for ii = 2:n
                 assert(isa(varargin{ii}, c), "All inputs must be of the same class")
                 assert(isequal(class(obj.Data), class(varargin{ii}.Data)), ...
@@ -377,14 +378,35 @@ classdef (Abstract) ArrayTable
                         assert(isequal(size(obj.Data, 2), size(varargin{ii}.Data, 2)), ...
                             "All inputs must have the same size")
                         obj.Data = [obj.Data; varargin{ii}.Data];
+                        if numel(dn)>0 && dn(1)~=""
+                            n = extract(dn(1), alphanumericsPattern);
+                            for jj = 1:numel(n)
+                                n1 = n(jj);
+                                obj.(n1) = [obj.(n1); varargin{ii}.(n1)];
+                            end
+                        end
                     case 2
                         assert(isequal(size(obj.Data, 1), size(varargin{ii}.Data, 1)), ...
                             "All inputs must have the same size")
                         obj.Data = [obj.Data varargin{ii}.Data];
+                        if numel(dn)>1 && dn(2)~=""
+                            n = extract(dn(2), alphanumericsPattern);
+                            for jj = 1:numel(n)
+                                n1 = n(jj);
+                                obj.(n1) = [obj.(n1) varargin{ii}.(n1)];
+                            end
+                        end
                     case 3
                         assert(isequal(size(obj.Data, 1:2), size(varargin{ii}.Data, 1:2)), ...
                             "All inputs must have the same size")
                         obj.Data = cat(3, obj.Data, varargin{ii}.Data);
+                        if numel(dn)>2 && dn(3)~=""
+                            n = extract(dn(3), alphanumericsPattern);
+                            for jj = 1:numel(n)
+                                n1 = n(jj);
+                                obj.(n1) = cat(3, obj.(n1), varargin{ii}.(n1));
+                            end
+                        end
                     otherwise
                         error("Invalid dimension")
                 end

@@ -8,18 +8,18 @@ classdef GazeDrawer < spiky.app.Drawer
     end
 
     methods (Sealed)
-        function obj = GazeDrawer(app, period)
-            % GazeDrawer Constructor for the GazeDrawer class
+        function obj = GazeDrawer(app, hCheckbox)
+            % GazeDrawer Constructor for the FixationTargetDrawer class
             %
-            %   obj = GazeDrawer(app, period)
+            %   obj = FixationTargetDrawer(app, hCheckbox, toggleType)
             %
             %   app: SessionViewer app instance
-            %   period: time period for the timer (default: 0.1 seconds)
+            %   hCheckbox: handle to the checkbox for visibility control
             arguments
                 app spiky.app.SessionViewer
-                period (1, 1) double = 0.1
+                hCheckbox = []
             end
-            obj@spiky.app.Drawer(app, period); % Call the superclass constructor
+            obj@spiky.app.Drawer(app, hCheckbox, "show");
         end
 
         function name = getName(obj)

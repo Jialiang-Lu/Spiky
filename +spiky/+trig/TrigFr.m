@@ -134,11 +134,15 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 options.IdcEvents = []
                 options.SubSet = []
                 options.FaceAlpha double = 0
+                options.Parent matlab.graphics.axis.Axes = matlab.graphics.axis.Axes.empty
             end
 
-            fg = findall(0, "Type", "Figure");
-            if isempty(fg)
-                spiky.plot.fig
+            if isempty(options.Parent)
+                fg = findall(0, "Type", "Figure");
+                if isempty(fg)
+                    spiky.plot.fig
+                end
+                options.Parent = gca;
             end
             n = obj.NEvents;
             idcEvents = options.IdcEvents;

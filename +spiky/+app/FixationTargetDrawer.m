@@ -2,7 +2,7 @@ classdef FixationTargetDrawer < spiky.app.Drawer
     %FIXATIONTARGETDRAWER Class for drawing fixation targets in the SessionViewer app
 
     properties
-        LastIdx double
+        LastIdx double = 0
     end
     
     methods (Static, Sealed)
@@ -12,18 +12,20 @@ classdef FixationTargetDrawer < spiky.app.Drawer
     end
 
     methods (Sealed)
-        function obj = FixationTargetDrawer(app, period)
-            %FIXATIONTARGETDRAWER Constructor for the FixationTargetDrawer class
+        function obj = FixationTargetDrawer(app, hCheckbox, toggleType)
+            % FixationTargetDrawer Constructor for the FixationTargetDrawer class
             %
-            %   obj = FIXATIONTARGETDRAWER(app, period)
+            %   obj = FixationTargetDrawer(app, hCheckbox, toggleType)
             %
             %   app: SessionViewer app instance
-            %   period: time period for the timer (default: 0.1 seconds)
+            %   hCheckbox: handle to the checkbox for visibility control
+            %   toggleType: type of toggle, either "create" or "show"
             arguments
                 app spiky.app.SessionViewer
-                period (1, 1) double = 0.1
+                hCheckbox = []
+                toggleType (1, 1) string {mustBeMember(toggleType, ["create", "show"])} = "show"
             end
-            obj@spiky.app.Drawer(app, period); % Call the superclass constructor
+            obj@spiky.app.Drawer(app, hCheckbox, toggleType);
         end
 
         function name = getName(obj)
@@ -62,12 +64,12 @@ classdef FixationTargetDrawer < spiky.app.Drawer
             if idx==obj.LastIdx
                 return
             end
-            obj.LastIdx = idx;
             target = obj.App.Minos.Eye.FixationTargets{idx, :};
-            if target.MinAngle>8
+            if ismissing(target.Name) || target.MinAngle>8
                 obj.clear();
                 return
             end
+            obj.LastIdx = idx;
             proj = target.Proj;
             targetProj = target.TargetProj;
             obj.HPlot(1).XData = proj(1);

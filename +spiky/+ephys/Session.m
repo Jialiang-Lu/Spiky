@@ -85,7 +85,7 @@ classdef Session < spiky.core.Metadata
                 options.Period (1, 2) double = [0 Inf]
                 options.BrainRegions string = "brain"
                 options.ChannelConfig = []
-                options.Probe = "NP1030"
+                options.Probe = "NP1032"
                 options.MainProbe (1, 1) double = 1
                 options.ResampleDat (1, 1) logical = false
                 options.ResampleLfp (1, 1) logical = true

@@ -11,6 +11,7 @@ classdef ScreenCapture < spiky.core.Metadata & handle
         Reader %VideoReader
         IsOpen logical = false
         IsValidTime logical = false
+        Frame
     end
 
     properties (Transient, Hidden)
@@ -38,6 +39,7 @@ classdef ScreenCapture < spiky.core.Metadata & handle
                 obj.Reader = VideoReader(obj.Path);
                 obj.IsOpen = true;
             end
+            obj.Frame = zeros(obj.Height, obj.Width, 3, "uint8");
         end
         
         function obj = close(obj)
@@ -70,18 +72,18 @@ classdef ScreenCapture < spiky.core.Metadata & handle
                     frame = readFrame(obj.Reader);
                     obj.IsValidTime = true;
                 else
-                    frame = zeros(obj.Height, obj.Width, 3, "uint8");
+                    frame = obj.Frame;
                     obj.IsValidTime = false;
-                    obj.CurrentTime_ = obj.Reader.Duration;
                 end
             else
                 obj.CurrentTime = t;
                 if obj.IsValidTime
                     frame = readFrame(obj.Reader);
                 else
-                    frame = zeros(obj.Height, obj.Width, 3, "uint8");
+                    frame = obj.Frame;
                 end
             end
+            obj.Frame = frame;
         end
 
         function t = get.CurrentTime(obj)

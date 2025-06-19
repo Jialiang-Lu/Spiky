@@ -243,11 +243,11 @@ classdef MinosInfo < spiky.core.Metadata
                     sc.Sync = spiky.ephys.EventGroup("Screen", ...
                         spiky.ephys.ChannelType.Stim, eventsSync, ...
                         tFlip([1 end]).*1e7, sync);
+                    obj.Session.saveMetaData(sc);
                 catch me
                     warning("Error occured during alignment:\n%s\n%s", me.identifier, me.message)
                 end
             end
-            obj.Session.saveMetaData(sc);
         end
 
         function fix = getFixation(obj)
