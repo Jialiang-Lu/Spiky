@@ -46,8 +46,8 @@ classdef SpikeRasterDrawer < spiky.app.Drawer
             %
             %   h: handle to the plot object
             obj.Trig = obj.App.Spikes.trig(0, [0 obj.App.Info.Duration]);
-            cats = [obj.App.Spikes.Neuron]';
-            cats = [cats.Region]';
+            cats = vertcat(obj.App.Spikes.Neuron);
+            cats = cats.Region;
             obj.Cats = categorical(cats);
             [obj.T, obj.R, obj.Edges] = obj.Trig.getRaster(obj.Cats, "neuron");
             [obj.T, idc] = sort(obj.T);

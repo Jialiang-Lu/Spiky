@@ -81,10 +81,10 @@ classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
         end
 
         function visible = get.Visible(obj)
-            if ismember("Visible", obj.Data.Properties.VariableNames)
-                visible = obj.Data.Visible;
+            if ismember("Visible", obj.Data.Data.Properties.VariableNames)
+                visible = any(obj.Data.Visible, 3);
             else
-                visible = true(height(obj.Data), 1, size(obj.Data.Active, 3));
+                visible = true(height(obj.Data), 1);
             end
         end
 

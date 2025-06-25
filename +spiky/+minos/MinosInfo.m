@@ -28,6 +28,7 @@ classdef MinosInfo < spiky.core.Metadata
                 options.MinPhotodiodeGap double = 0.05
                 options.Plot = true
             end
+            %%
             if isempty(info)
                 error("Not implemented")
             end
@@ -90,6 +91,7 @@ classdef MinosInfo < spiky.core.Metadata
             else
                 fiveDot = [];
             end
+            %%
             obj.Eye = spiky.minos.EyeData.load(fdir, sync.Inv, fiveDot, tr, ...
                 obj.Vars.DisplayFov.Data.Data(1));
             obj.Player = spiky.core.TimeTable(...

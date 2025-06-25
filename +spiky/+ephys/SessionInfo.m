@@ -212,12 +212,11 @@ classdef SessionInfo < spiky.core.Metadata
             arguments
                 obj
                 options.Method string {mustBeMember(options.Method, ["kilosort3", "kilosort4"])} = ...
-                    "kilosort3"
+                    "kilosort4"
                 options.Labels string {mustBeMember(options.Labels, ["", "good", "mua"])} = ["good", "mua"]
                 options.MinAmplitude double = 10
                 options.MinFr double = 0.2
                 options.MaxCv double = 0.5
-                options.ExtractWaveforms logical = false
             end
 
             switch options.Method
@@ -247,6 +246,7 @@ classdef SessionInfo < spiky.core.Metadata
                 otherwise
                     error("Method %s not recognized", options.Method)
             end
+            fprintf("Saving ...\n");
             obj.Session.saveMetaData(si);
         end
 
@@ -260,6 +260,7 @@ classdef SessionInfo < spiky.core.Metadata
             options.Plot = ~exist(obj.Session.getFpth("spiky.minos.MinosInfo.mat"), "file");
             optionsCell = namedargs2cell(options);
             minos = spiky.minos.MinosInfo.load(obj, optionsCell{:});
+            fprintf("Saving ...\n");
             obj.Session.saveMetaData(minos);
             if ~exist(obj.Session.getFpth("spiky.minos.Asset.mat"), "file")
                 minos.getAssets();
@@ -436,7 +437,7 @@ classdef SessionInfo < spiky.core.Metadata
             end
             %%
             period = obj.EventGroups(idxGroup).NSamples;
-            period = period-200*obj.Fs:period;
+            period = period-400*obj.Fs:period;
             pb = spiky.plot.ProgressBar(1, "Loading binary for waveforms");
             raw = obj.loadBinary(obj.ChannelGroups.getGroupIndices(idxGroup), period, type="dat", ...
                 periodType="index");
@@ -468,24 +469,26 @@ classdef SessionInfo < spiky.core.Metadata
                 chs = [obj.ChannelGroups([obj.ChannelGroups.ChannelType]'=="Neural").NChannels]';
                 chsRanges = spiky.core.Periods([cumsum([1; chs(1:end-1)]), cumsum(chs)]);
                 [ch, ~, idcGroup] = chsRanges.haveEvents(chInAll, false, 1, true, false);
-                singleFile = true;
             else
-                singleFile = false;
+                idcGroup = idxGroup*ones(size(chInAll));
             end
+            %%
+            if isempty(idcGood)
+                s = spiky.core.Spikes.empty;
+            end
+            nNeurons = length(idcGood);
+            idcGroup = idcGroup(idcGood);
+            sessions = repmat(obj.Session, nNeurons, 1);
+            groupNames = categorical([obj.ChannelGroups(idcGroup).Name]');
+            waveforms = arrayfun(@(x) spiky.lfp.Lfp(tStart, obj.Fs, data.waveform(x, :)), ...
+                idcGood, UniformOutput=false);
+            neurons = spiky.core.Neuron(sessions, idcGroup, data.id(idcGood), groupNames, ...
+                chInAll(idcGood), ch(idcGood), categorical(data.label(idcGood)), waveforms);
             %%
             clear s;
             for jj = length(idcGood):-1:1
                 idx = idcGood(jj);
-                if singleFile
-                    idxGroup = idcGroup(idx);
-                end
-                neuron = spiky.core.Neuron(obj.Session, idxGroup, data.id(idx), ...
-                    obj.ChannelGroups(idxGroup).Name, chInAll(idx), ch(idx), ...
-                    data.label(idx), spiky.lfp.Lfp(tStart, obj.Fs, data.waveform(idx, :)));
-                s(jj, 1) = spiky.core.Spikes(neuron, sync(data.ts{idx}));
-            end
-            if isempty(idcGood)
-                s = spiky.core.Spikes.empty;
+                s(jj, 1) = spiky.core.Spikes(neurons(jj), sync(data.ts{idx}));
             end
         end
     end

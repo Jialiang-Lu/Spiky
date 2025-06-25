@@ -14,6 +14,14 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             %   dimNames: dimension names
             dimNames = ["Time" "Neuron"];
         end
+
+        function index = getScalarDimension()
+            %GETSCALARDIMENSION Get the scalar dimension of the ArrayTable
+            %
+            %   index: index of the scalar dimension, 0 means no scalar dimension, 
+            %       1 means obj(idx) equals obj(idx, :), 2 means obj(idx) equals obj(:, idx), etc.
+            index = 2;
+        end
     end
 
     methods
@@ -68,7 +76,7 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             obj.T_ = events;
             obj.Window = window;
             obj.Data = s;
-            obj.Neuron = [spikes.Neuron]';
+            obj.Neuron = vertcat(spikes.Neuron);
         end
 
         function fr = get.Fr(obj)

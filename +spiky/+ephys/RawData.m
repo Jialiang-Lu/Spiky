@@ -170,6 +170,12 @@ classdef RawData
                     tsRangesAdc = spiky.utils.npy.memmapNPY( ...
                         fullfile(obj.DatFiles(end).Folder, "sample_numbers.npy")).Data.m([1 end]);
                     eventsAdc = spiky.ephys.RawData.loadEvents(fiAdc.Path, channelNames, tsRangesAdc(1));
+                    eventsPhotodiode = eventsAdc.Photodiode;
+                    idc = find(diff(eventsPhotodiode.Time)<1e-3);
+                    idc1 = find(eventsAdc.ChannelName=="Photodiode");
+                    idc1 = idc1([idc; idc+1]);
+                    idc1 = sort(idc1);
+                    eventsAdc(idc1, :) = [];
                     eventsNet = spiky.ephys.RawData.loadEvents(fiNet.Path, [], tsRangesAdc(1));
                     eventsSyncNet = eventsNet(contains([eventsNet.Message], ["Sync" "sync"]), :);
                     if eventsSyncNet.Message(1)==eventsSyncNet.Message(2)

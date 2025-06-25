@@ -1,50 +1,53 @@
-classdef Neuron
-
-    properties
-        Session spiky.ephys.Session
-        Group double
-        Id double
-        Region string
-        Ch double
-        ChInGroup double
-        Label string
-        Waveform spiky.lfp.Lfp
-        Amplitude double
-    end
+classdef Neuron < spiky.core.ArrayTable
 
     properties (Dependent)
         Str string
+    end
+
+    methods (Static)
+        function index = getScalarDimension()
+            %GETSCALARDIMENSION Get the scalar dimension of the ArrayTable
+            %
+            %   index: index of the scalar dimension, 0 means no scalar dimension, 
+            %       1 means obj(idx) equals obj(idx, :), 2 means obj(idx) equals obj(:, idx), etc.
+            index = 1;
+        end
     end
 
     methods
         function obj = Neuron(session, group, id, region, ch, chInGroup, label, waveform)
             arguments
                 session spiky.ephys.Session = spiky.ephys.Session.empty
-                group double = 0
-                id double = 0
-                region string = ""
-                ch double = 0
-                chInGroup double = 0
-                label string = ""
-                waveform spiky.lfp.Lfp = spiky.lfp.Lfp.empty
+                group double = []
+                id double = []
+                region categorical = categorical.empty
+                ch double = []
+                chInGroup double = []
+                label categorical = categorical.empty
+                waveform cell = cell.empty
             end
-            obj.Session = session;
-            obj.Group = group;
-            obj.Id = id;
-            obj.Region = region;
-            obj.Ch = ch;
-            obj.ChInGroup = chInGroup;
-            obj.Label = label;
-            obj.Waveform = waveform;
+            if numel(session)~= numel(group) || ...
+               numel(session) ~= numel(id) || ...
+               numel(session) ~= numel(region) || ...
+               numel(session) ~= numel(ch) || ...
+               numel(session) ~= numel(chInGroup) || ...
+               numel(session) ~= numel(label) || ...
+               (numel(session) ~= numel(waveform) && ~isempty(waveform))
+                error("All input arguments must have the same number of elements.");
+            end
             if ~isempty(waveform)
-                obj.Amplitude = max(waveform.Data) - min(waveform.Data);
+                amplitude = cellfun(@(w) max(w.Data) - min(w.Data), waveform);
             else
-                obj.Amplitude = 0;
+                waveform = cell(size(session));
+                amplitude = zeros(size(session));
             end
+            obj@spiky.core.ArrayTable(...
+                table(session, group, id, region, ch, chInGroup, label, waveform, amplitude, ...
+                VariableNames=["Session" "Group" "Id" "Region" "Ch" "ChInGroup" "Label" "Waveform" "Amplitude"]));
         end
 
         function str = get.Str(obj)
-            str = sprintf("%s_%s_%d", obj.Session.Name, obj.Region, obj.Id);
+            str = compose("%s_%s_%d", obj.Session.Name, obj.Region, obj.Id);
         end
 
         function out = eq(obj, other)

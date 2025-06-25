@@ -11,6 +11,14 @@ classdef (Abstract) ArrayTable
             %   dimNames: dimension names
             dimNames = string.empty;
         end
+
+        function index = getScalarDimension()
+            %GETSCALARDIMENSION Get the scalar dimension of the ArrayTable
+            %
+            %   index: index of the scalar dimension, 0 means no scalar dimension, 
+            %       1 means obj(idx) equals obj(idx, :), 2 means obj(idx) equals obj(:, idx), etc.
+            index = 0;
+        end
     end
 
     methods
@@ -243,6 +251,19 @@ classdef (Abstract) ArrayTable
                 [varargout{1:nargout}] = builtin("subsref", obj, s);
                 return
             end
+            if ismember(s(1).type, {'()', '{}'}) && isscalar(s(1).subs)
+                % If the first subscript is a scalar and the object has a scalar dimension,
+                % we need to adjust the subscripts to include all dimensions.
+                idx = s(1).subs{1};
+                switch obj.getScalarDimension()
+                    case 1
+                        s(1).subs = {idx, ':'};
+                    case 2
+                        s(1).subs = {':', idx};
+                    case 3
+                        s(1).subs = {':', ':', idx};
+                end
+            end
             switch s(1).type
                 case '.'
                     if istable(obj.Data) && ismember(s(1).subs, ...
@@ -304,7 +325,12 @@ classdef (Abstract) ArrayTable
                 case '()'
                     sd = s(1);
                     obj1 = varargin{1};
-                    obj.Data = subsasgn(obj.Data, sd, obj1.Data);
+                    if isempty(obj1)
+                        data = [];
+                    else
+                        data = obj1.Data;
+                    end
+                    obj.Data = subsasgn(obj.Data, sd, data);
                     dn = feval(class(obj)+".getDimNames");
                     for ii = 1:numel(dn)
                         name = dn(ii);
@@ -316,7 +342,12 @@ classdef (Abstract) ArrayTable
                         n = extract(name, alphanumericsPattern);
                         for jj = 1:numel(n)
                             n1 = n(jj);
-                            obj.(n1) = subsasgn(obj.(n1), sd1, obj1.(n1));
+                            if isempty(obj1)
+                                data = [];
+                            else
+                                data = obj1.(n1);
+                            end
+                            obj.(n1) = subsasgn(obj.(n1), sd1, data);
                         end
                     end
                     return

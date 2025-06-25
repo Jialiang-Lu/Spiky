@@ -21,8 +21,8 @@ classdef RegionFilter < spiky.app.Filter
                 hControl = []
             end
             obj@spiky.app.Filter(app, "Neuron", hDrawer, hControl);
-            neurons = [app.Spikes.Neuron]';
-            regions = [neurons.Region]';
+            neurons = vertcat(app.Spikes.Neuron);
+            regions = neurons.Region;
             regionNames = unique(regions, "stable");
             obj.Regions = categorical(regions, regionNames);
             obj.RegionNames = regionNames;

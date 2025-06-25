@@ -56,6 +56,7 @@ classdef EyeData < spiky.core.Metadata
                 fov double = 60
             end
             %%
+            fprintf("Loading eye data\n");
             data0 = spiky.minos.Data(fullfile(fdir, "Eye.bin"));
             t = func(double(data0.Data.Timestamp)/1e7);
             data = table();
@@ -73,7 +74,8 @@ classdef EyeData < spiky.core.Metadata
             data = spiky.core.TimeTable(t, data);
             %%
             if ~isempty(fiveDot)
-                % Calibrate with FiveDot
+                %% Calibrate with FiveDot
+                fprintf("Calibrating eye data with FiveDot paradigm\n");
                 [pos, ~, idcPos] = unique(fiveDot.Trials.Pos, "rows", "sorted");
                 pos = pos./pos(:, 3);
                 nPos = size(pos, 1);
@@ -153,6 +155,7 @@ classdef EyeData < spiky.core.Metadata
                 t = data.Time;
             end
             %% Get eye events
+            fprintf("Loading eye events\n");
             events = spiky.minos.Data(fullfile(fdir, "EyeLinkEvent.bin"));
             if ~isempty(events.Data)
                 %%
@@ -167,14 +170,70 @@ classdef EyeData < spiky.core.Metadata
                 blinks = leftBlinks|rightBlinks;
                 %% Find fixation targets
                 if ~isempty(transform)
+                    fprintf("Finding fixation targets\n");
+                    transform = transform([transform.IsHuman]);
                     nFixations = height(fixations.Time);
-                    prds = spiky.core.Periods.concat(transform.Period);
-                    [~, idcFix, idcTr] = prds.haveEvents(fixations.Start+0.01);
+                    nTr = numel(transform);
                     gaze = data.Convergence;
                     vp = spiky.minos.EyeData.getViewport(gaze, fov);
                     vp = single(vp);
                     proj = interp1(t, vp, fixations.Start+0.01);
                     gaze = interp1(t, gaze, fixations.Start+0.01);
+                    %%
+                    trT = cell(nTr, 1);
+                    trIdc = cell(nTr, 1);
+                    trIdcT = cell(nTr, 1);
+                    trPos = cell(nTr, 1);
+                    trProj = cell(nTr, 1);
+                    trTrial = cell(nTr, 1);
+                    for ii = 1:nTr
+                        idc1 = find(transform(ii).Visible);
+                        idc1 = idc1(1:end-1);
+                        trT{ii} = transform(ii).Time([idc1 idc1+1]);
+                        trIdc{ii} = ones(numel(idc1), 1).*ii;
+                        trPos{ii} = transform(ii).Pos(idc1, :, :);
+                        trProj{ii} = transform(ii).Proj(idc1, :, :);
+                        trTrial{ii} = transform(ii).Trial(idc1);
+                        trIdcT{ii} = idc1;
+                    end
+                    trT = vertcat(trT{:});
+                    trIdc = vertcat(trIdc{:});
+                    trIdcT = vertcat(trIdcT{:});
+                    trPos = vertcat(trPos{:});
+                    trProj = vertcat(trProj{:});
+                    trTrial = vertcat(trTrial{:});
+                    trVec = (trProj-0.5)*2.*[tand(fov/2)/9*16 tand(fov/2) 0]+[0 0 1];
+                    [~, idcSortTr] = sort(trT(:, 1), "ascend");
+                    trTSorted = trT(idcSortTr, :);
+                    trIdcSorted = trIdc(idcSortTr);
+                    trIdcTSorted = trIdcT(idcSortTr);
+                    trVecSorted = trVec(idcSortTr, :, :);
+                    trPosSorted = trPos(idcSortTr, :, :);
+                    trProjSorted = trProj(idcSortTr, :, :);
+                    trTrialSorted = trTrial(idcSortTr);
+                    %%
+                    [~, idcFix, idcTrWithFix] = spiky.core.Periods(trTSorted).haveEvents(fixations.Start+0.01);
+                    ang = squeeze(spiky.utils.angle(trVecSorted(idcTrWithFix, :, :), gaze(idcFix, :), 2));
+                    %%
+                    tbl = table();
+                    tbl.Angle = ang;
+                    tbl.IdcFix = idcFix;
+                    tbl1 = groupsummary(tbl, "IdcFix", ...
+                        @(x) spiky.utils.wrap(@min, 1:2, x(:, 2:end)', [], "all"), ...
+                        "Angle");
+                    minAng = cell2mat(tbl1.fun1_Angle(:, 1));
+                    minInd = cell2mat(tbl1.fun1_Angle(:, 2));
+                    idcMinTrEach = floor((minInd-1)/11)+1;
+                    idcMinPart = mod(minInd-1, 11)+1;
+                    idcMinTr = zeros(height(tbl1), 1); % index in idcTrWithFix
+                    idcFixValid = tbl1.IdcFix;
+                    for ii = 1:height(tbl1)
+                        idc1 = find(idcFix==idcFixValid(ii));
+                        idcMinTr(ii) = idc1(idcMinTrEach(ii));
+                    end
+                    idcCombined = idcTrWithFix(idcMinTr); % index in the combined arrays
+                    idcTr = trIdcSorted(idcCombined);
+                    nValid = numel(idcFixValid);
                     %%
                     ids = zeros(nFixations, 1, "int32");
                     names = strings(nFixations, 1);
@@ -183,43 +242,17 @@ classdef EyeData < spiky.core.Metadata
                     targetPos = zeros(nFixations, 3, "single");
                     targetProj = zeros(nFixations, 3, "single");
                     angles = zeros(nFixations, 1, "single");
-                    one3 = ones(1, 1, 12, "single");
-                    oneFunc = @(x) x.*one3;
                     %%
-                    pb = spiky.plot.ProgressBar(nFixations, "Calculating fixation targets", ...
-                        Parallel=true);
-                    parfor ii = 1:nFixations
-                        %%
-                        is1 = idcFix==ii;
-                        if sum(is1)==0
-                            pb.step
-                            continue
-                        end
-                        idc1 = idcTr(is1);
-                        tr1 = transform(idc1).interp(fixations.Start(ii)+0.01);
-                        proj1 = {tr1.Proj};
-                        proj1 = cellfun(oneFunc, proj1, UniformOutput=false);
-                        proj1 = vertcat(proj1{:});
-                        vec1 = (proj1-0.5)*2.*[tand(fov/2)/9*16 tand(fov/2) 0]+[0 0 1];
-                        vec1 = vec1./vecnorm(vec1, 2, 2);
-                        ang1 = acosd(dot(vec1, gaze(ii, :).*ones(size(vec1)), 2)./vecnorm(gaze(ii, :), 2));
-                        [minAngle, idxMin] = min(ang1, [], "all");
-                        [idxMinTr, idxMinPart] = ind2sub(size(ang1), idxMin);
-                        trMin = tr1(idxMinTr);
-                        if ~trMin.IsHuman
-                            idxMinPart = 1;
-                        end
-                        part = spiky.minos.BodyPart(idxMinPart-1);
-                        ids(ii) = trMin.Id;
-                        names(ii) = trMin.Name;
-                        targetPos(ii, :) = trMin.Pos(:, :, idxMinPart);
-                        targetProj(ii, :) = trMin.Proj(:, :, idxMinPart);
-                        angles(ii) = minAngle;
-                        trials(ii) = trMin.Trial;
-                        parts(ii) = part;
-                        pb.step
-                    end
-                    names = categorical(names);
+                    ids(idcFixValid) = vertcat(transform(idcTr).Id);
+                    names(idcFixValid) = categorical(vertcat(transform(idcTr).Name));
+                    trials(idcFixValid) = trTrialSorted(idcCombined);
+                    parts(idcFixValid) = spiky.minos.BodyPart(idcMinPart);
+                    idcPos = sub2ind(size(trPosSorted), ...
+                        repmat(idcCombined, 3, 1), reshape(repmat(1:3, nValid, 1), [], 1), ...
+                        repmat(idcMinPart+1, 3, 1));
+                    targetPos(idcFixValid, :) = reshape(trPosSorted(idcPos), [], 3);
+                    targetProj(idcFixValid, :) = reshape(trProjSorted(idcPos), [], 3);
+                    angles(idcFixValid) = minAng;
                     %%
                     fixationTargets = table(trials, ids, names, parts, gaze, proj, ...
                         targetPos, targetProj, angles, VariableNames=["Trial" "Id" "Name" "Part" ...
