@@ -80,6 +80,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                     obj.Time = t;
                     obj.Window = window;
                     obj.N_ = nT;
+                    obj.Options = options;
                     return
                 otherwise
                     error("Unknown kernel %s", options.Kernel);
@@ -116,73 +117,102 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             sd = squeeze(std(data, 0, [1 2]));
         end
 
+        function [m, se] = getGroupMean(obj, cats)
+            %GETGROUPMEAN Get group mean and standard error of the firing rate
+            %
+            %   [m, se] = getGroupMean(obj, cats)
+            %
+            %   obj: triggered firing rate object
+            %   cats: categories of events
+            %
+            %   m: mean firing rate for each category
+            %   se: standard error of the mean for each category
+
+            arguments
+                obj spiky.trig.TrigFr
+                cats (:, 1) = categorical(strings(obj.NEvents, 1))
+            end
+
+            data = permute(obj.Data, [2 1 3]);
+            % [m1, names] = groupsummary(data, cats, @mean);
+            names = unique(cats);
+            m1 = NaN(height(names), size(data, 2), size(data, 3));
+            for ii = 1:height(names)
+                idc = cats==names(ii);
+                if any(idc)
+                    m1(ii, :, :) = mean(data(idc, :, :), 1);
+                end
+            end
+            m = obj;
+            m.Data = permute(m1, [2 1 3]);
+            m.Events = names;
+            if nargout>1
+                % [se1, ~] = groupsummary(data, cats, @std);
+                % se1 = se1./sqrt(groupcounts(cats));
+                se1 = NaN(height(names), size(data, 2), size(data, 3));
+                for ii = 1:height(names)
+                    idc = cats==names(ii);
+                    if any(idc)
+                        se1(ii, :, :) = std(data(idc, :, :), 0, 1)./sqrt(sum(idc));
+                    end
+                end
+                se = obj;
+                se.Data = permute(se1, [2 1 3]);
+                se.Events = names;
+            end
+        end
+
         function [h, hError] = plotFr(obj, cats, lineSpec, plotOps, options)
             %PLOTFR Plot firing rate
             % 
-            %   h = plotFr(obj, idcEvents, cats, plotOps)
+            %   h = plotFr(obj, cats, lineSpec, ...)
             %
             %   obj: triggered firing rate object
             %   cats: categories of events
             %   idcEvents: indices of events to plot
             %   lineSpec: line specification
             %   Name-value arguments:
+            %       Grouping: grouping of the data, can be "Cats", "Events", 
+            %           or "Neurons"
             %       IdcEvents: indices of events to plot
             %       SubSet: subset of categories to plot
             %       Color, LineWidth, ...: options passed to plot() 
             %       FaceAlpha: face alpha for the error bars
+            %       Parent: parent axes for the plot
             %
             %   h: handle to the plot
             %   hError: handle to the error bars
 
             arguments
                 obj spiky.trig.TrigFr
-                cats categorical = categorical.empty
-                lineSpec string = "k-"
+                cats = zeros(obj.NEvents, 1)
+                lineSpec string = "-"
                 plotOps.?matlab.graphics.chart.primitive.Line
-                options.IdcEvents = []
-                options.SubSet = []
+                options.Grouping string {mustBeMember(options.Grouping, ["Cats", "Events", "Neurons"])} = "Cats"
+                options.SubSet = unique(cats)
                 options.FaceAlpha double = 0
-                options.Parent matlab.graphics.axis.Axes = matlab.graphics.axis.Axes.empty
+                options.Parent matlab.graphics.axis.Axes = gca
             end
 
-            if isempty(options.Parent)
-                fg = findall(0, "Type", "Figure");
-                if isempty(fg)
-                    spiky.plot.fig
-                end
-                options.Parent = gca;
-            end
             n = obj.NEvents;
-            idcEvents = options.IdcEvents;
-            if isempty(idcEvents)
-                idcEvents = 1:n;
+            idcEvents = ismember(cats, options.SubSet);
+            cats = cats(idcEvents);
+            switch options.Grouping
+                case "Cats"
+                    data = mean(obj.Data(:, idcEvents, :), 3)';
+                case "Events"
+                    data = mean(obj.Data(:, idcEvents, :), 3)';
+                    cats = 1:height(data);
+                    options.FaceAlpha = 0;
+                case "Neurons"
+                    data = mean(permute(obj.Data(:, idcEvents, :), [3 1 2]), 3);
+                    cats = (1:height(data))';
+                    options.FaceAlpha = 0;
             end
-            if islogical(idcEvents)
-                idcEvents = find(idcEvents);
-            end
-            data = obj.Data(:, idcEvents)';
-            if ~isempty(cats)
-                cats = cats(:);
-                if numel(cats)==n
-                    cats = cats(idcEvents);
-                elseif numel(cats)~=numel(idcEvents)
-                    error("Wrong size of categories")
-                end
-                if ~isempty(options.SubSet)
-                    idcEvents = ismember(cats, options.SubSet);
-                    data = data(idcEvents, :);
-                    cats = cats(idcEvents);
-                end
-                [m, names] = groupsummary(data, cats, @mean);
-                if options.FaceAlpha>0
-                    [se, ~] = groupsummary(data, cats, @std);
-                    se = se./sqrt(groupcounts(cats));
-                end
-            else
-                m = mean(data, 1);
-                if options.FaceAlpha>0
-                    se = std(data, 0, 1)./size(data, 1);
-                end
+            [m, names] = groupsummary(data, cats, @mean);
+            if options.FaceAlpha>0
+                [se, ~] = groupsummary(data, cats, @std);
+                se = se./sqrt(groupcounts(cats));
             end
             if isempty(m)
                 error("No data to plot")
@@ -194,15 +224,24 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             else
                 plotArgs = namedargs2cell(plotOps);
                 h1 = plot(obj.Time', m, lineSpec, plotArgs{:});
+                hError1 = gobjects(0, 1);
+            end
+            if ~strcmp(options.Grouping, "Cats")
+                set(h1, Color=h1(1).Color);
+                if ~isempty(hError1)
+                    set(hError1, FaceColor=h1(1).Color, EdgeColor="none");
+                end
+            else
+                if size(m, 1)>1
+                    legend(h1, names);
+                end
             end
             box off
             xlim(obj.Time([1 end]));
-            xline(0, "g", LineWidth=2);
+            l = xline(0, "g", LineWidth=2);
+            l.Annotation.LegendInformation.IconDisplayStyle = "off";
             xlabel("Time (s)");
             ylabel("Firing rate (Hz)");
-            if size(m, 1)>1
-                legend(h1, names);
-            end
             if nargout>0
                 h = h1;
                 if nargout>1
@@ -360,6 +399,57 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             else
                 error("Only 1D and 2D tuning curves are supported")
             end
+        end
+
+        function obj = xcorr(obj, obj2)
+            %XCORR Cross-correlation of the firing rate
+            %
+            %   r = xcorr(obj, obj2)
+            %
+            %   obj: triggered firing rate object
+            %   obj2: second triggered firing rate object
+            %
+            %   obj: cross-correlation of the firing rate
+
+            arguments
+                obj spiky.trig.TrigFr
+                obj2 spiky.trig.TrigFr
+            end
+            
+            assert(size(obj, 3)==size(obj2, 3), "The number of neurons must be the same");
+            assert(width(obj)==1 || width(obj2)==1, "One of the objects must have only one event");
+            if width(obj2)==1
+                idc1 = (1:width(obj))';
+                idc2 = ones(width(obj), 1);
+                events = obj.Events;
+            else
+                idc1 = ones(width(obj2), 1);
+                idc2 = (1:width(obj2))';
+                events = obj2.Events;
+            end
+            data1 = obj.Data;
+            data2 = flipud(obj2.Data);
+            nT1 = height(data1);
+            nT2 = height(data2);
+            data0 = zeros(nT1+nT2-1, numel(idc1), size(obj, 3));
+            pb = spiky.plot.ProgressBar(size(obj, 3), "Calculating cross-correlation", Parallel=true);
+            parfor ii = 1:size(obj, 3)
+                d = zeros(nT1+nT2-1, numel(idc1));
+                for jj = 1:numel(idc1)
+                    d(:, jj) = conv(data1(:, idc1(jj), ii), data2(:, idc2(jj), ii), "full");
+                end
+                data0(:, :, ii) = d;
+                pb.step
+            end
+            data = zeros(nT1, numel(idc1), size(obj, 3));
+            t1 = obj2.Time(1);
+            t2 = obj2.Time(2);
+            offset = nT2+round(t1/(t2-t1)); % First index in the full convolution to keep
+            idcData0 = (1:nT1)+offset-1; % Indices in the full convolution
+            isValid = idcData0>=1 & idcData0<=nT1+nT2-1;
+            data(isValid, :, :) = data0(idcData0(isValid), :, :);
+            obj.Data = data;
+            obj.Events = events;
         end
 
         function p = ttest(obj, baseline, window)
@@ -538,6 +628,12 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 options.Pool = false
             end
 
+            if height(obj)>1 && width(obj)==1
+                % if obj is a TimeTable with multiple time points, convert it to multiple events
+                obj.Data = permute(obj.Data, [2 1 3]);
+                obj.Events_ = obj.Time;
+                obj.Time = obj.Time(1);
+            end
             if isempty(idcEvents)
                 idcEvents = true(obj.NEvents, 1);
             end
@@ -553,7 +649,28 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 factors = reshape(repmat(factors', numel(t), 1), [], 1);
                 t = obj.Events(1);
             end
-            stats = spiky.stat.ANOVA(t, factors, data, [obj.Neuron]');
+            stats = spiky.stat.ANOVA(t, factors, data, obj.Neuron);
+        end
+
+        function mdl = fscnca(obj, labels, varargin)
+            % FSCNCA Fit a feature selection and classification model
+            %   mdl = fscnca(obj, labels, window, idcEvents, options)
+            %
+            %   obj: triggered firing rate object
+            %
+            %   mdl: feature selection and classification model
+            arguments
+                obj spiky.trig.TrigFr
+                labels
+            end
+            arguments (Repeating)
+                varargin
+            end
+
+            labels = labels(:);
+            data = reshape(obj.Data, [], size(obj, 3));
+            assert(size(data, 1)==numel(labels), "Number of labels must match number of events");
+            mdl = fscnca(data, labels, varargin{:});
         end
 
         function mdls = fitcecoc(obj, labels, window, idcEvents, options)
@@ -569,6 +686,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             %       Learners: type of learners to use, e.g. "svm", "tree", "knn"
             %       Coding: coding scheme, "onevsall" or "onevsone"
             %       KFold: number of folds for cross-validation
+            %       FitPosterior: fit posterior probabilities
             %       ClassNames: names of the classes
             %       GroupIndices: indices of groups of neurons to use, can be a numeric array or a
             %           cell array
@@ -584,6 +702,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 options.Learners = "svm"
                 options.Coding string {mustBeMember(options.Coding, ["onevsall", "onevsone"])} = "onevsall"
                 options.KFold double = []
+                options.FitPosterior logical = false
                 options.ClassNames = []
                 options.GroupIndices = []
                 options.GroupNames string = string.empty
@@ -599,9 +718,12 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 idcEvents = true(obj.NEvents, 1);
             end
             labels = labels(idcEvents);
+            labels = removecats(categorical(labels));
             nUnits = size(obj, 3);
             if isempty(options.GroupIndices)
-                options.GroupIndices = {1:nUnits};
+                [options.GroupNames, ~, idcGroups] = unique(obj.Neuron.Region);
+                options.GroupIndices = arrayfun(@(x) find(idcGroups==x), unique(idcGroups), ...
+                    UniformOutput=false);
             elseif isnumeric(options.GroupIndices) || iscategorical(options.GroupIndices)
                 if isempty(options.GroupNames)
                     options.GroupNames = unique(options.GroupIndices);
@@ -635,11 +757,13 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 if isempty(options.KFold)
                     mdls{ii} = fitcecoc(X(options.GroupIndices{idxGroup}, :, idxT), labels, ...
                     Coding=options.Coding, ObservationsIn="columns", Learners=options.Learners, ...
-                        ClassNames=options.ClassNames, Options=optionsFit);
+                        ClassNames=options.ClassNames, Options=optionsFit, Verbose=1, ...
+                        FitPosterior=options.FitPosterior);
                 else
                     mdls{ii} = fitcecoc(X(options.GroupIndices{idxGroup}, :, idxT), labels, ...
                     Coding=options.Coding, ObservationsIn="columns", Learners=options.Learners, ...
-                        ClassNames=options.ClassNames, KFold=options.KFold, Options=optionsFit);
+                        ClassNames=options.ClassNames, KFold=options.KFold, Options=optionsFit, ...
+                        Verbose=1, FitPosterior=options.FitPosterior);
                 end
                 pb.step
             end

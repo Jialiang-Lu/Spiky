@@ -1,11 +1,11 @@
 classdef Subspaces < spiky.stat.GroupedStat
-    %Subspaces Class representing a set of subspaces
+    % SUBSPACES Class representing a set of subspaces
 
     methods
         function obj = Subspaces(time, data, groups, groupIndices)
-            %Subspaces Create a new instance of Subspaces
+            % SUBSPACES Create a new instance of Subspaces
             %
-            %   Subspaces(time, data, groups) creates a new instance of Subspaces
+            %   Subspaces(time, data, groups, groupIndices)
             %
             %   time: time points
             %   data: coordinates
@@ -23,7 +23,7 @@ classdef Subspaces < spiky.stat.GroupedStat
         end
 
         function data = project(obj, data, idcDim)
-            %PROJECT Project the data onto the coordinates
+            % PROJECT Project the data onto the coordinates
             %
             %   data = PROJECT(obj, data)
             %

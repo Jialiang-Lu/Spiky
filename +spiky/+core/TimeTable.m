@@ -1,4 +1,4 @@
-classdef TimeTable < spiky.core.Events & spiky.core.ArrayTable & matlab.mixin.CustomDisplay
+classdef TimeTable < spiky.core.Events & spiky.core.ArrayTable
     % TIMETABLE Represents data indexed by time points in seconds
 
     methods (Static)
@@ -30,7 +30,7 @@ classdef TimeTable < spiky.core.Events & spiky.core.ArrayTable & matlab.mixin.Cu
                 obj.Step_ = 1;
                 obj.N_ = height(data);
             elseif nargin==2
-                obj.T_ = varargin{1};
+                obj.T_ = varargin{1}(:);
                 data = varargin{2};
                 % if isvector(data)
                 %     data = data(:);
@@ -147,7 +147,11 @@ classdef TimeTable < spiky.core.Events & spiky.core.ArrayTable & matlab.mixin.Cu
             end
             t = obj.Time;
             x = obj.Data;
-            isCross = x>=thr;
+            if islogical(x)
+                isCross = x;
+            else
+                isCross = x>=thr;
+            end
             if isscalar(t) && isscalar(isCross)
                 if isCross
                     periods = [t Inf];
@@ -167,31 +171,78 @@ classdef TimeTable < spiky.core.Events & spiky.core.ArrayTable & matlab.mixin.Cu
             periods = spiky.core.Periods(periods);
         end
 
-        % function varargout = subsref(obj, s)
-        %     if isempty(obj)
-        %         [varargout{1:nargout}] = builtin("subsref", obj, s);
-        %         return
-        %     end
-        %     switch s(1).type
-        %         case '()'
-        %             sd = s(1);
-        %             st = sd;
-        %             st.subs = sd.subs(1);
-        %             obj.Time = subsref(obj.Time, st);
-        %     end
-        %     [varargout{1:nargout}] = subsref@spiky.core.ArrayTable(obj, s);
-        % end
+        function out = densify(obj, t, options)
+            %DENSIFY Densify the TimeTable to a regular time grid
+            %
+            %   out = densify(obj, t, options)
+            %
+            %   obj: TimeTable
+            %   t: time points to densify to
+            %   Name-Value options:
+            %       IgnoreContent: ignore the content of the TimeTable
+            %       OneHot: return one-hot encoded data
+            %       AsTimeTable: return as TimeTable
+            %
+            %   out: densified TimeTable
 
-        % function obj = subsasgn(obj, s, varargin)
-        %     obj = subsasgn@spiky.core.ArrayTable(obj, s, varargin{:});
-        %     switch s(1).type
-        %         case '()'
-        %             sd = s(1);
-        %             st = sd;
-        %             st.subs = sd.subs(1);
-        %             obj1 = varargin{1};
-        %             obj.Time = subsasgn(obj.Time, st, obj1.Time);
-        %     end
-        % end
+            arguments
+                obj spiky.core.TimeTable
+                t (:, 1) double
+                options.IgnoreContent (1, 1) logical = false
+                options.OneHot (1, 1) logical = false
+                options.AsTable (1, 1) logical = true
+                options.AsTimeTable (1, 1) logical = false
+            end
+            
+            nT = length(t);
+            res = t(2)-t(1);
+            centers = (t(1:end-1)+t(2:end))/2;
+            prds = [[centers(1)-res/2; centers] [centers; centers(end)+res/2]];
+            [~, idcObj, idcT] = obj.inPeriods(prds);
+            if options.IgnoreContent
+                obj.Data = ones(height(obj.Data), 1);
+            end
+            data = obj.Data;
+            if istable(data) && width(data)==1 && ~options.AsTable
+                data = data{:, 1};
+            end
+            nD = width(data);
+            if istable(data)
+                out = table();
+                for ii = 1:nD
+                    obj.Data = data{:, ii};
+                    out.(data.Properties.VariableNames{ii}) = ...
+                        obj.densify(t, IgnoreContent=options.IgnoreContent, ...
+                        OneHot=options.OneHot, AsTimeTable=false);
+                end
+                if options.AsTimeTable
+                    out = spiky.core.TimeTable(t, out);
+                end
+                return
+            elseif iscell(data)
+                out = cell(nT, nD);
+            elseif isstring(data) && ~options.OneHot
+                out = strings(nT, nD);
+            elseif iscategorical(data) && ~options.OneHot
+                out = categorical(NaN(nT, nD));
+            elseif options.OneHot
+                if iscategorical(data)
+                    cn = categories(data);
+                else
+                    if islogical(data)
+                        data = int8(data);
+                    end
+                    cn = unique(data);
+                end
+                data = onehotencode(data, 2, ClassNames=cn);
+                out = zeros(nT, width(data));
+            else
+                out = zeros(nT, nD);
+            end
+            out(idcT, :) = data(idcObj, :);
+            if options.AsTimeTable
+                out = spiky.core.TimeTable(t, out);
+            end
+        end
     end
 end

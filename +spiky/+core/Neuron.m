@@ -1,9 +1,5 @@
 classdef Neuron < spiky.core.ArrayTable
 
-    properties (Dependent)
-        Str string
-    end
-
     methods (Static)
         function index = getScalarDimension()
             %GETSCALARDIMENSION Get the scalar dimension of the ArrayTable
@@ -11,6 +7,14 @@ classdef Neuron < spiky.core.ArrayTable
             %   index: index of the scalar dimension, 0 means no scalar dimension, 
             %       1 means obj(idx) equals obj(idx, :), 2 means obj(idx) equals obj(:, idx), etc.
             index = 1;
+        end
+
+        function b = isScalarRow()
+            %ISSCALARROW if each row contains heterogeneous data and should be treated as a scalar
+            %   This is useful if the Data is a table or a cell array and the number of columns is fixed.
+            %
+            %   b: true if each row is a scalar, false otherwise
+            b = true;
         end
     end
 
@@ -46,8 +50,8 @@ classdef Neuron < spiky.core.ArrayTable
                 VariableNames=["Session" "Group" "Id" "Region" "Ch" "ChInGroup" "Label" "Waveform" "Amplitude"]));
         end
 
-        function str = get.Str(obj)
-            str = compose("%s_%s_%d", obj.Session.Name, obj.Region, obj.Id);
+        function str = string(obj)
+            str = compose("%s_%s_%d", obj.Data.Session.Name, obj.Data.Region, obj.Data.Id);
         end
 
         function out = eq(obj, other)

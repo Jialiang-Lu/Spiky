@@ -59,7 +59,12 @@ classdef SpikeRasterDrawer < spiky.app.Drawer
             % xlabel(obj.HAxes, "Time (s)");
             set(obj.HAxes, YDir="reverse");
             h2 = yline(obj.HAxes, obj.Edges, "y", LineWidth=0.5);
-            h = [h1; h2];
+            centers = (obj.Edges(1:end-1)+obj.Edges(2:end))/2;
+            regions = unique(obj.Cats, "stable");
+            h3 = text(obj.HAxes, -1*ones(length(regions), 1), centers, string(regions), ...
+                HorizontalAlignment="left", VerticalAlignment="middle", ...
+                FontSize=12, Color="w", BackgroundColor=obj.App.UIFigure.Color);
+            h = [h1; h2; h3];
         end
 
         function filter(obj)
@@ -84,8 +89,13 @@ classdef SpikeRasterDrawer < spiky.app.Drawer
             obj.R = obj.R(idc);
             ylim(obj.HAxes, obj.Edges([1 end]));
             obj.HPlot(2:end).delete;
-            h3 = yline(obj.HAxes, obj.Edges, "y", LineWidth=0.5);
-            obj.HPlot = [obj.HPlot(1); h3];
+            h2 = yline(obj.HAxes, obj.Edges, "y", LineWidth=0.5);
+            centers = (obj.Edges(1:end-1)+obj.Edges(2:end))/2;
+            regions = unique(cats, "stable");
+            h3 = text(obj.HAxes, -1*ones(length(regions), 1), centers, string(regions), ...
+                HorizontalAlignment="left", VerticalAlignment="middle", ...
+                FontSize=12, Color="w", BackgroundColor=obj.App.UIFigure.Color);
+            obj.HPlot = [obj.HPlot(1); h2; h3];
             obj.onTimeUpdate(obj.App.CurrentTime);
         end
 

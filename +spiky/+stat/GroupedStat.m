@@ -28,16 +28,16 @@ classdef (Abstract) GroupedStat < spiky.core.TimeTable
             arguments
                 time double = []
                 data = []
-                groups = []
-                groupIndices cell = {}
+                groups (:, 1) = []
+                groupIndices cell = cell(height(groups), 1)
             end
             if isempty(time) && isempty(data) && isempty(groups)
                 return
             end
-            if width(data) ~= numel(groups)
+            if width(data) ~= height(groups)
                 error("The number of groups must be the same as the number of columns in the data")
             end
-            if width(data) ~= numel(groupIndices)
+            if width(data) ~= height(groupIndices)
                 error("The number of group indices must be the same as the number of columns in the data")
             end
             if height(data) ~= numel(time)
@@ -77,7 +77,7 @@ classdef (Abstract) GroupedStat < spiky.core.TimeTable
                 end
                 filter = @(x) ismember(x.(filter), filterArg);
             end
-            [~, idc] = filter(obj.Groups);
+            [~, idc] = feval(filter, obj.Groups);
             obj = obj(:, idc, :);
         end
     end

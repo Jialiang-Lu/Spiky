@@ -25,6 +25,9 @@ classdef FixationDrawer < spiky.app.EventDrawer
 
         function onTimeUpdate(obj, time)
             onTimeUpdate@spiky.app.EventDrawer(obj, time);
+            if isempty(obj.HPlot)
+                return
+            end
             set(obj.HPlot(:, 1), "Color", [0.2 0.8 0.2]);
         end
 

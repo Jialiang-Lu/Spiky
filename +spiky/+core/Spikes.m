@@ -86,6 +86,23 @@ classdef Spikes < spiky.core.Events
                 Kernel="box", Normalize=options.Normalize);
         end
 
+        function counts = trigCounts(obj, events, window, options)
+            % TRIGCOUNTS Trigger counts by events
+            %
+            %   events: event times
+            %   window: time vector around events, e.g. -before:1/fs:after
+            %   options: options for spiky.trig.TrigCounts
+            %
+            %   counts: triggered counts
+            arguments
+                obj spiky.core.Spikes
+                events % (n, 1) double or spiky.core.Events
+                window double {mustBeVector}
+                options.Bernoulli logical = false % If true, counts are binary (0 or 1)
+            end
+            counts = spiky.trig.TrigCounts(obj, events, window, Bernoulli=options.Bernoulli);
+        end
+
         function fr = trigFr(obj, events, window, options)
             % TRIGFR Trigger firing rate by events
             %
@@ -104,6 +121,24 @@ classdef Spikes < spiky.core.Events
             end
             optionsCell = namedargs2cell(options);
             fr = spiky.trig.TrigFr(obj, events, window, optionsCell{:});
+        end
+
+        function zeta = zeta(obj, events, window, options)
+            % ZETA Zeta test for neuronal responsiveness
+            %
+            %   events: event times
+            %   window: time window for the Zeta test
+            %   options: options for the Zeta test
+            %
+            %   zeta: Zeta object with results of the Zeta test
+            arguments
+                obj spiky.core.Spikes
+                events % (n, 1) double or spiky.core.Events
+                window (1, 1) double = 1
+                options.NumResample (1, 1) double = 100
+            end
+            zeta = spiky.stat.Zeta(obj, events, window, ...
+                NumResample=options.NumResample);
         end
     end
 

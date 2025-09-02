@@ -19,6 +19,14 @@ classdef (Abstract) ArrayTable
             %       1 means obj(idx) equals obj(idx, :), 2 means obj(idx) equals obj(:, idx), etc.
             index = 0;
         end
+
+        function b = isScalarRow()
+            %ISSCALARROW if each row contains heterogeneous data and should be treated as a scalar
+            %   This is useful if the Data is a table or a cell array and the number of columns is fixed.
+            %
+            %   b: true if each row is a scalar, false otherwise
+            b = false;
+        end
     end
 
     methods
@@ -246,35 +254,68 @@ classdef (Abstract) ArrayTable
             obj.Data = obj.Data | obj2;
         end
 
+        function s = checkIndexing(obj, s)
+            if ismember(s(1).type, {'()', '{}'})
+                if obj.isScalarRow() && strcmp(s(1).type, '()')
+                    % Obj is treated as a column vector
+                    assert(isscalar(s(1).subs) || s(1).subs{2}==':' || s(1).subs{2}==1, ...
+                        "Object is a column vector, only scalar subscripts are allowed");
+                    s(1).subs = {s(1).subs{1}, ':'};
+                elseif isscalar(s(1).subs)
+                    % If the first subscript is a scalar and the object has a scalar dimension,
+                    % we need to adjust the subscripts to include all dimensions.
+                    idx = s(1).subs{1};
+                    switch obj.getScalarDimension()
+                        case 1
+                            s(1).subs = {idx, ':'};
+                        case 2
+                            s(1).subs = {':', idx};
+                        case 3
+                            s(1).subs = {':', ':', idx};
+                    end
+                end
+            end
+        end
+
         function varargout = subsref(obj, s)
             if isempty(obj)
                 [varargout{1:nargout}] = builtin("subsref", obj, s);
                 return
             end
-            if ismember(s(1).type, {'()', '{}'}) && isscalar(s(1).subs)
-                % If the first subscript is a scalar and the object has a scalar dimension,
-                % we need to adjust the subscripts to include all dimensions.
-                idx = s(1).subs{1};
-                switch obj.getScalarDimension()
-                    case 1
-                        s(1).subs = {idx, ':'};
-                    case 2
-                        s(1).subs = {':', idx};
-                    case 3
-                        s(1).subs = {':', ':', idx};
-                end
-            end
+            s = checkIndexing(obj, s);
             switch s(1).type
                 case '.'
+                    if isequal(s(1).subs, 'Data')
+                        obj = builtin("subsref", obj, s(1));
+                        if isscalar(s)
+                            varargout{1} = obj;
+                        else
+                            [varargout{1:nargout}] = subsref(obj, s(2:end));
+                        end
+                        return
+                    end
                     if istable(obj.Data) && ismember(s(1).subs, ...
                         obj.Data.Properties.VariableNames)
-                        obj = obj.Data;
+                        if isscalar(s)
+                            varargout{1} = subsref(obj.Data, s);
+                        else
+                            obj = subsref(obj.Data, s(1));
+                            [varargout{1:nargout}] = subsref(obj, s(2:end));
+                        end
+                        return
+                    end
+                    if isfield(obj.Data(1, 1), s(1).subs) || isprop(obj.Data(1, 1), s(1).subs)
+                        obj1 = reshape(vertcat(obj.Data.(s(1).subs)), ...
+                            size(obj.Data));
+                        if isscalar(s)
+                            varargout{1} = obj1;
+                        else
+                            [varargout{1:nargout}] = subsref(obj1, s(2:end));
+                        end
+                        return
                     end
                 case '()'
                     sd = s(1);
-                    if isscalar(sd.subs)
-                        sd.subs{2} = ':';
-                    end
                     obj.Data = subsref(obj.Data, sd);
                     dn = feval(class(obj)+".getDimNames");
                     for ii = 1:numel(dn)
@@ -284,10 +325,16 @@ classdef (Abstract) ArrayTable
                         end
                         sd1 = sd;
                         sd1.subs = sd1.subs(ii);
-                        n = extract(name, alphanumericsPattern);
+                        % sd1.subs{2} = ':';
+                        n = extract(name, alphanumericsPattern+optionalPattern("'"));
                         for jj = 1:numel(n)
                             n1 = n(jj);
-                            obj.(n1) = subsref(obj.(n1), sd1);
+                            sd2 = sd1;
+                            if endsWith(n1, "'")
+                                n1 = extractBefore(n1, "'");
+                                sd2.subs = [':' , sd2.subs{1}];
+                            end
+                            obj.(n1) = subsref(obj.(n1), sd2);
                         end
                     end
                     if isscalar(s)
@@ -313,13 +360,36 @@ classdef (Abstract) ArrayTable
             if isequal(obj, [])
                 obj = feval(mfilename("class"));
             end
+            s = checkIndexing(obj, s);
             switch s(1).type
                 case '.'
+                    if isequal(s(1).subs, 'Data')
+                        if isscalar(s)
+                            obj = builtin("subsasgn", obj, s, varargin{:});
+                        else
+                            obj1 = builtin("subsref", obj, s(1));
+                            obj1 = subsasgn(obj1, s(2:end), varargin{:});
+                            obj = builtin("subsasgn", obj, s(1), obj1);
+                        end
+                        return
+                    end
                     if istable(obj.Data) && ismember(s(1).subs, ...
                         obj.Data.Properties.VariableNames)
                         obj1 = obj.Data;
                         obj1 = builtin("subsasgn", obj1, s, varargin{:});
                         obj.Data = obj1;
+                        return
+                    end
+                    if isfield(obj.Data(1, 1), s(1).subs) || isprop(obj.Data(1, 1), s(1).subs)
+                        if isscalar(s)
+                            obj1 = varargin{1};
+                        else
+                            obj1 = reshape(vertcat(obj.Data.(s(1).subs)), ...
+                                size(obj.Data));
+                            obj1 = builtin("subsasgn", obj1, s(2:end), varargin{:});
+                        end
+                        obj1 = num2cell(obj1);
+                        [obj.Data.(s(1).subs)] = deal(obj1{:});
                         return
                     end
                 case '()'
@@ -374,11 +444,43 @@ classdef (Abstract) ArrayTable
             end
         end
 
+        % function n = numel(obj)
+        %     %NUMEL Number of elements in the ArrayTable
+        %     %
+        %     %   n = numel(obj)
+
+        %     n = prod(size(obj));
+        % end
+
         function varargout = size(obj, varargin)
             if isempty(obj)
                 varargout{1} = [0 0];
             end
             [varargout{1:nargout}] = size(obj.Data, varargin{:});
+            if obj.isScalarRow()
+                % If the object is a scalar row, we return the size as a column vector
+                if nargout<=1
+                    if isempty(varargin)
+                        varargout{1} = [varargout{1}(1) 1];
+                    elseif isscalar(varargin)
+                        idc = varargin{1}==2;
+                        varargout{1}(idc) = 1;
+                    else
+                        idc = cell2mat(varargin)==2;
+                        varargout{1}(idc) = 1;
+                    end
+                else
+                    if isempty(varargin)
+                        varargout{2} = 1;
+                    elseif isscalar(varargin)
+                        idc = varargin{1}==2;
+                        varargout{idc} = 1;
+                    else
+                        idc = cell2mat(varargin)==2;
+                        varargout{idc} = 1;
+                    end
+                end
+            end
         end
 
         function b = isempty(obj)

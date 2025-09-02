@@ -7,6 +7,7 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
         Trials spiky.core.TimeTable
         TrialInfo spiky.core.TimeTable
         Vars spiky.core.Parameter
+        Latency double
     end
 
     methods (Static)
@@ -44,6 +45,8 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
                 @(s) all(~ismember(s, ...
                 ["ParadigmStart", "ParadigmStop"])), "Event");
             numbers = unique(trials.Data.Number, "stable");
+            isValidInfo = ismember(trialInfo.Data.Number, numbers);
+            trialInfo = trialInfo(isValidInfo, :);
             singleInfo = numel(trialInfo.Data.Number)==numel(unique(trialInfo.Data.Number));
             [~, idcInfo] = ismember(numbers, trialInfo.Data.Number(end:-1:1));
             idcInfo = length(trialInfo.Data.Number)-idcInfo+1;
@@ -60,6 +63,8 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
             t = func(double(trials.Data.Timestamp)/1e7);
             nEvents = length(eventNames);
             if ~isempty(photodiode)
+                eventLatencies = NaN(nEvents, 1);
+                eventCounts = NaN(nEvents, 1);
                 for ii = 1:nEvents
                     isEvent1 = trials.Data.Event==eventNames(ii);
                     t1 = t(isEvent1);
@@ -76,10 +81,15 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
                         t2(isValid) = tValid;
                         t2(~isValid) = t1(~isValid)+tdMean;
                         t(isEvent1) = t2;
+                        eventLatencies(ii) = tdMean;
+                        eventCounts(ii) = sum(isValid);
                     else
                         fprintf("No photodiode signal for %s in %s\n", eventNames(ii), name)
                     end
                 end
+                latency = mean(eventLatencies, "omitnan", Weights=eventCounts);
+            else
+                latency = NaN;
             end
             for ii = 1:n
                 id = numbers(ii);
@@ -95,24 +105,26 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
                 end
             end
             obj = spiky.minos.Paradigm(name, periods, spiky.core.TimeTable(...
-                func(double(data.Timestamp)/1e7), data), info, log.getParameters(func));
+                func(double(data.Timestamp)/1e7), data), info, log.getParameters(func), latency);
         end
     end
 
     methods
-        function obj = Paradigm(name, periods, trials, trialInfo, vars)
+        function obj = Paradigm(name, periods, trials, trialInfo, vars, latency)
             arguments
                 name string = ""
                 periods spiky.core.Periods = spiky.core.Periods.empty
                 trials spiky.core.TimeTable = spiky.core.TimeTable.empty
                 trialInfo spiky.core.TimeTable = spiky.core.TimeTable.empty
                 vars spiky.core.Parameter = spiky.core.Parameter.empty
+                latency double = NaN
             end
             obj.Name = name;
             obj.Periods = periods;
             obj.Trials = trials;
             obj.TrialInfo = trialInfo;
             obj.Vars = vars;
+            obj.Latency = latency;
         end
 
         function trials = getTrials(obj, var, value)

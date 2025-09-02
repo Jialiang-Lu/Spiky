@@ -14,7 +14,10 @@ arguments
     periods (:, 2) double
     rightClose (1, 1) logical = false
 end
-% [indices, counts] = spiky.mex.findInPeriods_(array, periods, rightClose);
+if isempty(getCurrentWorker())
+    [indices, counts] = spiky.mex.findInPeriods_(array, periods, rightClose);
+    return
+end
 nPeriods = size(periods, 1);
 nEvents = length(array);
 indices = zeros(nPeriods, 1);

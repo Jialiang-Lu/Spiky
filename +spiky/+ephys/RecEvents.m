@@ -61,7 +61,9 @@ classdef RecEvents < spiky.core.TimeTable & spiky.core.MappableArray
             %   name: name of the synchronization
             %   tol: tolerance in seconds
             %   options
-            %       allowStep: allow fitting with heavyside step function
+            %       AllowStep: allow fitting with heavyside step function
+            %       AllowMissing: allow missing events
+            %       Plot: plot the synchronization
             %
             %   sync: synchronization object
             %   obj2: updated events
@@ -72,48 +74,90 @@ classdef RecEvents < spiky.core.TimeTable & spiky.core.MappableArray
                 name string
                 tol double = 0.02
                 options.AllowStep logical = true
+                options.AllowMissing logical = false
                 options.Plot logical = true
             end
 
-            t1 = spiky.core.Events(obj.Time);
-            t2 = spiky.core.Events(obj2.Time);
-            dl = t1.Length-t2.Length;
+            t1 = obj.Time;
+            t2 = obj2.Time;
+            n1 = length(t1);
+            n2 = length(t2);
+            dl = n1-n2;
             d1 = diff(t1);
             d2 = diff(t2);
-            dlmax = min([max(abs(dl), 6) t1.Length-2 t2.Length-2]);
+            dlmax = min([max(abs(dl), 6) n1-2 n2-2]);
             shifts = -dlmax:dlmax;
             d = zeros(length(shifts), 1);
+            %%
             for ii = 1:length(shifts)
+                %%
                 s = shifts(ii);
                 if s<0
-                    l = min(t1.Length-1, t2.Length-1+s);
+                    l = min(n1-1, n2-1+s);
                     idc1 = 1:l;
                     idc2 = 1-s:l-s;
                 else
-                    l = min(t1.Length-1-s, t2.Length-1);
+                    l = min(n1-1-s, n2-1);
                     idc1 = 1+s:l+s;
                     idc2 = 1:l;
                 end
                 d(ii) = max(abs(d1(idc1)-d2(idc2)));
             end
+            
+            %%
             [dmin, idx] = min(d);
+            shift = shifts(idx);
             if dmin>tol
+                if options.AllowMissing
+                    t3 = [t1; t2];
+                    id3 = [ones(n1, 1); 2*ones(n2, 1)];
+                    idOld3 = [1:n1, 1:n2]';
+                    [t3, idc3] = sort(t3);
+                    id3 = id3(idc3);
+                    idOld3 = idOld3(idc3);
+                    d3 = diff(t3);
+                    idc12 = find(id3(1:end-1)==1 & id3(2:end)==2);
+                    idc21 = find(id3(1:end-1)==2 & id3(2:end)==1);
+                    d12 = d3(idc12);
+                    d21 = d3(idc21);
+                    if ~isempty(d12) && ~isempty(d21)
+                        if std(d12)<std(d21)
+                            offset = median(d12);
+                            idc = d12>=offset-tol & d12<=offset+tol;
+                            idc = idc12(idc);
+                            idc1 = idOld3(idc);
+                            idc2 = idOld3(idc+1);
+                        else
+                            offset = median(d21);
+                            idc = d21>=offset-tol & d21<=offset+tol;
+                            idc = idc21(idc);
+                            idc1 = idOld3(idc+1);
+                            idc2 = idOld3(idc);
+                        end
+                        obj.Time = obj.Time(idc1);
+                        obj.Data = obj.Data(idc1, :);
+                        obj2.Time = obj2.Time(idc2);
+                        obj2.Data = obj2.Data(idc2, :);
+                        [sync, obj2] = obj.syncWith(obj2, name, tol, ...
+                            AllowStep=options.AllowStep, Plot=options.Plot);
+                        return
+                    end
+                end
                 error("Max jitter is %.3f s, which is larger than the tolerance %.3f s", dmin, tol)
             end
-            shift = shifts(idx);
             if shift<0
-                l = min(t1.Length, t2.Length+shift);
+                l = min(n1, n2+shift);
                 idc1 = 1:l;
                 idc2 = 1-shift:l-shift;
             else
-                l = min(t1.Length-shift, t2.Length);
+                l = min(n1-shift, n2);
                 idc1 = 1+shift:l+shift;
                 idc2 = 1:l;
             end
-            t1 = spiky.core.Events(t1.Time(idc1));
-            t2 = spiky.core.Events(t2.Time(idc2));
+            t1 = spiky.core.Events(t1(idc1));
+            t2 = spiky.core.Events(t2(idc2));
             optionsArgs = namedargs2cell(options);
-            sync = t1.sync(t2, name, optionsArgs{:});
+            sync = t1.sync(t2, name, AllowStep=options.AllowStep, Plot=options.Plot);
             obj2.Time = sync.Inv(obj2.Time);
         end
 

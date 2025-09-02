@@ -193,6 +193,10 @@ classdef MinosInfo < spiky.core.Metadata
 
         function sc = getScreenCapture(obj, photodiode)
             % GETSCREENCAPTURE Get the screen capture data
+            arguments
+                obj spiky.minos.MinosInfo
+                photodiode spiky.ephys.RecEvents = spiky.ephys.RecEvents.empty
+            end
             fpthScreenCapture = obj.Session.getFpth("spiky.minos.ScreenCapture.mat");
             if exist(fpthScreenCapture, "file")
                 sc = obj.Session.loadData("spiky.minos.ScreenCapture.mat");
@@ -237,10 +241,15 @@ classdef MinosInfo < spiky.core.Metadata
                 tFlip = t(idc);
                 syncEvents = spiky.ephys.RecEvents(tFlip, ...
                     tFlip.*1e7, spiky.ephys.ChannelType.Stim, ...
-                    int16(1), "Screen", cd(idc+1)>0, "");
+                    int16(1), "Screen", cd(idc)>0, "");
                 try
-                   [sync, eventsSync] = photodiode.syncWith(syncEvents, "probe1 to screen", 0.1, ...
-                        allowStep=false);
+                    try
+                        [sync, eventsSync] = photodiode.syncWith(syncEvents, "probe1 to screen", 0.1, ...
+                            AllowStep=false);
+                    catch me
+                        [sync, eventsSync] = photodiode.syncWith(syncEvents, "probe1 to screen", 0.2, ...
+                            AllowStep=false, AllowMissing=true);
+                    end
                     sc.Path = fpthVideo;
                     sc.Sync = spiky.ephys.EventGroup("Screen", ...
                         spiky.ephys.ChannelType.Stim, eventsSync, ...

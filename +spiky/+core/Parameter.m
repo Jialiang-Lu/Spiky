@@ -47,7 +47,10 @@ classdef Parameter < spiky.core.MappableArray
             else
                 periods = spiky.core.Periods([[-Inf; obj.Time(2:end)], [obj.Time(2:end); Inf]]);
                 [~, ~, idc] = periods.haveEvents(time);
-                value = obj.Data(idc).Data;
+                value = obj.Data.Data(idc);
+                if iscell(obj.Data.Data)
+                    value = value{:};
+                end
             end
         end
 

@@ -208,7 +208,7 @@ classdef Events
                             events = events-periods(idcPeriods, 1)+offset;
                         end
                     else
-                        events = subsref(obj, substruct("()", {idc}));
+                        events = subsref(obj, substruct("()", {idc, ':'}));
                         if ~isempty(offset)
                             events.Time = events.Time-periods(idcPeriods, 1)+offset;
                         end
@@ -232,7 +232,7 @@ classdef Events
                                 events{ii} = ts(idc1);
                             end
                         else
-                            events{ii} = subsref(obj, substruct("()", {idc1}));
+                            events{ii} = subsref(obj, substruct("()", {idc1, ':'}));
                             if ~isempty(offset)
                                 events{ii}.Time = events{ii}.Time-periods(ii, 1)+offset;
                             end
@@ -256,7 +256,7 @@ classdef Events
                         events = events-periods(idcPeriods, 1)+offset;
                     end
                 else
-                    events = subsref(obj, substruct("()", {idc}));
+                    events = subsref(obj, substruct("()", {idc, ':'}));
                     if ~isempty(offset)
                         events.Time = events.Time-periods(idcPeriods, 1)+offset;
                     end
@@ -274,7 +274,7 @@ classdef Events
                         if ~options.KeepType
                             events{ii} = ts(idc1)-periods(ii, 1)+offset;
                         else
-                            events{ii} = subsref(obj, substruct("()", {idc1}));
+                            events{ii} = subsref(obj, substruct("()", {idc1, ':'}));
                             events{ii}.Time = events{ii}.Time-periods(ii, 1)+offset;
                         end
                     end
@@ -288,7 +288,7 @@ classdef Events
                         if ~options.KeepType
                             events{ii} = ts(idc1);
                         else
-                            events{ii} = subsref(obj, substruct("()", {idc1}));
+                            events{ii} = subsref(obj, substruct("()", {idc1, ':'}));
                         end
                     end
                 end
@@ -344,7 +344,7 @@ classdef Events
             %   name: name of the synchronized events
             %   varargin: additional options passed to fit
             %   options
-            %       allowStep: allow fitting with heavyside step function
+            %       AllowStep: allow fitting with heavyside step function
             %
             %   s: synchronized events
             arguments

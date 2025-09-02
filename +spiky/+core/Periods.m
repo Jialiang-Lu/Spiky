@@ -14,12 +14,16 @@ classdef Periods
     end
 
     methods (Static, Hidden)
-        function periods = combine(varargin, options)
+        function [c, ct] = count(varargin)
+            %COUNT Count number of periods that contains the current time
+            %   [c, ct] = count(time1, time2, ...)
+            %
+            %   time1, time2, ...: time periods as n x 2 double or spiky.core.Periods
+            %
+            %   c: TimeTable with time index and count of periods
+            %   ct: TimeTable with time and count of periods
             arguments (Repeating)
                 varargin
-            end
-            arguments
-                options.Op string {mustBeMember(options.Op, ["Union", "Intersect"])}
             end
             for ii = 1:nargin
                 if isa(varargin{ii}, "spiky.core.Periods")
@@ -40,6 +44,17 @@ classdef Periods
             d = d(idc);
             d = cumsum(d);
             c = spiky.core.TimeTable(1:numel(t), d);
+            ct = spiky.core.TimeTable(t, d);
+        end
+
+        function periods = combine(varargin, options)
+            arguments (Repeating)
+                varargin
+            end
+            arguments
+                options.Op string {mustBeMember(options.Op, ["Union", "Intersect"])}
+            end
+            [c, ct] = spiky.core.Periods.count(varargin{:});
             switch options.Op
                 case "Union"
                     thr = 0.5;
@@ -50,6 +65,7 @@ classdef Periods
             end
             prds = c.findPeriods(thr, 1, 0);
             prds = prds.Time+[0 1];
+            t = ct.Time;
             t = reshape(t(prds), height(prds), 2);
             t = t(diff(t, 1, 2)>0, :);
             periods = spiky.core.Periods(t);

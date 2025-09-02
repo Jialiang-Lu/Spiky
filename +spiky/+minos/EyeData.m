@@ -82,44 +82,57 @@ classdef EyeData < spiky.core.Metadata
                 prdTrials = spiky.core.Periods([fiveDot.Trials.Start_Align fiveDot.Trials.End]);
                 
                 dataRaw = spiky.minos.Data(fullfile(fdir, "EyeRaw.bin"));
+                proc = spiky.minos.Data(fullfile(fdir, "EyeProcessor.bin"));
                 tRaw = func(double(dataRaw.Data.Timestamp)/1e7);
                 dataRaw = spiky.core.TimeTable(tRaw, dataRaw.Data);
                 data1 = dataRaw.inPeriods(prdTrials, KeepType=true);
                 angVel = [vecnorm(diff(data1.LeftGaze, 1, 1), 2, 2)./diff(data1.Time); 0];
-                isFix = angVel<5 & data1.LeftPupil>0 & data1.RightPupil>0;
+                isFix = angVel<5 & (data1.LeftPupil>0 | data1.RightPupil>0);
                 data1 = data1(isFix, :);
 
-                leftGaze = ones(nPos, 3, "single");
-                rightGaze = ones(nPos, 3, "single");
+                %%
+                leftGaze = NaN(nPos, 3, "single");
+                rightGaze = NaN(nPos, 3, "single");
+                names = ["LeftGaze" "RightGaze"];
                 for ii = 1:nPos
                     % Find fixated periods
                     isPos1 = idcPos==ii;
                     pos1 = pos(ii, :);
                     prd1 = prdTrials.Time(isPos1, :);
                     dataTrial = data.inPeriods(prd1, KeepType=true);
-                    d1 = vecnorm(dataTrial.Convergence-pos1, 2, 2);
-                    tFix1 = dataTrial.Time(d1<0.1);
-                    prdFix1 = spiky.core.Events(tFix1).findContinuous(0.1, 0.1);
-                    % Filter data
-                    data2 = data1.inPeriods(prd1, KeepType=true);
-                    data2 = data2.inPeriods(prdFix1, KeepType=true);
-                    leftGaze(ii, 1:2) = median(data2.LeftGaze(:, 1:2), "omitnan");
-                    rightGaze(ii, 1:2) = median(data2.RightGaze(:, 1:2), "omitnan");
+                    for jj = 1:2
+                        d1 = vecnorm(dataTrial.Data.(names(jj))-pos1, 2, 2);
+                        tFix1 = dataTrial.Time(d1<0.2);
+                        prdFix1 = spiky.core.Events(tFix1).findContinuous(0.1, 0.1);
+                        data2 = data1.inPeriods(prd1, KeepType=true);
+                        data2 = data2.inPeriods(prdFix1, KeepType=true);
+                        tmp = data2.Data.(names(jj));
+                        if jj==1
+                            leftGaze(ii, 1:2) = median(tmp(:, 1:2), "omitnan");
+                        else
+                            rightGaze(ii, 1:2) = median(tmp(:, 1:2), "omitnan");
+                        end
+                    end
                 end
+                leftGaze(:, 3) = 1;
+                rightGaze(:, 3) = 1;
+                idcValidLeft = ~isnan(leftGaze(:, 1));
+                idcValidRight = ~isnan(rightGaze(:, 1));
 
+                %%
                 w = warning;
                 warning off
-                fitTypeX = fittype("poly22");
-                fitTypeY = fittype("poly22");
-                weights = exp(-vecnorm(pos(:, 1:2), 2, 2)*3);
-                leftFitX = fit(leftGaze(:, 1:2), pos(:, 1), fitTypeX, Weights=weights, ...
-                    Robust="off");
-                leftFitY = fit(leftGaze(:, 1:2), pos(:, 2), fitTypeY, Weights=weights, ...
-                    Robust="off");
-                rightFitX = fit(rightGaze(:, 1:2), pos(:, 1), fitTypeX, Weights=weights, ...
-                    Robust="off");
-                rightFitY = fit(rightGaze(:, 1:2), pos(:, 2), fitTypeY, Weights=weights, ...
-                    Robust="off");
+                fitTypeX = fittype("poly11");
+                fitTypeY = fittype("poly11");
+                weights = exp(-vecnorm(pos(:, 1:2), 2, 2)*4);
+                leftFitX = fit(leftGaze(idcValidLeft, 1:2), pos(idcValidLeft, 1), fitTypeX, ...
+                    Weights=weights(idcValidLeft), Robust="off");
+                leftFitY = fit(leftGaze(idcValidLeft, 1:2), pos(idcValidLeft, 2), fitTypeY, ...
+                    Weights=weights(idcValidLeft), Robust="off");
+                rightFitX = fit(rightGaze(idcValidRight, 1:2), pos(idcValidRight, 1), fitTypeX, ...
+                    Weights=weights(idcValidRight), Robust="off");
+                rightFitY = fit(rightGaze(idcValidRight, 1:2), pos(idcValidRight, 2), fitTypeY, ...
+                    Weights=weights(idcValidRight), Robust="off");
                 warning(w);
 
                 leftGazeFitted = leftGaze;
@@ -137,7 +150,9 @@ classdef EyeData < spiky.core.Metadata
                 title("Five Dot Calibration")
                 xlabel("Azimuth")
                 ylabel("Elevation")
+                drawnow
 
+                %%
                 dataRaw.LeftGaze(:, 1) = leftFitX(dataRaw.LeftGaze(:, 1:2));
                 dataRaw.LeftGaze(:, 2) = leftFitY(dataRaw.LeftGaze(:, 1:2));
                 dataRaw.RightGaze(:, 1) = rightFitX(dataRaw.RightGaze(:, 1:2));
@@ -308,6 +323,31 @@ classdef EyeData < spiky.core.Metadata
     end
 
     methods
+        function periods = getViewPeriods(obj, mingap, minperiod)
+            % GETVIEWPERIODS Get periods when the eye is visible
+            %
+            %   mingap: minimum gap between periods in seconds
+            %   minperiod: minimum period length in seconds
+            %
+            %   periods: periods when the eye is visible
+            arguments
+                obj spiky.minos.EyeData
+                mingap (1, 1) double = 1
+                minperiod (1, 1) double = 2
+            end
+            if isempty(obj.Data.Time)
+                periods = spiky.core.Periods.empty;
+                return
+            end
+            isViewing = ~isnan(obj.Data.Convergence(:, 1)) & ...
+                obj.Data.Convergence(:, 1)>0 & ...
+                obj.Data.Convergence(:, 1)<1 & ...
+                obj.Data.Convergence(:, 2)>0 & ...
+                obj.Data.Convergence(:, 2)<1;
+            tt = spiky.core.TimeTable(obj.Data.Time, isViewing);
+            periods = tt.findPeriods(0, mingap, minperiod);
+        end
+
         function time = get.Time(obj)
             time = obj.Data.Time;
         end
