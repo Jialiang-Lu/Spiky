@@ -451,6 +451,9 @@ classdef SessionInfo < spiky.core.Metadata
             for ii = 1:n
                 idc = round(data.ts{ii}*obj.Fs)+1;
                 idc = idc(idc>=period(1)-idcT(1) & idc<=period(end)-idcT(end));
+                if isempty(idc)
+                    continue
+                end
                 idc = idc'-period(1)+1+idcT;
                 idc = idc(:);
                 wav = raw{idc, ch(ii)};
