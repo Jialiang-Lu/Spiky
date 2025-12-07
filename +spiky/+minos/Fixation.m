@@ -10,15 +10,6 @@ classdef Fixation < spiky.core.TimeTable
         Dist (:, 1) double
     end
 
-    methods (Static)
-        function obj = calc(eyeData, tr, fov)
-            arguments
-                eyeData spiky.minos.EyeData
-                tr spiky.minos.ObjectTransform
-            end
-        end
-    end
-
     methods
         function obj = Fixation(time, data)
             arguments

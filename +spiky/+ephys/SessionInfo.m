@@ -27,7 +27,7 @@ classdef SessionInfo < spiky.core.Metadata
     methods
         function obj = SessionInfo(session, nChannels, fs, fsLfp, nSamples, nSamplesLfp, ...
             duration, precision, fpthDat, fpthLfp, channelGroups, eventGroups, options)
-            % SESSIONINFO Create a new instance of SessionInfo
+            %SESSIONINFO Create a new instance of SessionInfo
             
             arguments
                 session spiky.ephys.Session = spiky.ephys.Session.empty
@@ -87,7 +87,7 @@ classdef SessionInfo < spiky.core.Metadata
         end
 
         function data = loadBinary(obj, ch, period, options)
-            % LOADBINARY Load binary data
+            %LOADBINARY Load binary data
             %
             % data = LOADBINARY(obj, type, ch, period, options)
             %
@@ -180,7 +180,7 @@ classdef SessionInfo < spiky.core.Metadata
         end
 
         function spikeSort(obj, options)
-            % SPIKESORT Sort spikes from raw data
+            %SPIKESORT Sort spikes from raw data
 
             arguments
                 obj
@@ -207,7 +207,7 @@ classdef SessionInfo < spiky.core.Metadata
         end
 
         function si = extractSpikes(obj, options)
-            % EXTRACTSPIKES Extract spikes from sorted data
+            %EXTRACTSPIKES Extract spikes from sorted data
 
             arguments
                 obj
@@ -251,7 +251,7 @@ classdef SessionInfo < spiky.core.Metadata
         end
 
         function minos = extractMinos(obj, options)
-            % EXTRACTMINOS Extract Minos data
+            %EXTRACTMINOS Extract Minos data
 
             arguments
                 obj
@@ -268,7 +268,7 @@ classdef SessionInfo < spiky.core.Metadata
         end
 
         function createNsXml(obj)
-            % CREATENSXML Create Neuroscope XML file
+            %CREATENSXML Create Neuroscope XML file
             
             defaultColors = ["#ffeb3b", "#aeea00", "#00e5ff", "#d1c4e9"];
             defaultAdcColor = "#ff0000";
@@ -451,6 +451,11 @@ classdef SessionInfo < spiky.core.Metadata
             for ii = 1:n
                 idc = round(data.ts{ii}*obj.Fs)+1;
                 idc = idc(idc>=period(1)-idcT(1) & idc<=period(end)-idcT(end));
+                if isempty(idc)
+                    data.waveform(ii, :) = 0;
+                    data.amplitude(ii) = 0;
+                    continue
+                end
                 idc = idc'-period(1)+1+idcT;
                 idc = idc(:);
                 wav = raw{idc, ch(ii)};

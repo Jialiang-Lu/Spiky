@@ -1,5 +1,5 @@
 function [indices, counts] = findInPeriods(array, periods, rightClose)
-% FINDINPERIODS Find indices of array elements within periods
+%FINDINPERIODS Find indices of array elements within periods
 % [indices, counts] = findInPeriods(array, periods, rightClose)
 %
 %   array: 1D sorted array of doubles

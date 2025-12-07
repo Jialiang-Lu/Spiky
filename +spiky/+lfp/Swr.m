@@ -1,5 +1,5 @@
 classdef Swr < spiky.core.TimeTable
-    % SWR Class representing Sharp Wave Ripple events
+    %SWR Class representing Sharp Wave Ripple events
 
     properties
         Options = struct
@@ -19,7 +19,7 @@ classdef Swr < spiky.core.TimeTable
     methods 
         function obj = Swr(time, onsets, offsets, cycles, freqs, amplitudes, amplitudesNorm, troughs, ...
             options)
-            % SWR Create a new instance of Swr
+            %SWR Create a new instance of Swr
             %
             %   Swr(time, onsets, offsets, cycles, freqs, amplitudes, amplitudesNorm, troughs)
             %   time: time vector

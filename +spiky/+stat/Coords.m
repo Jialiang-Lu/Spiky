@@ -1,154 +1,215 @@
-classdef Coords
-    % COORDS Class representing a coordinate system in a N-D space
+classdef Coords < spiky.core.ArrayTable
+    %COORDS Class representing a coordinate system in a N-D space
+    %
+    % Origin (NDims x 1 vector)
+    % Bases (NDims x NBases matrix)
 
     properties
-        Origin (:, 1) double % NDim x 1 vector representing the origin of the coordinate system
-        Bases (:, :) double % NDim x NBases matrix representing the basis vectors
-        Props (1, 1) struct
+        Origin (:, 1) double
+        BasisNames (:, 1)
     end
 
     properties (Dependent)
-        NDim double
+        DimNames (:, 1)
+        NDims double
         NBases double
+        Bases (:, :)
     end
 
-methods (Static)
-    function obj = makeRaisedCosine(dt, nBases, peakRange, options)
-        % MAKERAISEDCOSINE Create a Coords with raised-cosine basis over time
-        %   obj = Coords.makeRaisedCosine(dt, nBases, peakRange, options)
-        %
-        %   dt: time step
-        %   nBases: number of basis functions
-        %   peakRange: [tFirst, tLast] range for the peaks
-        %   Name-Value pairs
-        %     - TimeRange: [tStart, tEnd] for the time vector (default: covers peakRange)
-        %     - Spacing: 'Log' or 'Linear' for peak spacing (default: 'Log')
-
-        arguments
-            dt (1,1) double {mustBePositive}
-            nBases (1,1) double {mustBeInteger, mustBePositive}
-            peakRange (1,2) double
-            options.TimeRange (1,2) double = [NaN, NaN]
-            options.Spacing (1,1) string {mustBeMember(options.Spacing, ["Log","Linear"])} = "Log"
-        end
-
-        pr = sort(peakRange(:).'); % ensure ascending
-        if any(~isfinite(pr)) || pr(1) < 0
-            error("peakRange must be finite, nonnegative");
-        end
-        timeRange = options.TimeRange;
-        switch options.Spacing
-            case "Linear"
-                centers = linspace(pr(1), pr(2), nBases);
-                centersOp = centers;
-                width = centers(2)-centers(1);
-                if any(isnan(timeRange))
-                    timeRange = [0, centers(end) + width];
-                end
-                t = (timeRange(1):dt:timeRange(2)).';
-                tOp = t;
-            case "Log"
-                centersOp = linspace(log1p(pr(1)), log1p(pr(2)), nBases);
-                centers = expm1(centersOp);
-                width = centersOp(2)-centersOp(1);
-                if any(isnan(timeRange))
-                    timeRange = [0, expm1(centersOp(end)+width*2)];
-                end
-                t = (timeRange(1):dt:timeRange(2)).';
-                tOp = log1p(t);
-        end
-        nT = numel(t);
-        if nT < 3
-            error("TimeRange and dt produce too few time points.");
-        end
-        % B = ((cos(max(-pi, min(pi, tOp-centersOp))*pi/width/2)+1)/2);
-        B = (cos(max(-pi, min(pi, (tOp-centersOp)*pi/width/2)))+1)/2;
-        obj = spiky.stat.Coords();
-        obj.Origin = zeros(nT, 1);
-        obj.Bases  = B;
-        obj.Props  = struct( ...
-            "Type", "raisedCosine", ...
-            "T", t, ...
-            "Dt", dt, ...
-            "PeakRange", pr, ...
-            "TimeRange", timeRange, ...
-            "Spacing", options.Spacing, ...
-            "Centers", centers);
+    properties (Hidden)
+        Dims_ (:, 1)
     end
-end
+
+    methods (Static)
+        function dimNames = getDimNames()
+            %GETDIMNAMES Get the dimension names of the TimeTable
+            %
+            %   dimNames: dimension names
+            dimNames = ["DimNames,Origin" "BasisNames"];
+        end
+    end
 
     methods
-        function obj = Coords(origin, bases, varargin)
-            % COORDS Create a new instance of Coords
+        function obj = Coords(origin, bases, dimNames, basisNames)
+            %COORDS Create a new instance of Coords
             %
             %   Coords(origin, bases, ...) creates a new instance of Coords
             %
             %   origin: origin of the coordinate system
             %   bases: basis vectors
-            %   Name-Value pairs: additional properties
+            %   dimNames: dimension names or objects
+            %   basisNames: names of the basis vectors
             %
             %   obj: Coords object
             arguments
-                origin double = []
-                bases double = []
+                origin (:, 1) double = double.empty(0, 1)
+                bases (:, :, :) double = double.empty(0, 0)
+                dimNames (:, 1) = zeros(height(origin), 1)
+                basisNames (:, 1) = categorical(NaN(width(bases), 1))
             end
-            arguments (Repeating)
-                varargin
-            end
+            assert(height(origin)==height(bases), ...
+                "The number of rows in bases must be the same as the length of origin");
+            assert(height(dimNames)==height(origin), ...
+                "The number of rows in dimNames must be the same as the length of origin");
+            obj@spiky.core.ArrayTable(bases);
             obj.Origin = origin;
-            obj.Bases = bases;
-            obj.Props = struct();
-            for ii = 1:2:length(varargin)
-                obj.Props.(varargin{ii}) = varargin{ii + 1};
-            end
+            obj.DimNames = dimNames;
+            obj.BasisNames = basisNames;
         end
 
-        function n = get.NDim(obj)
-            n = size(obj.Bases, 1);
-        end
-
-        function n = get.NBases(obj)
-            n = size(obj.Bases, 2);
-        end
-
-        function data = project(obj, data, idcDim)
+        function [data, proj] = project(obj, data, idcBases)
             %PROJECT Project the data onto the coordinate system
             %
             %   data = PROJECT(obj, data)
             %
             %   obj: coordinate system
             %   data: data to project, nDim x nObs
-            %   idcDim: indices of the dimensions to project
+            %   idcBases: indices of the bases to use for projection
             %
-            %   data: projected data, length(idcDim) x nObs
+            %   data: projected data, length(idcBases) x nObs
+            %   proj: projected data in the original space, nDims x nObs
             arguments
                 obj spiky.stat.Coords
                 data double
-                idcDim double = []
+                idcBases double = 1:obj.NBases
             end
-            if size(data, 1) ~= obj.NDim
-                error("The number of dimensions must be the same as the number of dimensions in the coordinate system")
-            end
-            if isempty(idcDim)
-                idcDim = 1:obj.NBases;
-            end
-            B = obj.Bases(:, idcDim);
-            data = (B'*B)\(B'*(data - obj.Origin));
+            assert(height(data)==obj.NDims, ...
+                "The number of rows in data must be the same as the number of dimensions in the coordinate system")
+            B = obj.Bases(:, idcBases);
+            data = (B'*B)\(B'*(data-obj.Origin));
+            proj = B*data+obj.Origin;
         end
 
-        function varargout = subsref(obj, s)
-            if isempty(obj)
-                [varargout{1:nargout}] = builtin("subsref", obj, s);
+        function data = unproject(obj, data, idcBases)
+            %UNPROJECT Unproject the data from the coordinate system
+            %
+            %   data = UNPROJECT(obj, data)
+            %
+            %   obj: coordinate system
+            %   data: data to unproject, nDataBases x nObs
+            %   idcBases: indices of the bases used for projection
+            %
+            %   data: unprojected data, nDims x nObs
+            arguments
+                obj spiky.stat.Coords
+                data double
+                idcBases double = 1:height(data)
+            end
+            assert(height(data)==numel(idcBases), ...
+                "The number of rows in data must be the same as the number of indices in idcBases")
+            assert(numel(idcBases)<=obj.NBases, ...
+                "The number of indices in idcBases must be less than or equal to the number of bases in the coordinate system")
+            B = obj.Bases(:, idcBases);
+            data = B*data+obj.Origin;
+        end
+
+        function obj = pca(obj, nDims)
+            %PCA Reduce the basis dimensions using PCA
+            %   obj = PCA(obj, nDims)
+            %
+            %   obj: Coords object
+            %   nDims: number of dimensions to keep
+            arguments
+                obj spiky.stat.Coords
+                nDims double {mustBePositive, mustBeInteger}
+            end
+            assert(nDims<=obj.NBases, ...
+                "nDims must be less than or equal to the number of bases");
+            [coeff, ~, ~, ~, explained, mu] = pca(obj.Bases, NumComponents=nDims);
+            obj.Origin = mu(:);
+            obj.Bases = coeff;
+            obj.DimNames = obj.BasisNames;
+            obj.BasisNames = explained(:);
+        end
+
+        function obj = addPCA(obj, data, options)
+            %ADDPCA Add PCA basis vectors in the orthogonal complement of the current bases
+            %   obj = ADDPCA(obj, data)
+            %
+            %   obj: Coords object
+            %   data: data to compute PCA, nDims x nObs
+            %   Name-value arguments:
+            %       NAdd: number of PCA basis vectors to add
+            arguments
+                obj spiky.stat.Coords
+                data double
+                options.NAdd double = 1
+            end
+            nDims = height(data);
+            bases = orth(obj.Bases);
+            nBases = width(bases);
+            data = data-obj.Origin;
+            data = data-bases*(bases'*data);
+            [u, s, v] = svd(data', "econ");
+            options.NAdd = min([options.NAdd, nDims-nBases]);
+            newBases = v(:, 1:options.NAdd);
+            obj.Bases = [obj.Bases, newBases];
+            obj.BasisNames = [obj.BasisNames; categorical("PCA"+(1:options.NAdd).')];
+        end
+
+        function sim = getSimilarity(obj, other, idcDims, options)
+            %GETSIMILARITY Get the similarity between two coordinate systems
+            %   sim = GETSIMILARITY(obj, other, idcDims, options)
+            %
+            %   obj: Coords object
+            %   other: another Coords object
+            %   idcDims: indices of the bases to use for similarity calculation
+            %   Name-value arguments:
+            %       Metric: similarity metric ("projection" or "nuclear")
+            arguments
+                obj spiky.stat.Coords
+                other spiky.stat.Coords
+                idcDims double = 1:obj.NBases
+                options.Metric string {mustBeMember(options.Metric, ["projection" "nuclear"])} = "projection"
+            end
+            assert(obj.NDims==other.NDims, ...
+                "The number of dimensions in the two coordinate systems must be the same");
+            assert(obj.NBases==other.NBases, ...
+                "The number of bases in the two coordinate systems must be the same");
+            B1 = obj.Bases(:, idcDims);
+            B2 = other.Bases(:, idcDims);
+            [U, S, V] = svd(B1'*B2);
+            nDims = numel(idcDims);
+            switch options.Metric
+                case "projection"
+                    sim = sum(diag(S).^2)/nDims;
+                case "nuclear"
+                    sim = sum(diag(S))/nDims;
+            end
+        end
+
+        function n = get.NDims(obj)
+            n = height(obj.Origin);
+        end
+
+        function n = get.NBases(obj)
+            n = width(obj.Bases);
+        end
+
+        function dimNames = get.DimNames(obj)
+            if class(obj)=="spiky.stat.TimeCoords"
+                dimNames = obj.Time;
                 return
             end
-            switch s(1).type
-                case '.'
-                    if isfield(obj.Props, s(1).subs)
-                        s1 = substruct(".", "Props");
-                        s = [s1, s];
-                    end
+            dimNames = obj.Dims_;
+        end
+
+        function obj = set.DimNames(obj, dimNames)
+            if class(obj)=="spiky.stat.TimeCoords"
+                obj.Time = dimNames;
+                return
             end
-            [varargout{1:nargout}] = builtin("subsref", obj, s);
+            assert(height(dimNames)==height(obj.Bases), ...
+                "The number of rows in dimNames must be the same as the length of origin");
+            obj.Dims_ = dimNames;
+        end
+
+        function b = get.Bases(obj)
+            b = obj.Data;
+        end
+
+        function obj = set.Bases(obj, b)
+            obj.Data = b;
         end
     end
 end

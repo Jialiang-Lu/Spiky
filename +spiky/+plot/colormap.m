@@ -11,7 +11,7 @@ function map = colormap(name, n, qualitative)
 %
 % Zhaoxu Liu / slandarer (2024). 200 colormap 
 % (https://www.mathworks.com/matlabcentral/fileexchange/120088-200-colormap), 
-% MATLAB Central File Exchange
+%MATLAB Central File Exchange
 
 arguments
     name (1, 1) string {mustBeMember(name, [
@@ -217,7 +217,32 @@ arguments
         "vivid"
         ])}
     n double {mustBeScalarOrEmpty} = []
-    qualitative logical = false
+    qualitative logical = ismember(name, [
+        "Pastel1"
+        "Pastel2"
+        "Paired"
+        "Accent"
+        "Dark2"
+        "Set1"
+        "Set2"
+        "Set3"
+        "tab10"
+        "tab20"
+        "tab20b"
+        "tab20c"
+        "538"
+        "bold"
+        "brewer"
+        "colorblind"
+        "glasbey"
+        "glasbey_bw"
+        "glasbey_category10"
+        "glasbey_dark"
+        "glasbey_hv"
+        "glasbey_light"
+        "prism2"
+        "vivid"
+        ])
 end
 
 fpth = mfilename("fullpath");
@@ -244,9 +269,10 @@ end
 if nargout>0
     map = map1;
 else
-    colormap(gca, map1);
+    colormap(map1);
     if qualitative
-        clim(gca, [0.5, n+0.5]);
+        colororder(map1)
+        clim([0.5, n+0.5]);
     end
 end
 end

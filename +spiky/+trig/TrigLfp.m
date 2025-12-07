@@ -1,9 +1,9 @@
 classdef TrigLfp < spiky.trig.Trig & spiky.lfp.Lfp
-    % TRIGLFP Class representing a Local Field Potential signal triggered by events
+    %TRIGLFP Class representing a Local Field Potential signal triggered by events
 
     methods
         function obj = TrigLfp(lfp, events, window)
-            % TRIGLFP Create a new instance of TrigLfp
+            %TRIGLFP Create a new instance of TrigLfp
             %
             %   TrigLfp(lfp, events, window) creates a new instance of TrigLfp
             %   lfp: spiky.lfp.Lfp object

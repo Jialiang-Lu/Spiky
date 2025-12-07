@@ -20,7 +20,7 @@ end
 if size(v1, dim)==3
     a = atan2d(vecnorm(cross(v1, v2, dim), 2, dim), dot(v1, v2, dim));
 else
-    a = real(acosd(max(min(dot(v1, v2, dim)/(vecnorm(v1, 2, dim).*vecnorm(v2, 2, dim)), 1), -1)));
+    a = real(acosd(max(min(dot(v1, v2, dim)./(vecnorm(v1, 2, dim).*vecnorm(v2, 2, dim)), 1), -1)));
 end
 end
 

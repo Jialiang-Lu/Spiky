@@ -1,5 +1,5 @@
 classdef (Abstract) EventDrawer < spiky.app.Drawer
-    % EVENTDRAWER Abstract class for drawing events in the SessionViewer app
+    %EVENTDRAWER Abstract class for drawing events in the SessionViewer app
     % 
     %   This class serves as a base for specific event drawers, providing
     %   common functionality and properties.
@@ -10,7 +10,7 @@ classdef (Abstract) EventDrawer < spiky.app.Drawer
 
     methods
         function obj = EventDrawer(app, hCheckbox)
-            % EVENTDRAWER Constructor for the EventDrawer class
+            %EVENTDRAWER Constructor for the EventDrawer class
             %
             %   obj = Drawer(app, hCheckbox)
             %
@@ -75,7 +75,7 @@ classdef (Abstract) EventDrawer < spiky.app.Drawer
 
     methods (Abstract)
         [evts, names] = getEvents(obj, time)
-        % GETEVENTS Get events at a specific time
+        %GETEVENTS Get events at a specific time
         %   events = obj.getEvents(time)
         %   time: time in seconds
         %   evts: array of events at the specified time, either Nx1 or Nx2

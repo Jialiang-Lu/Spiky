@@ -32,7 +32,7 @@ classdef RegionFilter < spiky.app.Filter
         end
 
         function indices = onUpdate(obj, event)
-            % ONUPDATE Update the filter indices based on the selected region
+            %ONUPDATE Update the filter indices based on the selected region
             %
             %   indices = obj.onUpdate(event)
             %

@@ -1,5 +1,5 @@
 classdef ChannelConfig < spiky.core.Metadata
-    % CHANNELCONFIG Class representing a configuration of non-neural channels
+    %CHANNELCONFIG Class representing a configuration of non-neural channels
 
     properties
         Aux (:, 1) string
@@ -9,7 +9,7 @@ classdef ChannelConfig < spiky.core.Metadata
 
     methods (Static)
         function obj = read(configStruct)
-            % READ Convert struct to ChannelConfig object
+            %READ Convert struct to ChannelConfig object
             arguments
                 configStruct struct
             end
@@ -22,7 +22,7 @@ classdef ChannelConfig < spiky.core.Metadata
 
     methods
         function obj = ChannelConfig(aux, adc, dig)
-            % CHANNELCONFIG Constructor for ChannelConfig class
+            %CHANNELCONFIG Constructor for ChannelConfig class
             arguments
                 aux string
                 adc string

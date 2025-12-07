@@ -136,22 +136,19 @@ classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
         end
 
         function gaze = getViewGaze(obj, height, width)
-
+            %GETVIEWGAZE Get the gaze direction vector in world coordinates given the viewport size
+            %   gaze = getViewGaze(obj, height, width)
+            %
+            %   height: viewport height in degrees
+            %   width: viewport width in degrees
+            %
+            %   gaze: gaze direction vector (Nx3 matrix)
             arguments
                 obj spiky.minos.Transform
                 height (1, 1) double
                 width (1, 1) double = NaN
             end
-            if isnan(width)
-                width = height/9*16;
-            end
-            % vp = [gaze(:, 1)./gaze(:, 3)./tand(width/2).*0.5+0.5...
-            %     gaze(:, 2)./gaze(:, 3)./tand(height/2).*0.5+0.5];
-            vp = obj.Proj(:, 1:2);
-            gaze = ones(height(vp), 3);
-            gaze(:, 1) = (vp(:, 1)-0.5).*tand(width/2).*2;
-            gaze(:, 2) = (vp(:, 2)-0.5).*tand(height/2).*2;
-            gaze = gaze./vecnorm(gaze, 2, 2);
+            gaze = spiky.minos.EyeData.getGaze(obj.Proj, height, width);
         end
 
         function vec = getVec(obj, vecName, bodyPart, time)
@@ -166,7 +163,7 @@ classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
             end
             bodyPart = bodyPart(:);
             vec = obj.Data.(vecName);
-            if isstring(bodyPart) || ischar(bodyPart) || iscellstr(bodyPart)
+            if isstring(bodyPart)
                 bodyPart = bodyPart(ismember(bodyPart, enumeration("spiky.minos.BodyPart")));
                 bodyPart = double(spiky.minos.BodyPart(bodyPart))+1;
             end
@@ -177,6 +174,49 @@ classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
                 idc(idc<1) = 1;
                 vec = vec(idc, :, bodyPart);
             end
+        end
+
+        function pt = flatten(obj, bodyPart, fov)
+            arguments
+                obj spiky.minos.Transform
+                bodyPart = "Root"
+                fov double = 60
+            end
+            if isstring(bodyPart)
+                bodyPart = bodyPart(ismember(bodyPart, enumeration("spiky.minos.BodyPart")));
+                bodyPart = double(spiky.minos.BodyPart(bodyPart))+1;
+            end
+            n = numel(obj);
+            nVis = arrayfun(@(x) sum(x.Visible)-1, obj);
+            nAll = sum(nVis);
+            t = zeros(nAll, 2);
+            idc = zeros(nAll, 1);
+            idcT = zeros(nAll, 1);
+            trials = zeros(nAll, 1, "int64");
+            pos = zeros(nAll, 3, "single");
+            rot = zeros(nAll, 3, "single");
+            proj = zeros(nAll, 3, "single");
+            idx = 1;
+            for ii = 1:n
+                obj1 = obj(ii);
+                idc1 = find(obj1.Visible);
+                idc1 = idc1(1:end-1);
+                idc2 = idx:idx+numel(idc1)-1;
+                t(idc2, :) = obj1.Time([idc1 idc1+1]);
+                idc(idc2) = ii;
+                idcT(idc2) = idc1;
+                trials(idc2) = obj1.Trial(idc1);
+                pos(idc2, :) = obj1.Pos(idc1, :, bodyPart);
+                rot(idc2, :) = obj1.Rot(idc1, :, bodyPart);
+                proj(idc2, :) = obj1.Proj(idc1, :, bodyPart);
+                idx = idx+numel(idc1);
+            end
+            [~, idcSort] = sort(t(:, 1));
+            data = table(idc(idcSort), idcT(idcSort), trials(idcSort), pos(idcSort, :), ...
+                rot(idcSort, :), proj(idcSort, :), ...
+                spiky.minos.EyeData.getGaze(proj(idcSort, :), fov), ...
+                VariableNames=["Index" "TimeIndex" "Trial" "Pos" "Rot" "Proj" "Ray"]);
+            pt = spiky.core.PeriodsTable(t(idcSort, :), data);
         end
     end
 

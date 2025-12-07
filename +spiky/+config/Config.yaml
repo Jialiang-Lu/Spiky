@@ -34,3 +34,11 @@ channelConfig:
       - None
       - None
       - None
+
+# Brain region name mappings
+brainRegionMap:
+  CA1: HPC
+  CA3: HPC
+  ML: ITC
+  AM: ITC
+  F5: vPMC

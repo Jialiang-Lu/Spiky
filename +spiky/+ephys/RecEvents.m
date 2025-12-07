@@ -1,17 +1,17 @@
 classdef RecEvents < spiky.core.TimeTable & spiky.core.MappableArray
 
-    properties (Dependent)
-        Timestamp int64
-        Type spiky.ephys.ChannelType
-        Channel int16
-        ChannelName categorical
-        Rising logical
-        Message string
-    end
+    % properties (Dependent)
+    %     Timestamp int64
+    %     Type spiky.ephys.ChannelType
+    %     Channel int16
+    %     ChannelName categorical
+    %     Rising logical
+    %     Message string
+    % end
 
     methods
         function obj = RecEvents(time, timestamp, type, channel, name, rising, message)
-            % RECEVENTS Create a new instance of RecEvents
+            %RECEVENTS Create a new instance of RecEvents
 
             arguments
                 time double = []
@@ -54,7 +54,7 @@ classdef RecEvents < spiky.core.TimeTable & spiky.core.MappableArray
         end
 
         function [sync, obj2] = syncWith(obj, obj2, name, tol, options)
-            % SYNCWITH Synchronize two event objects
+            %SYNCWITH Synchronize two event objects
             %
             %   obj: events
             %   obj2: events to synchronize with
@@ -162,7 +162,7 @@ classdef RecEvents < spiky.core.TimeTable & spiky.core.MappableArray
         end
 
         function h = plot(obj, linespec, plotOps, options)
-            % PLOT Plot the events
+            %PLOT Plot the events
             %
             %   h = obj.plot(plotOps, options)
             %

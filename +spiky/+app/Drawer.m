@@ -140,20 +140,20 @@ classdef (Abstract) Drawer < handle & matlab.mixin.Heterogeneous
 
     methods (Abstract, Static)
         target = getTarget()
-        % GETTARGET Get the target type of the drawer
+        %GETTARGET Get the target type of the drawer
         %   target: target type ("Stim" or "Event" or "Resp")
     end
     
     methods (Abstract)
         name = getName(obj)
-        % GETNAME Get the name of the drawer
+        %GETNAME Get the name of the drawer
         %   name: name of the drawer
         h = onCreate(obj)
-        % ONCREATE Create the plot for the drawer
+        %ONCREATE Create the plot for the drawer
         %   h = obj.onCreate()
         %   h: handle to the plot object
         onTimeUpdate(obj, time)
-        % ONTIMEUPDATE Update the drawer with the new time
+        %ONTIMEUPDATE Update the drawer with the new time
         %   obj.onTimeUpdate(time)
         %   time: new time point
     end

@@ -1,5 +1,5 @@
 function [ccg, pairs] = ccg(events, ids, binSize, halfBins)
-% CCG Compute cross-correlogram
+%CCG Compute cross-correlogram
 %
 %   ccg = CCG(events, marks, binSize, halfBins)
 %

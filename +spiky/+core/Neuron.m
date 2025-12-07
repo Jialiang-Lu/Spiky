@@ -16,6 +16,15 @@ classdef Neuron < spiky.core.ArrayTable
             %   b: true if each row is a scalar, false otherwise
             b = true;
         end
+
+        function obj = zeros(n)
+            %ZEROS Create an array of Neuron objects with all fields set to zero or empty
+            %
+            %   n: number of Neuron objects
+            %
+            %   obj: array of Neuron objects
+            obj = repmat(spiky.core.Neuron(spiky.ephys.Session, 0, 0, 0, 0, 0, 0, {}), n, 1);
+        end
     end
 
     methods
@@ -51,7 +60,7 @@ classdef Neuron < spiky.core.ArrayTable
         end
 
         function str = string(obj)
-            str = compose("%s_%s_%d", obj.Data.Session.Name, obj.Data.Region, obj.Data.Id);
+            str = compose("%s_%s_%d", [obj.Data.Session.Name]', obj.Data.Region, obj.Data.Id);
         end
 
         function out = eq(obj, other)

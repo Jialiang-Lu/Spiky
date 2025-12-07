@@ -123,7 +123,7 @@ snakeYamlFile = fullfile(fileparts(mfilename('fullpath')), 'snakeyaml', 'snakeya
 if ~ismember(snakeYamlFile, javaclasspath('-dynamic'))
     javaaddpath(snakeYamlFile);
 end
-snakeYamlFile = fullfile(fileparts(mfilename('fullpath')), 'snakeyaml', 'CustomConstuctor.jar');
+snakeYamlFile = fullfile(fileparts(mfilename('fullpath')), 'snakeyaml', 'CustomConstructor.jar');
 if ~ismember(snakeYamlFile, javaclasspath('-dynamic'))
     javaaddpath(snakeYamlFile);
 end

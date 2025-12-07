@@ -436,7 +436,7 @@ classdef StimHMM
 
     methods (Static)
         function [pi_c, Kspk_c, Ktr_c, LL_final] = fitOneCell(y, X0, Xspk, Kspk_c, Ktr_c, pi_c, Emiss, Reg, Lambda, dt, T, N, P0, MaxIter, TolFun, Verbose)
-        % EM for a single cell
+        %EM for a single cell
             %% EM loop
             LL_prev = -inf;
             for it = 1:MaxIter

@@ -5,11 +5,33 @@ classdef (Abstract) ArrayTable
     end
 
     methods (Static)
+        % The following functions can be overridden by subclasses to customize the behavior
+        % of indexing and concatenation.
+
         function dimNames = getDimNames()
-            %GETDIMNAMES Get the dimension names of the ArrayTable
+            %GETDIMNAMES Get the dimension names of the ArrayTable. Dimension names are names of
+            %   fields that have the same size as the corresponding dimension of Data, even after
+            %   indexing or concatenation. Multiple names for the same dimension can be separated by 
+            %   commas.
             %
             %   dimNames: dimension names
+            arguments (Output)
+                dimNames string
+            end
             dimNames = string.empty;
+        end
+
+        function [extraDataName, scalarDimension] = getExtraDataName()
+            %GETEXTRADATANAME Get the name of the extra data field
+            %
+            %   extraDataName: name of the each data field, empty if no extra data field
+            %   scalarDimension: indices of the scalar dimension for each extra data field
+            arguments (Output)
+                extraDataName string
+                scalarDimension cell
+            end
+            extraDataName = string.empty;
+            scalarDimension = cell.empty;
         end
 
         function index = getScalarDimension()
@@ -17,6 +39,9 @@ classdef (Abstract) ArrayTable
             %
             %   index: index of the scalar dimension, 0 means no scalar dimension, 
             %       1 means obj(idx) equals obj(idx, :), 2 means obj(idx) equals obj(:, idx), etc.
+            arguments (Output)
+                index double
+            end
             index = 0;
         end
 
@@ -25,7 +50,18 @@ classdef (Abstract) ArrayTable
             %   This is useful if the Data is a table or a cell array and the number of columns is fixed.
             %
             %   b: true if each row is a scalar, false otherwise
+            arguments (Output)
+                b logical
+            end
             b = false;
+        end
+    end
+
+    methods (Static, Access=private)
+        function obj = resize(obj, sz)
+            sz = arrayfun(@(x) 1:x, sz, UniformOutput=false);
+            s = substruct('()', sz);
+            obj = subsref(obj, s);
         end
     end
 
@@ -47,55 +83,73 @@ classdef (Abstract) ArrayTable
             obj.Data = fun(obj.Data, varargin{:});
         end
 
-        function S = sum(obj, varargin)
+        function obj = sum(obj, varargin)
             %SUM Compute the sum of the signal
             %
-            %   S = sum(obj, varargin)
+            %   obj = sum(obj, varargin)
             %   varargin: additional arguments passed to sum
 
-            S = sum(obj.Data, varargin{:});
+            data = sum(obj.Data, varargin{:});
+            obj = spiky.core.ArrayTable.resize(obj, size(data));
+            obj.Data = data;
         end
 
-        function M = max(obj, varargin)
+        function obj = max(obj, varargin)
             %MAX Compute the maximum of the signal
             %
-            %   M = max(obj, varargin)
+            %   obj = max(obj, varargin)
             %   varargin: additional arguments passed to max
 
             if isempty(varargin)
                 varargin = {"all"};
             end
-            M = max(obj.Data, [], varargin{:});
+            data = max(obj.Data, [], varargin{:});
+            obj = spiky.core.ArrayTable.resize(obj, size(data));
+            obj.Data = data;
         end
 
-        function M = min(obj, varargin)
+        function obj = min(obj, varargin)
             %MIN Compute the minimum of the signal
             %
-            %   M = min(obj, varargin)
+            %   obj = min(obj, varargin)
             %   varargin: additional arguments passed to min
 
             if isempty(varargin)
                 varargin = {"all"};
             end
-            M = min(obj.Data, [], varargin{:});
+            data = min(obj.Data, [], varargin{:});
+            obj = spiky.core.ArrayTable.resize(obj, size(data));
+            obj.Data = data;
         end
 
-        function M = mean(obj, varargin)
+        function obj = mean(obj, varargin)
             %MEAN Compute the mean of the signal
             %
-            %   M = mean(obj, varargin)
+            %   obj = mean(obj, varargin)
             %   varargin: additional arguments passed to mean
 
-            M = mean(obj.Data, varargin{:});
+            data = mean(obj.Data, varargin{:});
+            obj = spiky.core.ArrayTable.resize(obj, size(data));
+            obj.Data = data;
         end
 
-        function M = median(obj, varargin)
+        function obj = median(obj, varargin)
             %MEDIAN Compute the median of the signal
             %
-            %   M = median(obj, varargin)
+            %   obj = median(obj, varargin)
             %   varargin: additional arguments passed to median
 
-            M = median(obj.Data, varargin{:});
+            data = median(obj.Data, varargin{:});
+            obj = spiky.core.ArrayTable.resize(obj, size(data));
+            obj.Data = data;
+        end
+
+        function obj = uminus(obj)
+            %UMINUS Negate the signal
+            %
+            %   obj = uminus(obj)
+
+            obj.Data = -obj.Data;
         end
 
         function obj = plus(obj, obj2)
@@ -285,7 +339,7 @@ classdef (Abstract) ArrayTable
             s = checkIndexing(obj, s);
             switch s(1).type
                 case '.'
-                    if isequal(s(1).subs, 'Data')
+                    if isprop(obj, s(1).subs)
                         obj = builtin("subsref", obj, s(1));
                         if isscalar(s)
                             varargout{1} = obj;
@@ -317,6 +371,16 @@ classdef (Abstract) ArrayTable
                 case '()'
                     sd = s(1);
                     obj.Data = subsref(obj.Data, sd);
+                    [edn, sdim] = feval(class(obj)+".getExtraDataName");
+                    for ii = 1:numel(edn)
+                        name = edn(ii);
+                        if name==""
+                            continue
+                        end
+                        sd1 = sd;
+                        sd1.subs(sdim{ii}) = {':'};
+                        obj.(name) = subsref(obj.(name), sd1);
+                    end
                     dn = feval(class(obj)+".getDimNames");
                     for ii = 1:numel(dn)
                         name = dn(ii);
@@ -324,8 +388,11 @@ classdef (Abstract) ArrayTable
                             continue
                         end
                         sd1 = sd;
-                        sd1.subs = sd1.subs(ii);
-                        % sd1.subs{2} = ':';
+                        if ii>numel(sd.subs)
+                            sd1.subs = {1};
+                        else
+                            sd1.subs = sd1.subs(ii);
+                        end
                         n = extract(name, alphanumericsPattern+optionalPattern("'"));
                         for jj = 1:numel(n)
                             n1 = n(jj);
@@ -333,6 +400,8 @@ classdef (Abstract) ArrayTable
                             if endsWith(n1, "'")
                                 n1 = extractBefore(n1, "'");
                                 sd2.subs = [':' , sd2.subs{1}];
+                            else
+                                sd2.subs{2} = ':';
                             end
                             obj.(n1) = subsref(obj.(n1), sd2);
                         end
@@ -358,12 +427,12 @@ classdef (Abstract) ArrayTable
 
         function obj = subsasgn(obj, s, varargin)
             if isequal(obj, [])
-                obj = feval(mfilename("class"));
+                obj = feval(class(varargin{1}));
             end
             s = checkIndexing(obj, s);
             switch s(1).type
                 case '.'
-                    if isequal(s(1).subs, 'Data')
+                    if isprop(obj, s(1).subs)
                         if isscalar(s)
                             obj = builtin("subsasgn", obj, s, varargin{:});
                         else
@@ -380,7 +449,8 @@ classdef (Abstract) ArrayTable
                         obj.Data = obj1;
                         return
                     end
-                    if isfield(obj.Data(1, 1), s(1).subs) || isprop(obj.Data(1, 1), s(1).subs)
+                    if ~isempty(obj.Data) && ...
+                        (isfield(obj.Data(1, 1), s(1).subs) || isprop(obj.Data(1, 1), s(1).subs))
                         if isscalar(s)
                             obj1 = varargin{1};
                         else
@@ -401,6 +471,16 @@ classdef (Abstract) ArrayTable
                         data = obj1.Data;
                     end
                     obj.Data = subsasgn(obj.Data, sd, data);
+                    [edn, sdim] = feval(class(obj)+".getExtraDataName");
+                    for ii = 1:numel(edn)
+                        name = edn(ii);
+                        if name==""
+                            continue
+                        end
+                        sd1 = sd;
+                        sd1.subs(sdim{ii}) = {':'};
+                        obj.(name) = subsasgn(obj.(name), sd1, obj1.(name));
+                    end
                     dn = feval(class(obj)+".getDimNames");
                     for ii = 1:numel(dn)
                         name = dn(ii);
@@ -432,11 +512,14 @@ classdef (Abstract) ArrayTable
         end
 
         function n = numArgumentsFromSubscript(obj, s, indexingContext)
-            switch s(1).type
-                case '{}'
-                    s(1).type = '()';
-            end
+            % switch s(1).type
+            %     case '{}'
+            %         s(1).type = '()';
+            % end
             if isscalar(s)
+                if strcmp(s(1).type, '{}')
+                    s(1).type = '()';
+                end
                 n = builtin("numArgumentsFromSubscript", obj, s, indexingContext);
             else
                 obj = subsref(obj, s(1));
@@ -455,6 +538,7 @@ classdef (Abstract) ArrayTable
         function varargout = size(obj, varargin)
             if isempty(obj)
                 varargout{1} = [0 0];
+                return
             end
             [varargout{1:nargout}] = size(obj.Data, varargin{:});
             if obj.isScalarRow()
@@ -526,7 +610,7 @@ classdef (Abstract) ArrayTable
                             n = extract(dn(2), alphanumericsPattern);
                             for jj = 1:numel(n)
                                 n1 = n(jj);
-                                obj.(n1) = [obj.(n1) varargin{ii}.(n1)];
+                                obj.(n1) = [obj.(n1); varargin{ii}.(n1)];
                             end
                         end
                     case 3
@@ -537,7 +621,18 @@ classdef (Abstract) ArrayTable
                             n = extract(dn(3), alphanumericsPattern);
                             for jj = 1:numel(n)
                                 n1 = n(jj);
-                                obj.(n1) = cat(3, obj.(n1), varargin{ii}.(n1));
+                                obj.(n1) = [obj.(n1); varargin{ii}.(n1)];
+                            end
+                        end
+                    case 4
+                        assert(isequal(size(obj.Data, 1:3), size(varargin{ii}.Data, 1:3)), ...
+                            "All inputs must have the same size")
+                        obj.Data = cat(4, obj.Data, varargin{ii}.Data);
+                        if numel(dn)>3 && dn(4)~=""
+                            n = extract(dn(4), alphanumericsPattern);
+                            for jj = 1:numel(n)
+                                n1 = n(jj);
+                                obj.(n1) = [obj.(n1); varargin{ii}.(n1)];
                             end
                         end
                     otherwise

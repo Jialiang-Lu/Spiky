@@ -15,7 +15,7 @@ classdef MinosInfo < spiky.core.Metadata
 
     methods (Static)
         function obj = load(info, options)
-            % LOAD Load Minos info from a directory
+            %LOAD Load Minos info from a directory
             %
             %   info: SessionInfo object
             %   options: 
@@ -114,7 +114,7 @@ classdef MinosInfo < spiky.core.Metadata
 
     methods
         function data = loadData(obj, name1, name2)
-            % LOADDATA Load data from Minos info
+            %LOADDATA Load data from Minos info
             %
             %   data = loadData(obj, filename)
             %   data = loadData(obj, folder, filename)
@@ -135,7 +135,7 @@ classdef MinosInfo < spiky.core.Metadata
         end
 
         function tr = getTransform(obj)
-            % GETTRANSFORM Get the object transform
+            %GETTRANSFORM Get the object transform
             fpthTransform = obj.Session.getFpth("spiky.minos.Transform.mat");
             if exist(fpthTransform, "file")
                 tr = obj.Session.loadData("spiky.minos.Transform.mat");
@@ -192,7 +192,7 @@ classdef MinosInfo < spiky.core.Metadata
         end
 
         function sc = getScreenCapture(obj, photodiode)
-            % GETSCREENCAPTURE Get the screen capture data
+            %GETSCREENCAPTURE Get the screen capture data
             arguments
                 obj spiky.minos.MinosInfo
                 photodiode spiky.ephys.RecEvents = spiky.ephys.RecEvents.empty
@@ -262,7 +262,7 @@ classdef MinosInfo < spiky.core.Metadata
         end
 
         function fix = getFixation(obj)
-            % GETFIXATION Get the fixation data
+            %GETFIXATION Get the fixation data
             fpthFixation = obj.Session.getFpth("spiky.minos.Fixation.mat");
             if exist(fpthFixation, "file")
                 fix = obj.Session.loadData("spiky.minos.Fixation.mat");
@@ -274,7 +274,7 @@ classdef MinosInfo < spiky.core.Metadata
         end
 
         function assets = getAssets(obj)
-            % GETASSETS Get the assets of the Minos info
+            %GETASSETS Get the assets of the Minos info
             %
             %   assets: assets
             fpthAssets = obj.Session.getFpth("spiky.minos.Asset.mat");
@@ -302,7 +302,7 @@ classdef MinosInfo < spiky.core.Metadata
         end
 
         function stimuli = loadStimuli(obj, name)
-            % LOADSTIMULI Load stimuli from name
+            %LOADSTIMULI Load stimuli from name
             %
             %   name: name of the stimulus set
             %
@@ -324,6 +324,13 @@ classdef MinosInfo < spiky.core.Metadata
             asset.x_type = stimulusType(asset.x_type+1);
             asset.x_source = stimulusSource(asset.x_source+1);
             asset.x_setType = stimulusSourceType(asset.x_setType+1);
+            if asset.x_hasLabels==1
+                labelNames = categorical(cell2mat(asset.x_labels.value))';
+                idcLabels = typecast(uint8(sscanf(asset.x_labelIndices.value, "%2x")), "int32")+1;
+                labels = labelNames(idcLabels);
+            else
+                labels = categorical(strings(asset.x_count, 1));
+            end
             if strcmp(asset.x_source, "Internal") % internal
                 switch asset.x_type
                     case "Image"
@@ -335,11 +342,8 @@ classdef MinosInfo < spiky.core.Metadata
                 end
                 guids = [ims.guid]';
                 [~, idc] = ismember(guids, [assets.Guid]);
-                for ii = length(idc):-1:1
-                    stimuli(ii, 1) = spiky.minos.Stimulus(...
-                        assets(idc(ii)).Name, categorical(asset.x_type, ["Image" "Video" "GameObject"]), ...
-                        assets(idc(ii)).Path, 1);
-                end
+                names = [assets(idc).Name]';
+                paths = [assets(idc).Path]';
             else % external
                 paths = strsplit(asset.x_text, newline)';
                 if ~contains(paths(1), filesep)
@@ -349,11 +353,8 @@ classdef MinosInfo < spiky.core.Metadata
                 for ii = length(paths):-1:1
                     [~, names(ii), ~] = fileparts(paths(ii));
                 end
-                for ii = length(paths):-1:1
-                    stimuli(ii, 1) = spiky.minos.Stimulus(...
-                        names(ii), categorical(asset.x_type, ["Image" "Video" "GameObject"]), paths(ii), 1);
-                end
             end
+            stimuli = spiky.minos.Stimuli(names, asset.x_type, paths, 1, labels);
         end
     end
 end

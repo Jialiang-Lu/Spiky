@@ -1,5 +1,5 @@
 classdef Lfp < spiky.core.TimeTable
-    % LFP Class representing a Local Field Potential signal in microvolts
+    %LFP Class representing a Local Field Potential signal in microvolts
 
     properties (Dependent)
         NChannels double
@@ -8,7 +8,7 @@ classdef Lfp < spiky.core.TimeTable
     
     methods
         function obj = Lfp(varargin)
-            % LFP Create a new instance of Lfp
+            %LFP Create a new instance of Lfp
             %
             %   Lfp(data) creates a LFP signal starting at 0 with a sampling frequency of 1 kHz
             %   Lfp(time, data) creates a LFP signal with the time vector

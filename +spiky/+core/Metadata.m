@@ -126,6 +126,11 @@ classdef (HandleCompatible) Metadata
                 obj.save(fpth);
             end
         end
+
+        function saveObj(obj, fpth)
+            data = spiky.core.Metadata.objToStruct(obj);
+            save(fpth, "data");
+        end
     end
     
     methods
@@ -134,8 +139,7 @@ classdef (HandleCompatible) Metadata
         end
 
         function save(obj, fpth)
-            data = spiky.core.Metadata.objToStruct(obj);
-            save(fpth, "data");
+            spiky.core.Metadata.saveObj(obj, fpth);
         end
     end
 end

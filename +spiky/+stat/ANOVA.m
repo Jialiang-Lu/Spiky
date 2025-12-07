@@ -1,5 +1,5 @@
 classdef ANOVA < spiky.stat.GroupedStat
-    % ANOVA Class representing analysis of variance (ANOVA) models
+    %ANOVA Class representing analysis of variance (ANOVA) models
     %
     % The first dimension is time and the second dimension is the neurons.
 

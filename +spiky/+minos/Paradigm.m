@@ -1,5 +1,5 @@
 classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
-    % PARADIGM represents paradigm data
+    %PARADIGM represents paradigm data
 
     properties
         Name string
@@ -12,7 +12,7 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
 
     methods (Static)
         function obj = load(fdir, periods, func, photodiode)
-            % LOAD Load a paradigm from a directory
+            %LOAD Load a paradigm from a directory
             %
             %   fdir: directory containing the paradigm data
             %   func: function to convert the time
@@ -89,7 +89,7 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
                 end
                 latency = mean(eventLatencies, "omitnan", Weights=eventCounts);
             else
-                latency = NaN;
+                latency = 0;
             end
             for ii = 1:n
                 id = numbers(ii);
@@ -128,7 +128,7 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
         end
 
         function trials = getTrials(obj, var, value)
-            % GETTRIALS Get the trials satisfying certain conditions
+            %GETTRIALS Get the trials satisfying certain conditions
             %   trials = getTrials(obj, var1, value1, var2, value2, ...)
             %
             %   obj: paradigm object

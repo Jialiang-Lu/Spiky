@@ -1,11 +1,19 @@
 classdef Labels < spiky.core.TimeTable
-    % LABELS Class for behavior and stimulus labels for training classifiers and linear models
+    %LABELS Class for behavior and stimulus labels for training classifiers and linear models
 
     properties
-        Name (:, 1) categorical = categorical.empty(0, 1); % Name of each label
-        Class (:, 1) categorical = categorical.empty(0, 1); % Class of each label after one-hot encoding
-        BaseIndex (:, 1) double = double.empty(0, 1); % BaseIndex of each label after basis expansion
-        Bases spiky.stat.Coords = spiky.stat.Coords.empty; % Basis functions
+        Name (:, 1) categorical % Name of each label
+        IsEvent (:, 1) logical % If the label is an event (not a state)
+        Class (:, 1) categorical % Class of each label after one-hot encoding
+        BaseIndex (:, 1) double % BaseIndex of each label after basis expansion
+        Bases spiky.stat.TimeCoords % Basis functions
+        Trial (:, 1) double % Trial indices for each time point
+        Offset (:, 1) double % Time offset for each time point
+    end
+
+    properties (Dependent)
+        VarName (:, 1) string % Name.Class.BaseIndex
+        Expanded (1, 1) logical % If the labels have been expanded with basis functions
     end
 
     methods (Static)
@@ -13,35 +21,95 @@ classdef Labels < spiky.core.TimeTable
             %GETDIMNAMES Get the dimension names of the TimeTable
             %
             %   dimNames: dimension names
-            dimNames = ["Time" "Name,Class,BaseIndex"];
+            dimNames = ["Time,Trial,Offset" "Name,IsEvent,Class,BaseIndex"];
+        end
+
+        function [data, isEvent] = preprocess(tt, t, mode)
+            %PREPROCESS Preprocess the input TimeTable for adding as labels
+            %
+            %   [data, isEvent] = PREPROCESS(tt, t, mode)
+            %
+            %   tt: input TimeTable or PeriodsTable or numeric array
+            %   t: time vector
+            %   mode:
+            %       "event": tt is a TimeTable with event labels (default)
+            %       "state": tt is a TimeTable or PeriodsTable with state labels
+            %       "trigger": tt is a TimeTable where only the time points are taken as events
+            %
+            %   data: preprocessed data
+            %   isEvent: if the data represents events
+            arguments
+                tt % TimeTable or PeriodsTable or numeric array
+                t (:, 1) double
+                mode (1, 1) string {mustBeMember(mode, ["event" "state" "trigger"])} = "event"
+            end
+            if isa(tt, "spiky.core.PeriodsTable")
+                mode = "state";
+                data = tt.interp(t);
+                isEvent = false;
+            elseif isa(tt, "spiky.core.TimeTable") && mode=="state"
+                data = tt.interp(t, "previous");
+                isEvent = false;
+            elseif isa(tt, "spiky.core.TimeTable") && mode=="event"
+                data = tt.densify(t);
+                isEvent = true;
+            elseif isa(tt, "spiky.core.TimeTable") && mode=="trigger"
+                tt.Data = true(height(tt), 1);
+                data = tt.densify(t);
+                isEvent = true;
+            elseif isnumeric(tt)
+                tt = spiky.core.TimeTable(tt, true(height(tt), 1));
+                mode = "trigger";
+                data = tt.densify(t);
+                isEvent = true;
+            else
+                error("Input must be a TimeTable or PeriodsTable.");
+            end
+            if istable(data)
+                data = data{:, 1};
+            end
+            assert(isnumeric(data) || islogical(data) || isstring(data) || iscategorical(data), ...
+                "Unsupported data type %s for labels.", class(data));
         end
     end
 
     methods
-        function obj = Labels(time, varargin)
-            % LABELS Constructor for Labels class
-            %   obj = Labels(time, tt1, tt2, ...)
+        function obj = Labels(time, window, options)
+            %LABELS Constructor for Labels class
+            %   obj = Labels(time, window)
             %
             %   time: time vector
-            %   tt1, tt2, ...: TimeTables with labels
+            %   [window]: optional time window for each trial. If not empty, the object represents
+            %       labels over multiple trials with the same time window.
+            %   Name-Value pairs:
+            %       Expanded: if true, the labels have been expanded with basis functions (default: false)
             arguments
-                time (:, 1) double = double.empty(0, 1);
-            end
-            arguments (Repeating)
-                varargin
+                time (:, 1) double = double.empty(0, 1)
+                window (:, 1) double = []
+                options.Expanded logical = false
             end
             if isempty(time)
                 return
             end
             obj.Time = time;
-            obj.Data = table(Size=[numel(time), 0], VariableNames=string.empty);
-            if ~isempty(varargin)
-                obj = obj.addLabels(varargin{:});
+            if options.Expanded
+                obj.Data = double.empty(height(time), 0);
+            else
+                obj.Data = table(Size=[numel(time), 0], VariableNames=string.empty);
+            end
+            if ~isempty(window)
+                nTrials = numel(time)/numel(window);
+                assert(mod(nTrials, 1)==0, "Time length must be multiple of window length.");
+                obj.Trial = repelem((1:nTrials).', numel(window));
+                obj.Offset = repmat(window, nTrials, 1);
+            else
+                obj.Trial = ones(numel(time), 1);
+                obj.Offset = time;
             end
         end
 
         function obj = addLabels(obj, varargin)
-            % ADDLABELS Add labels to the Labels object
+            %ADDLABELS Add labels to the Labels object
             %   obj = ADDLABELS(obj, tt1, tt2, ...)
             %
             %   tt1, tt2, ...: TimeTables with labels
@@ -57,112 +125,170 @@ classdef Labels < spiky.core.TimeTable
         end
 
         function obj = addLabel(obj, tt, options)
-            % ADDLABEL Add a single label to the Labels object
+            %ADDLABEL Add a single label to the Labels object
             %   obj = ADDLABEL(obj, tt, options)
             %
-            %   tt: TimeTable with labels
-            %   options: Name-Value pairs for additional options
+            %   tt: TimeTable or PeriodsTable with labels
+            %   Name-Value pairs:
+            %       Name: name of the label (default: "LabelN" where N is the next available index)
+            %       Mode:
+            %           "event": tt is a TimeTable with event labels (default)
+            %           "state": tt is a TimeTable or PeriodsTable with state labels
+            %           "trigger": tt is a TimeTable where only the time points are taken as events
+            %       Categorize: if true, convert the label data to categorical (default: false)
             arguments
                 obj spiky.stat.Labels
-                tt spiky.core.TimeTable
+                tt % spiky.core.TimeTable or spiky.core.PeriodsTable
                 options.Name string = string.empty
+                options.Mode (1, 1) string {mustBeMember(options.Mode, ["event" "state" "trigger"])} = "event"
+                options.Categorize (1, 1) logical = false
             end
-            if ~isa(tt, "spiky.core.TimeTable")
-                error("Input must be a TimeTable.");
+            [data, isEvent] = spiky.stat.Labels.preprocess(tt, obj.Time, options.Mode);
+            if isempty(options.Name)
+                options.Name = sprintf("Label%d", width(obj.Data)+1);
             end
-            data = tt.densify(obj.Time);
-            if isnumeric(data) || islogical(data) || isstring(data) || iscategorical(data)
-                if isempty(options.Name)
-                    options.Name = sprintf("Label%d", width(obj.Data)+1);
-                end
-                data = table(data, VariableNames=[options.Name]);
-            elseif istable(data) && ~isempty(options.Name)
-                n = min(width(data), numel(options.Name));
-                data = renamevars(data, data.Properties.VariableNames(1:n), options.Name(1:n));
-            else
-                error("Unsupported data type %s for labels.", class(data));
+            data = table(data, VariableNames=[options.Name]);
+            if options.Categorize
+                data.(options.Name) = categorical(data.(options.Name));
             end
             obj.Data = [obj.Data, data];
             obj.Name = [obj.Name; categorical(options.Name)];
+            obj.IsEvent = [obj.IsEvent; isEvent];
             obj.Class = [obj.Class; categorical("")];
-            obj.BaseIndex = [obj.BaseIndex; 1];
-            obj.Bases = [obj.Bases; 1];
+            obj.BaseIndex = [obj.BaseIndex; 0];
         end
 
-        function obj = expand(obj, options)
-            % EXPAND Expand the labels with basis functions
+        function obj = addExpandedLabel(obj, tt, bases, options)
+            %ADDEXPANDEDLABEL Add an expanded label to the Labels object
+            %   obj = ADDEXPANDEDLABEL(obj, tt, bases)
+            %
+            %   tt: TimeTable or PeriodsTable with labels
+            %   bases: TimeCoords with basis functions
+            %   Name-Value pairs:
+            %       Name: name of the label
+            %       Mode:
+            %           "event": tt is a TimeTable with event labels (default)
+            %           "state": tt is a TimeTable or PeriodsTable with state labels
+            %           "trigger": tt is a TimeTable where only the time points are taken as events
+            arguments
+                obj spiky.stat.Labels
+                tt % spiky.core.TimeTable or spiky.core.PeriodsTable
+                bases spiky.stat.TimeCoords = spiky.stat.TimeCoords.empty
+                options.Name string
+                options.Mode (1, 1) string {mustBeMember(options.Mode, ["event" "state" "trigger"])} = "event"
+            end
+            [data, isEvent] = spiky.stat.Labels.preprocess(tt, obj.Time, options.Mode);
+            [data, classes] = spiky.utils.flagsencode(data);
+            n = width(data);
+            if isEvent && ~isempty(bases)
+                data = bases.expand(spiky.core.TimeTable(obj.Time, data));
+                data = data.Data;
+                basesIdc = repmat((1:bases.NBases).', n, 1);
+                classes = repelem(classes, bases.NBases, 1);
+                n = width(data);
+            else
+                basesIdc = zeros(n, 1);
+            end
+            obj.Data = [obj.Data, data];
+            obj.Name = [obj.Name; repmat(categorical(options.Name), n, 1)];
+            obj.IsEvent = [obj.IsEvent; repmat(isEvent, n, 1)];
+            obj.Class = [obj.Class; classes];
+            obj.BaseIndex = [obj.BaseIndex; basesIdc];
+        end
+
+        function obj = expand(obj, bases, options)
+            %EXPAND Expand the labels with basis functions
             %   obj = EXPAND(obj, ...)
             %
             %   Name-Value pairs:
             arguments
                 obj spiky.stat.Labels
+                bases spiky.stat.TimeCoords = spiky.stat.TimeCoords.empty
                 options.ExcludeFromOneHot (1, :) string = string.empty
-                options.BaseType (1, 1) string {mustBeMember(options.BaseType, ["RaisedCosine"])} = "RaisedCosine"
-                options.NBases (1, 1) double {mustBeInteger, mustBePositive} = 1
-                options.PeakRange (1, 2) double = [0 0]
-                options.TimeRange (1, 2) double = [NaN, NaN]
-                options.Spacing (1, 1) string {mustBeMember(options.Spacing, ["Log","Linear"])} = "Log"
             end
 
-            %% One-hot encode tabular data
-            if istable(obj.Data)
-                varNames = string(obj.Data.Properties.VariableNames);
-                names = categorical.empty(0, 1);
-                classes = categorical.empty(0, 1);
-                latencies = double.empty(0, 1);
-                bases = double.empty(0, 1);
-                data = double.empty(height(obj.Data), 0);
-                for ii = 1:numel(varNames)
-                    varName = varNames(ii);
-                    data1 = obj.Data.(varName);
-                    if ismember(varName, options.ExcludeFromOneHot)
-                        if ~isnumeric(data1)
-                            error("Cannot exclude non-numeric variable %s from one-hot encoding.", varName);
-                        end
-                        n1 = width(data1);
-                        classes1 = categorical(strings(n1, 1));
-                    else
-                        classes1 = unique(data1(~ismissing(data1)));
-                        if iscategorical(classes1)
-                            classes1 = string(classes1);
-                        end
-                        data1 = onehotencode(data1, 2, ClassNames=classes1);
-                        data1(isnan(data1)) = 0;
-                        n1 = width(data1);
+            %% One-hot encode tabular data and expand event labels
+            varNames = string(obj.Data.Properties.VariableNames);
+            nVars = numel(varNames);
+            % names = categorical.empty(0, 1);
+            % isEvents = logical.empty(0, 1);
+            % classes = categorical.empty(0, 1);
+            % basesIdc = double.empty(0, 1);
+            % data = double.empty(height(obj.Data), 0);
+            names = cell(nVars, 1);
+            isEvents = cell(nVars, 1);
+            classes = cell(nVars, 1);
+            basesIdc = cell(nVars, 1);
+            data = cell(1, nVars);
+            parfor ii = 1:nVars
+                varName = varNames(ii);
+                data1 = obj.Data.(varName);
+                if ismember(varName, options.ExcludeFromOneHot)
+                    if ~isnumeric(data1)
+                        error("Cannot exclude non-numeric variable %s from one-hot encoding.", varName);
                     end
-                    data = [data, data1];
-                    names = [names; categorical(repmat(varName, n1, 1))];
-                    classes = [classes; categorical(classes1)];
-                    latencies = [latencies; ones(n1, 1)];
-                    bases = [bases; ones(n1, 1)];
+                    classes1 = categorical(NaN(width(data1), 1));
+                else
+                    [data1, classes1] = spiky.utils.flagsencode(data1);
                 end
-                obj.Data = data;
-                obj.Name = names;
-                obj.Class = classes;
-                obj.BaseIndex = latencies;
-                obj.Bases = bases;
+                n1 = width(data1);
+                if obj.IsEvent(ii) && ~isempty(bases)
+                    % if n1>1
+                    %     data1 = [any(data1, 2), data1]; % add a column for "any event type"
+                    %     classes1 = [categorical("*"); classes1];
+                    %     n1 = n1+1;
+                    % end
+                    data1 = bases.expand(spiky.core.TimeTable(obj.Time, data1));
+                    data1 = data1.Data;
+                    basesIdc1 = repmat((1:bases.NBases).', n, 1);
+                    classes1 = repelem(classes1, bases.NBases, 1);
+                    n1 = width(data1);
+                else
+                    basesIdc1 = zeros(n1, 1);
+                end
+                names{ii} = repmat(varName, n1, 1);
+                isEvents{ii} = repmat(obj.IsEvent(ii), n1, 1);
+                classes{ii} = classes1;
+                basesIdc{ii} = basesIdc1;
+                data{ii} = data1;
             end
+            obj.Data = cell2mat(data);
+            obj.Name = cell2mat(names);
+            obj.IsEvent = cell2mat(isEvents);
+            obj.Class = cell2mat(classes);
+            obj.BaseIndex = cell2mat(basesIdc);
+            obj.Bases = bases;
+        end
 
-            %% Expand the labels with basis functions
-            if width(obj.Bases)>1 || options.NBases==1 % already expanded or no expansion needed
-                return
-            end
-            coords = spiky.stat.Coords.makeRaisedCosine(...
-                obj.Time(2)-obj.Time(1), ...
-                options.NBases, ...
-                options.PeakRange, ...
-                TimeRange=options.TimeRange, ...
-                Spacing=options.Spacing);
-            data = zeros(height(obj), options.NBases*width(obj.Data));
-            for ii = 1:options.NBases
-                data(:, (ii-1)*width(obj.Data)+1:ii*width(obj.Data)) = ...
-                    convn(obj.Data, coords.Bases(:, ii), "same");
-            end
-            obj.Name = repmat(obj.Name, options.NBases, 1);
-            obj.Class = repmat(obj.Class, options.NBases, 1);
-            obj.BaseIndex = reshape(repmat(1:options.NBases, width(obj.Data), 1), [], 1);
-            obj.Bases = reshape(repmat(permute(coords.Bases, [1 3 2]), 1, width(obj.Data)), [], width(data), 1).';
-            obj.Data = data;
+        function obj = reduce(obj)
+            %REDUCE Reduce the Labels object by combining base-expanded labels
+            %   obj = REDUCE(obj)
+            assert(obj.Expanded, "Labels must be expanded to be reduced.");
+            [data, groups] = groupsummary(obj.Data', {obj.Name, obj.IsEvent, obj.Class}, "sum");
+            obj.Data = data';
+            obj.Name = groups{1};
+            obj.IsEvent = groups{2};
+            obj.Class = groups{3};
+            obj.BaseIndex = zeros(size(obj.Name));
+        end
+
+        function varName = get.VarName(obj)
+            %GET.VARNAME Get the variable names in the format Name.Class.BaseIndex
+            varName = compose("%s.%s.%d", obj.Name, obj.Class, obj.BaseIndex);
+        end
+
+        function expanded = get.Expanded(obj)
+            %GET.EXPANDED Get if the labels have been expanded with basis functions
+            expanded = isnumeric(obj.Data);
+        end
+
+        function image(obj)
+            %IMAGE Visualize the labels as an image
+            assert(obj.Expanded, "Labels must be expanded to be visualized as an image.");
+            imagesc(obj.Time, 1:width(obj.Data), obj.Data.');
+            xlabel("Time (s)");
+            yticks(1:width(obj.Data));
+            yticklabels(obj.VarName);
         end
     end
 end

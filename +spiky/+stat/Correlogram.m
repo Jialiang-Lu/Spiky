@@ -7,7 +7,7 @@ classdef Correlogram
 
     methods (Static)
         function obj = computeDiscrete(cellEvents, binSize, halfBins, normalization, epochs)
-            % COMPUTEDISCRETE Compute discrete cross-correlogram
+            %COMPUTEDISCRETE Compute discrete cross-correlogram
             %
             %   cellEvents: (cell) of event times
             %   binSize: bin size in the event time units

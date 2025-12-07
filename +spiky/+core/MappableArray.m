@@ -1,5 +1,5 @@
 classdef (Abstract) MappableArray
-    % MAPABLEARRAY Class for arrays that can be referenced by key
+    %MAPABLEARRAY Class for arrays that can be referenced by key
 
     properties (Access = protected, Dependent)
         Key string

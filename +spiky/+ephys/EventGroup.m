@@ -1,5 +1,5 @@
 classdef EventGroup < spiky.core.Metadata & spiky.core.MappableArray
-    % EVENTSGROUP Class containing information of events and their synchronization
+    %EVENTSGROUP Class containing information of events and their synchronization
     
     properties %(SetAccess = {?spiky.core.Metadata, ?spiky.ephys.EventGroup})
         Name string
@@ -15,7 +15,7 @@ classdef EventGroup < spiky.core.Metadata & spiky.core.MappableArray
     
     methods
         function obj = EventGroup(name, type, events, tsRange, sync)
-            % RECSYNC Create a new instance of EventGroup
+            %RECSYNC Create a new instance of EventGroup
             
             arguments
                 name string = ""

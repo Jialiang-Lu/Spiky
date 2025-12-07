@@ -113,7 +113,7 @@ classdef SpikeRasterDrawer < spiky.app.Drawer
         end
 
         function [t, r] = getRaster(obj, time)
-            % GETRASTER Get the raster data for the specified time
+            %GETRASTER Get the raster data for the specified time
             %
             %   [t, r] = obj.getRaster(time)
             %   time: time point in seconds

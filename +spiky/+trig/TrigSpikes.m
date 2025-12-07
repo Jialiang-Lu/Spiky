@@ -1,5 +1,5 @@
 classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
-    % TRIGSPIKES Spikes triggered by events
+    %TRIGSPIKES Spikes triggered by events
     %   The data is stored in a cell array, where the rows correspond to the events and the columns
     %   to the neurons.
 
@@ -110,7 +110,7 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
                 window = obj.Window;
             end
             if isempty(cats)
-                cats = (1:height(obj.Data))';
+                cats = obj.Events;
                 nCats = numel(cats);
                 events = cats;
             elseif isscalar(cats)
@@ -118,7 +118,7 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
                 nCats = 1;
                 events = 0;
             else
-                events = categories(cats, OutputType="string");
+                events = categories(cats);
                 nCats = numel(events);
             end
             if numel(cats)~=height(obj.Data)
@@ -138,20 +138,12 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
                 frMean = mean(cellfun(@numel, obj.Data), 1)./diff(obj.Window);
                 fr2 = (fr2-frMean)./sqrt(frMean./w);
             end
-            fr = spiky.trig.TrigFr;
-            fr.Start_ = window(1);
-            fr.Step_ = w;
-            fr.N_ = 1;
-            fr.Data = permute(fr2, [3 1 2]);
-            fr.EventDim = 2;
-            fr.Events_ = events;
-            fr.Window = window;
-            fr.Neuron = obj.Neuron;
+            fr = spiky.trig.TrigFr(window(1), w, permute(fr2, [3 1 2]), events, window, obj.Neuron);
             fr.Options = options;
         end
 
         function mdl = fitcecoc(obj, labels, window, idcEvents, options)
-            % FITCECOC Fit a multiclass error-correcting output codes model
+            %FITCECOC Fit a multiclass error-correcting output codes model
             %
             %   mdl = fitcecoc(obj, window, labels)
             %
@@ -200,7 +192,7 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
         end
 
         function [h, hLine] = plotRaster(obj, sz, c, cats, rowDim, plotOps, options)
-            % PLOTRASTER Plot raster of triggered spikes
+            %PLOTRASTER Plot raster of triggered spikes
             %
             %   h = plotRaster(obj, ...)
             %

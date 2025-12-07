@@ -1,5 +1,5 @@
 classdef Tuning < spiky.core.ArrayTable
-    % TUNING 1D continuous tuning curve
+    %TUNING 1D continuous tuning curve
 
     properties
         BinEdges (:, 1) double

@@ -1,45 +1,113 @@
-classdef GLM < spiky.stat.GroupedStat
+classdef GLM < spiky.core.ArrayTable
+    %GLM Generalized linear model fitted to binned spike counts
+    %
+    % First dimension is predictors, second dimension is neurons, third dimension is partitions 
+    % (e.g. cross-validation folds)
 
     properties
-        Partition
+        Neuron (:, 1) spiky.core.Neuron % Neurons the model is fitted to
+        Intercepts (1, :, :) double % Intercept term for each neuron and partition
+        Name (:, 1) string % Names of the predictors
+        Lambda (1, 1) double % Regularization parameter
+        Alpha (1, 1) double % Elastic net mixing parameter
+        Deviance (1, :, :) double % Deviance of the model for each neuron and partition
+        Options struct % Options used for fitting the GLM
     end
 
     properties (Dependent)
-        Coefficients double
+        Coeffs
+    end
+    
+    methods (Static)
+        function dimNames = getDimNames()
+            %GETDIMNAMES Get the dimension names of the TimeTable
+            %
+            %   dimNames: dimension names
+            dimNames = ["Name" "Neurons"];
+        end
+
+        function [extraDataName, scalarDimension] = getExtraDataName()
+            %GETEXTRADATANAME Get the name of the extra data field
+            %
+            %   extraDataName: name of the each data field, empty if no extra data field
+            %   scalarDimension: indices of the scalar dimension for each extra data field
+            extraDataName = ["Intercepts" "Deviance"];
+            scalarDimension = { 1, 1 };
+        end
     end
 
     methods
-        function obj = GLM(time, data, groups)
+        function obj = GLM(coeffs, intercepts, names, neuron, lambda, alpha, deviance, options)
             arguments
-                time double = []
-                data cell = {}
-                groups = []
+                coeffs = []
+                intercepts (1, :, :) double = []
+                names (:, 1) string = string.empty(0, 1)
+                neuron (:, 1) = spiky.core.Neuron.empty(0, 1)
+                lambda (1, 1) double = NaN
+                alpha (1, 1) double = NaN
+                deviance (1, :, :) double = []
+                options struct = struct()
             end
-            obj@spiky.stat.GroupedStat(time, data, groups);
+            if isempty(coeffs)
+                return
+            end
+            if height(coeffs) ~= numel(names)
+                error("The number of predictor names must be the same as the number of predictors")
+            end
+            obj.Data = coeffs;
+            obj.Intercepts = intercepts;
+            obj.Name = names;
+            obj.Neuron = neuron;
+            obj.Lambda = lambda;
+            obj.Alpha = alpha;
+            obj.Deviance = deviance;
+            obj.Options = options;
         end
 
-        function c = get.Coefficients(obj)
-            c = obj.getStat("Estimate");
-        end
-
-        function pc = pca(obj, groupIndices, groups)
+        function ss = getSubspace(obj, name, options)
+            %GETSUBSPACE Get the subspace corresponding to a predictor
+            %   ss = GETSUBSPACE(obj, name)
+            %
+            %   obj: GLM object
+            %   name: name of the predictor
+            %   Name-value arguments:
+            %       Average: Dimensions to perform averaging over (default: no averaging)
+            %
+            %   ss: spiky.stat.Subspace object
             arguments
                 obj spiky.stat.GLM
-                groupIndices = []
-                groups = []
+                name (1, 1) string
+                options.Average (1, :) double = []
             end
-            c = obj.Coefficients;
-            c = permute(num2cell(c, [2 4]), [1 3 2]);
-            c = cellfun(@(x) permute(x, [4 2 1 3]), c, UniformOutput=false);
-            pc = spiky.stat.PCA(obj.Time, c, groupIndices, groups);
+            names = split(obj.Name, ".");
+            isMatch = names(:, 1)==name;
+            if ~any(isMatch)
+                error("No predictor found with name '%s'", name);
+            end
+            classes = unique(names(isMatch, 2));
+            n = sum(isMatch);
+            bases = obj.Data(isMatch, :, :);
+            newNames = compose("%s.%s", names(isMatch, 2), names(isMatch, 3));
+            if ~isempty(options.Average)
+                bases = cell2mat(arrayfun(@(c) mean(bases(names(isMatch, 2)==c, :, :), options.Average), ...
+                    classes, UniformOutput=false));
+                n = height(bases);
+                newNames = classes;
+            end
+            regions = unique(obj.Neuron.Region);
+            groupIndices = arrayfun(@(r) find(obj.Neuron.Region==r), regions, UniformOutput=false);
+            coords = cell(1, numel(groupIndices), size(bases, 3));
+            for ii = 1:numel(groupIndices)
+                for jj = 1:size(bases, 3)
+                    coords{1, ii, jj} = spiky.stat.Coords(zeros(n, 1), ...
+                        bases(:, groupIndices{ii}, jj), newNames, obj.Neuron(groupIndices{ii}));
+                end
+            end
+            ss = spiky.stat.Subspaces(0, coords, regions, groupIndices);
         end
-    end
 
-    methods (Access=protected)
-        function out = getStat(obj, var)
-            out = cellfun(@(x) reshape(x.Coefficients{2:end, var}, 1, 1, 1, []), obj.Data, ...
-                UniformOutput=false);
-            out = cell2mat(out);
+        function coeffs = get.Coeffs(obj)
+            coeffs = obj.Data;
         end
     end
 end

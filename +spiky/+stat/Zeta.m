@@ -1,5 +1,5 @@
 classdef Zeta < spiky.stat.GroupedStat
-    % ZETA Class for Zeta tests results for neuronal responsiveness
+    %ZETA Class for Zeta tests results for neuronal responsiveness
     %   http://dx.doi.org/10.7554/eLife.71969
     %
     %   Fields:
@@ -24,7 +24,7 @@ classdef Zeta < spiky.stat.GroupedStat
     
     methods
         function obj = Zeta(spikes, events, window, options)
-            % ZETA Constructor for the Zeta class
+            %ZETA Constructor for the Zeta class
             %
             arguments
                 spikes spiky.core.Spikes
@@ -50,14 +50,25 @@ classdef Zeta < spiky.stat.GroupedStat
             parfor ii = 1:n
                 [p1, s1, s2, s3] = spiky.utils.zetatest.zetatest(spikes(ii).Time, events, window, ...
                     nResample);
-                p{ii} = p1;
-                z{ii} = s1.dblZETA;
-                d{ii} = s1.dblD;
-                onset{ii} = s2.vecPeakStartStop(1);
-                halfPeak{ii} = s3.Onset;
-                peak{ii} = s3.Peak;
-                offset{ii} = s2.vecPeakStartStop(2);
-                peakFr{ii} = s1.vecLatencyVals(3);
+                if ~isempty(s2)
+                    p{ii} = p1;
+                    z{ii} = s1.dblZETA;
+                    d{ii} = s1.dblD;
+                    onset{ii} = s2.vecPeakStartStop(1);
+                    halfPeak{ii} = s3.Onset;
+                    peak{ii} = s3.Peak;
+                    offset{ii} = s2.vecPeakStartStop(2);
+                    peakFr{ii} = s1.vecLatencyVals(3);
+                else
+                    p{ii} = 1;
+                    z{ii} = 0;
+                    d{ii} = 0;
+                    onset{ii} = NaN;
+                    halfPeak{ii} = NaN;
+                    peak{ii} = NaN;
+                    offset{ii} = NaN;
+                    peakFr{ii} = NaN;
+                end
                 pb.step
             end
             data = struct("P", p, "Z", z, "D", d, ...

@@ -1,5 +1,5 @@
 classdef PCA < spiky.stat.GroupedStat
-    % PCA class of principal component analysis objects
+    %PCA class of principal component analysis objects
     %
     % The first dimension is time, the second dimension is the group, and the third dimension 
     % is the sample

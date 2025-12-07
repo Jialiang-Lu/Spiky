@@ -1,5 +1,5 @@
 classdef Asset < spiky.core.Metadata & spiky.core.MappableArray
-    % ASSET Unity asset file
+    %ASSET Unity asset file
 
     properties
         Name string

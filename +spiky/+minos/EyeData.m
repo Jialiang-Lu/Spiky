@@ -5,7 +5,7 @@ classdef EyeData < spiky.core.Metadata
         Fixations spiky.core.Periods
         Saccades spiky.core.Periods
         Blinks spiky.core.Periods
-        FixationTargets spiky.core.TimeTable
+        FixationTargets spiky.core.PeriodsTable
     end
 
     properties (Dependent)
@@ -14,7 +14,7 @@ classdef EyeData < spiky.core.Metadata
 
     methods (Static)
         function vp = getViewport(gaze, height, width)
-            % GETVIEWPORT Get viewport
+            %GETVIEWPORT Get viewport
             %
             %   vp = getViewport(gaze, height, width)
             %
@@ -40,8 +40,35 @@ classdef EyeData < spiky.core.Metadata
                 gaze(:, 2)./gaze(:, 3)./h.*0.5+0.5 z];
         end
 
+        function gaze = getGaze(vp, height, width)
+            %GETGAZE Get gaze direction vector from viewport
+            %
+            %   gaze = getGaze(vp, height, width)
+            %
+            %   vp: viewport, (0, 0) is the left top corner, (1, 1) is the right bottom corner
+            %   height: height of the screen in degrees of view angle
+            %   width: width of the screen in degrees of view angle
+            %
+            %   gaze: gaze direction vector (Nx3 matrix)
+            arguments
+                vp (:, 3) double
+                height (1, 1) double
+                width (1, 1) double = NaN
+            end
+            if isnan(width)
+                w = tand(height/2)*16/9;
+            else
+                w = tand(width/2);
+            end
+            h = tand(height/2);
+            gaze = ones(size(vp, 1), 3, like=vp);
+            gaze(:, 1) = (vp(:, 1)-0.5).*w*2;
+            gaze(:, 2) = (vp(:, 2)-0.5).*h*2;
+            gaze = gaze./vecnorm(gaze, 2, 2);
+        end
+
         function obj = load(fdir, func, fiveDot, transform, fov)
-            % LOAD Load eye data from a directory
+            %LOAD Load eye data from a directory
             %
             %   fdir: directory containing the eye data
             %   func: function to convert the time
@@ -79,7 +106,7 @@ classdef EyeData < spiky.core.Metadata
                 [pos, ~, idcPos] = unique(fiveDot.Trials.Pos, "rows", "sorted");
                 pos = pos./pos(:, 3);
                 nPos = size(pos, 1);
-                prdTrials = spiky.core.Periods([fiveDot.Trials.Start_Align fiveDot.Trials.End]);
+                prdTrials = spiky.core.Periods([fiveDot.Trials.Data.Start_Align fiveDot.Trials.Data.End]);
                 
                 dataRaw = spiky.minos.Data(fullfile(fdir, "EyeRaw.bin"));
                 proc = spiky.minos.Data(fullfile(fdir, "EyeProcessor.bin"));
@@ -251,7 +278,7 @@ classdef EyeData < spiky.core.Metadata
                     nValid = numel(idcFixValid);
                     %%
                     ids = zeros(nFixations, 1, "int32");
-                    names = strings(nFixations, 1);
+                    names = categorical(strings(nFixations, 1));
                     trials = zeros(nFixations, 1, "int32");
                     parts = spiky.minos.BodyPart(zeros(nFixations, 1));
                     targetPos = zeros(nFixations, 3, "single");
@@ -273,7 +300,7 @@ classdef EyeData < spiky.core.Metadata
                         targetPos, targetProj, angles, VariableNames=["Trial" "Id" "Name" "Part" ...
                         "Gaze" "Proj" "TargetPos" "TargetProj" "MinAngle"]);
                 else
-                    fixationTargets = table(Size=[0 9], VariableTypes=["int32" "int32" "string" ...
+                    fixationTargets = table(Size=[0 9], VariableTypes=["int32" "int32" "categorical" ...
                         "spiky.minos.BodyPart" "single" "single" "single" "single" "single"], ...
                         VariableNames=["Trial" "Id" "Name" "Part" ...
                         "Gaze" "Proj" "TargetPos" "TargetProj" "MinAngle"]);
@@ -282,7 +309,7 @@ classdef EyeData < spiky.core.Metadata
                 fixations = spiky.core.Periods.empty;
                 saccades = spiky.core.Periods.empty;
                 blinks = spiky.core.Periods.empty;
-                fixationTargets = table(Size=[0 9], VariableTypes=["int32" "int32" "string" ...
+                fixationTargets = table(Size=[0 9], VariableTypes=["int32" "int32" "categorical" ...
                     "spiky.minos.BodyPart" "single" "single" "single" "single" "single"], ...
                     VaraibleNames=["Trial" "Id" "Name" "Part" ...
                     "Gaze" "Proj" "TargetPos" "TargetProj" "MinAngle"]);
@@ -294,9 +321,9 @@ classdef EyeData < spiky.core.Metadata
             obj.Saccades = saccades;
             obj.Blinks = blinks;
             if isempty(fixationTargets)
-                obj.FixationTargets = spiky.core.TimeTable([], fixationTargets);
+                obj.FixationTargets = spiky.core.PeriodsTable(double.empty(0, 2), fixationTargets);
             else
-                obj.FixationTargets = spiky.core.TimeTable(fixations.Start, fixationTargets);
+                obj.FixationTargets = spiky.core.PeriodsTable(fixations.Time, fixationTargets);
             end
         end
 
@@ -324,7 +351,7 @@ classdef EyeData < spiky.core.Metadata
 
     methods
         function periods = getViewPeriods(obj, mingap, minperiod)
-            % GETVIEWPERIODS Get periods when the eye is visible
+            %GETVIEWPERIODS Get periods when the eye is visible
             %
             %   mingap: minimum gap between periods in seconds
             %   minperiod: minimum period length in seconds
@@ -340,10 +367,10 @@ classdef EyeData < spiky.core.Metadata
                 return
             end
             isViewing = ~isnan(obj.Data.Convergence(:, 1)) & ...
-                obj.Data.Convergence(:, 1)>0 & ...
-                obj.Data.Convergence(:, 1)<1 & ...
-                obj.Data.Convergence(:, 2)>0 & ...
-                obj.Data.Convergence(:, 2)<1;
+                obj.Data.Proj(:, 1)>0 & ...
+                obj.Data.Proj(:, 1)<1 & ...
+                obj.Data.Proj(:, 2)>0 & ...
+                obj.Data.Proj(:, 2)<1;
             tt = spiky.core.TimeTable(obj.Data.Time, isViewing);
             periods = tt.findPeriods(0, mingap, minperiod);
         end

@@ -1,5 +1,5 @@
 classdef Probe < spiky.core.Metadata
-    % PROBE Class representing probe
+    %PROBE Class representing probe
 
     properties (SetAccess = {?spiky.core.Metadata, ?spiky.ephys.Probe})
         Name (1, 1) string = "Probe"

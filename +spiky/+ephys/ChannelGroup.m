@@ -1,5 +1,5 @@
 classdef ChannelGroup < spiky.core.Metadata & spiky.core.MappableArray
-    % CHANNELGROUP Class representing a group of channels
+    %CHANNELGROUP Class representing a group of channels
     
     properties %(SetAccess = {?spiky.core.Metadata, ?spiky.ephys.ChannelGroup})
         Name string
@@ -28,7 +28,7 @@ classdef ChannelGroup < spiky.core.Metadata & spiky.core.MappableArray
     methods
         function obj = ChannelGroup(name, nChannels, channelType, channelNames, probe, ...
             bitVolts, toMv)
-            % CHANNELGROUP Create a new instance of ChannelGroup
+            %CHANNELGROUP Create a new instance of ChannelGroup
 
             arguments
                 name string = ""
@@ -53,7 +53,7 @@ classdef ChannelGroup < spiky.core.Metadata & spiky.core.MappableArray
         end
 
         function [ch, idcGroup] = getChannel(obj, idc, resample)
-            % GETCHANNEL Get a channel by index
+            %GETCHANNEL Get a channel by index
 
             arguments
                 obj spiky.ephys.ChannelGroup
@@ -76,7 +76,7 @@ classdef ChannelGroup < spiky.core.Metadata & spiky.core.MappableArray
         end
 
         function idc = getGroupIndices(obj, group)
-            % GETGROUPINDICES Get indices of a group
+            %GETGROUPINDICES Get indices of a group
 
             arguments
                 obj spiky.ephys.ChannelGroup

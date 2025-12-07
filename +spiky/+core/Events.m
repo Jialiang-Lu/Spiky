@@ -1,5 +1,5 @@
 classdef Events
-    % EVENTS Class representing discrete events
+    %EVENTS Class representing discrete events
     
     properties (Hidden)
         T_ (:, 1) double % Time vector in seconds
@@ -335,7 +335,7 @@ classdef Events
         end
 
         function s = sync(obj, obj2, name, varargin, options)
-            % SYNC Synchronize two events objects
+            %SYNC Synchronize two events objects
             %
             %   s = sync(obj, obj2, name, varargin, options)
             %

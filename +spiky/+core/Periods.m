@@ -140,9 +140,13 @@ classdef Periods
             obj.Time = obj.Time(idc, :);
         end
 
-        function [obj, idc] = sort(obj)
+        function [obj, idc] = sort(obj, direction)
             %SORT Sort periods
-            [~, idc] = sort(obj.Time(:, 1));
+            arguments
+                obj spiky.core.Periods
+                direction string {mustBeMember(direction, ["ascend" "descend"])} = "ascend"
+            end
+            [~, idc] = sort(obj.Time(:, 1), direction);
             obj.Time = obj.Time(idc, :);
         end
 
@@ -238,9 +242,41 @@ classdef Periods
             periods = period - obj;
         end
 
+        function [periods, idc, idcPeriods] = havePeriods(obj, periods)
+            %HAVEPERIODS Find periods within periods
+            %   [periods, idc, idcPeriods] = havePeriods(obj, periods)
+            %
+            %   obj: periods
+            %   periods: periods object
+            %
+            %   periods: periods within obj
+            %   idc: indices of periods within obj
+            %   idcPeriods: indices of periods for each period
+            arguments
+                obj spiky.core.Periods
+                periods %double or spiky.core.Periods
+            end
+            if isnumeric(periods)
+                assert(width(periods)==2, "Periods must have two columns.");
+                prd = periods;
+            elseif isa(periods, "spiky.core.Periods")
+                prd = periods.Time;
+            else
+                error("Wrong input type %s.", class(periods))
+            end
+            [~, idc1, idcP1] = obj.haveEvents(prd(:, 1));
+            [~, idc2, idcP2] = obj.haveEvents(prd(idc1, 2));
+            idc2 = idc2(idcP2==idcP1(idc2));
+            idc = idc1(idc2);
+            idcPeriods = idcP1(idc2);
+            periods = subsref(periods, substruct("()", {idc, ':'}));
+        end
+
         function [events, idc, idcPeriods] = haveEvents(obj, events, cellmode, offset, ...
                 rightClose, sorted)
             %HAVEEVENTS Find events within periods
+            %   [events, idc, idcPeriods] = haveEvents(obj, events, [cellmode], [offset], ...
+            %       [rightClose], [sorted])
             %
             %   obj: periods
             %   periods: events object

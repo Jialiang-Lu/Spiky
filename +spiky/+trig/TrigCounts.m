@@ -1,5 +1,9 @@
 classdef TrigCounts < spiky.trig.TrigFr
-    % TRIGCOUNTS Class for counting spikes triggered by events
+    %TRIGCOUNTS Class for counting spikes triggered by events
+
+    properties
+        Bernoulli logical = false % If true, counts are binary (0 or 1)
+    end
 
     methods
         function obj = TrigCounts(spikes, events, window, options)
@@ -42,6 +46,47 @@ classdef TrigCounts < spiky.trig.TrigFr
             obj.Window = window;
             obj.Neuron = vertcat(spikes.Neuron);
             obj.Options = options;
+            obj.Bernoulli = options.Bernoulli;
+        end
+
+        function mdl = fitGlm(obj, labels, options)
+            %FITGLM Fit a GLM to the counts
+            %
+            %   mdl = fitGlm(obj, options)
+            %
+            %   obj: TrigCounts
+            %   options: Name-Value pairs for additional options
+            %
+            %   mdl: fitted GLM model
+            arguments
+                obj spiky.trig.TrigCounts
+                labels spiky.stat.Labels
+                options.Periods = [] % (n, 2) double or spiky.core.Periods
+            end
+            names = compose("%s.%s.%d", labels.Name, labels.Class, labels.BaseIndex);
+            if obj.Bernoulli
+                distr = "binomial";
+            else
+                distr = "poisson";
+            end
+            if ~isempty(options.Periods)
+                if isnumeric(options.Periods)
+                    options.Periods = spiky.core.Periods(options.Periods);
+                end
+                [~, idc] = options.Periods.haveEvents(obj.Time);
+            else
+                idc = true(height(obj.Time), 1);
+            end
+            dataRaw = obj.Data(idc, 1, :);
+            data = cell(1, size(obj.Data, 3));
+            pb = spiky.plot.ProgressBar(size(obj.Data, 3), "Fitting GLM", Parallel=true, ...
+                CloseOnFinish=false);
+            parfor ii = 1:size(obj.Data, 3)
+                data{ii} = fitglm(labels.Data(idc, :), dataRaw(:, :, ii), "linear", ...
+                    Distribution=distr, VarNames=[names; "spikes"]);
+                pb.step
+            end
+            mdl = spiky.stat.GLM(0, data, obj.Neuron);
         end
     end
 end

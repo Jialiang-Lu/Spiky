@@ -1,7 +1,7 @@
 classdef Trig < spiky.core.TimeTable
 
     properties (Hidden)
-        Events_ (:, 1) double
+        Events_ (:, 1)
     end
     
     properties
@@ -10,7 +10,7 @@ classdef Trig < spiky.core.TimeTable
     end
 
     properties (Dependent)
-        Events (:, 1) double
+        Events (:, 1)
         NEvents (1, 1) double
     end
 

@@ -90,7 +90,7 @@ classdef SpikeSorter
                 %% Main computation
                 % preprocess data to create temp_wh.dat
                 rez = preprocessDataSub(ops);
-                % NEW STEP TO DO DATA REGISTRATION
+                %NEW STEP TO DO DATA REGISTRATION
                 rez = datashift2(rez, 1); % last input is for shifting data
                 save(fullfile(fdirSort, "rez.mat"), "rez", "-v7.3");
                 % main tracking and template matching algorithm

@@ -98,7 +98,13 @@ classdef TimeTable < spiky.core.Events & spiky.core.ArrayTable
                 return
             end
             if ismember(method, ["nearest" "next" "previous"])
-                idc = interp1(obj.Time, 1:height(obj), t, method, extrap);
+                [t0, idcT] = unique(obj.Time);
+                idc = interp1(t0, idcT, t, method, extrap);
+                if method=="next"
+                    idc(isnan(idc)) = height(obj);
+                elseif method=="previous"
+                    idc(isnan(idc)) = 1;
+                end
                 if ndims(obj.Data)==3
                     out = obj.Data(idc, :, :);
                 else

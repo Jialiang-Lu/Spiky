@@ -17,7 +17,7 @@ classdef Data < spiky.core.ArrayTable
 
     methods (Static)
         function out = str2array(str, func)
-            % STR2ARRAY Convert a string to an array
+            %STR2ARRAY Convert a string to an array
             %
             %   str: string
             %   func: function to convert the elements
@@ -32,7 +32,7 @@ classdef Data < spiky.core.ArrayTable
         end
 
         function func = getConvertFunc(type)
-            % GETCONVERTFUNC Get the conversion function for a type
+            %GETCONVERTFUNC Get the conversion function for a type
             %
             %   type: type
 
@@ -216,7 +216,7 @@ classdef Data < spiky.core.ArrayTable
         end
 
         function out = getParameters(obj, func)
-            % GETPARAMETERS Get parameters from the data
+            %GETPARAMETERS Get parameters from the data
             %
             %   obj: Data object
             %   func: function to transform the time

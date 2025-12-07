@@ -9,7 +9,7 @@ classdef FixationDrawer < spiky.app.EventDrawer
 
     methods
         function obj = FixationDrawer(app, hCheckbox)
-            % FIXATIONDRAWER Constructor for the FixationDrawer class
+            %FIXATIONDRAWER Constructor for the FixationDrawer class
             %
             %   obj = FixationDrawer(app, hCheckbox)
             %
@@ -32,7 +32,7 @@ classdef FixationDrawer < spiky.app.EventDrawer
         end
 
         function name = getName(obj)
-            % GETNAME Get the name of the drawer
+            %GETNAME Get the name of the drawer
             %
             %   name = obj.getName()
             %
@@ -41,7 +41,7 @@ classdef FixationDrawer < spiky.app.EventDrawer
         end
 
         function [events, names] = getEvents(obj, time)
-            % GETEVENTS Get fixation events at a specific time
+            %GETEVENTS Get fixation events at a specific time
             %
             %   [events, names] = obj.getEvents(time)
             %

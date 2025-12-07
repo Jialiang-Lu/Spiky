@@ -13,7 +13,7 @@ classdef TrialEventDrawer < spiky.app.EventDrawer
 
     methods
         function obj = TrialEventDrawer(app, hCheckbox)
-            % TRIALEVENTDRAWER Constructor for the TrialEventDrawer class
+            %TRIALEVENTDRAWER Constructor for the TrialEventDrawer class
             %
             %   obj = TrialEventDrawer(app, hCheckbox)
             %
@@ -47,7 +47,7 @@ classdef TrialEventDrawer < spiky.app.EventDrawer
         end
 
         function name = getName(obj)
-            % GETNAME Get the name of the drawer
+            %GETNAME Get the name of the drawer
             %
             %   name = obj.getName()
             %
@@ -56,7 +56,7 @@ classdef TrialEventDrawer < spiky.app.EventDrawer
         end
 
         function [events, names] = getEvents(obj, time)
-            % GETEVENTS Get trial states at a specific time
+            %GETEVENTS Get trial states at a specific time
             %
             %   events = obj.getEvents(time)
             %

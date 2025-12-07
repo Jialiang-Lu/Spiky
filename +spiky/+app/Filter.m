@@ -11,7 +11,7 @@ classdef (Abstract) Filter < handle & matlab.mixin.Heterogeneous
 
     methods
         function obj = Filter(app, name, hDrawer, hControl, fcnName)
-            % FILTER Constructor for the Filter class
+            %FILTER Constructor for the Filter class
             %
             %   obj = Filter(app, name, hControl, hDrawer)
             %
@@ -44,7 +44,7 @@ classdef (Abstract) Filter < handle & matlab.mixin.Heterogeneous
         end
 
         function onControlUpdate(obj, source, event)
-            % ONCONTROLUPDATE Handle updates from the control
+            %ONCONTROLUPDATE Handle updates from the control
             %
             %   obj.onControlUpdate(source, event)
             %
@@ -59,7 +59,7 @@ classdef (Abstract) Filter < handle & matlab.mixin.Heterogeneous
 
     methods (Abstract)
         idc = onUpdate(obj, event);
-        % ONUPDATE Update the filter based on the value
+        %ONUPDATE Update the filter based on the value
         %   idc = obj.onUpdate(event)
         %   event: event from the control
         %   idc: indices of the filtered data

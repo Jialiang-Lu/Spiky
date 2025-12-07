@@ -1,5 +1,5 @@
 classdef Tuning2 < spiky.stat.Tuning
-    % TUNING2 2D continuous tuning curve
+    %TUNING2 2D continuous tuning curve
 
     properties
         BinEdgesY (:, 1) double
@@ -72,7 +72,7 @@ classdef Tuning2 < spiky.stat.Tuning
         end
 
         function [mi, p] = mutualInformation(obj, nShuffles)
-            % MUTUALINFORMATION Compute the mutual information between firing rate and position
+            %MUTUALINFORMATION Compute the mutual information between firing rate and position
             %
             %   [mi, p] = MUTUALINFORMATION(obj, nShuffles)
             %

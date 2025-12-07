@@ -2,7 +2,7 @@ function [flags, valueset] = flagsencode(cats, valueset)
 % FLAGSENCODE Encode categorical flags into a binary matrix
 %   flags = flagsencode(cats, valueset)
 %
-%   cats: Nx1 categorical array of strings. cats(i) = "x_i1|x_i2|...|x_i_ni" where
+%   cats: Nx1 categorical array or strings. cats(i) = "x_i1|x_i2|...|x_i_ni" where
 %       x_ij is the j-th value of the i-th flag, and belongs to valueset.
 %   valueset: Kx1 string array of valueset [X_1, X_2, ..., X_k]. Determined from cats if not
 %   provided.
@@ -19,7 +19,8 @@ cats = string(cats);
 c = arrayfun(@(x) split(x, "|"), cats, UniformOutput=false);
 if isempty(valueset)
     valueset = unique(vertcat(c{:}));
-    valueset = valueset(valueset~="");
+    valueset = valueset(valueset~=""&~ismissing(valueset));
 end
 is = cellfun(@(x) ismember(valueset, x), c, UniformOutput=false);
 flags = cell2mat(is')';
+valueset = categorical(valueset);

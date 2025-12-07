@@ -48,7 +48,8 @@ end
 plotArgsCell = namedargs2cell(plotOps);
 hLine1 = plot(x, y, lineSpec, plotArgsCell{:});
 if nLines>1
-    cs = spiky.plot.colormap("tab10", nLines, true);
+    % cs = spiky.plot.colormap("tab10", nLines, true);
+    cs = colororder();
 end
 for ii = nLines:-1:1
     xData = [x(:, ii); flipud(x(:, ii))];

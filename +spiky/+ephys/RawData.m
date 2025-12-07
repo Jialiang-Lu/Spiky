@@ -122,7 +122,7 @@ classdef RawData
         end
 
         function eventGroups = getEvents(obj, channelNames, options)
-            % GETEVENTS Get events from the raw data
+            %GETEVENTS Get events from the raw data
             %
             %   eventGroups = GETEVENTS(obj, channelNames)
             %
@@ -218,7 +218,7 @@ classdef RawData
         end
 
         function [data, tsRange] = getContinuous(obj, ch, idc)
-            % GETCONTINUOUS Get continuous data from the raw data
+            %GETCONTINUOUS Get continuous data from the raw data
             %
             %   [data, tsRange] = GETCONTINUOUS(obj, ch)
             %   ch: Channel number

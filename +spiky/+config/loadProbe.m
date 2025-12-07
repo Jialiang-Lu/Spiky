@@ -1,5 +1,5 @@
 function probe = loadProbe(probeName)
-    % LOADPROBE Load a probe from a file
+    %LOADPROBE Load a probe from a file
     %   probe = LOADPROBE(probeName) loads a probe from a file with the name
     %       probeName
 

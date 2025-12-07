@@ -1,5 +1,5 @@
 classdef Sync
-    % SYNC Class representing synchronization between two clocks
+    %SYNC Class representing synchronization between two clocks
 
     properties
         Name (1, 1) string % Name of the synchronization

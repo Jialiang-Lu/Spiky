@@ -1,5 +1,5 @@
 classdef Session < spiky.core.Metadata
-    % SESSION information about a recording session.
+    %SESSION information about a recording session.
 
     properties (SetAccess = {?spiky.core.Metadata, ?spiky.ephys.Session})
         Name string
@@ -29,17 +29,17 @@ classdef Session < spiky.core.Metadata
         end
 
         function out = eq(obj, other)
-            % EQ Compare two sessions.
+            %EQ Compare two sessions.
             out = obj.Name == other.Name;
         end
 
         function fpth = getFpth(obj, type)
-            % GETFPTH Get the Fpth to a file of a given type.
+            %GETFPTH Get the Fpth to a file of a given type.
             fpth = fullfile(obj.Fdir, obj.Name + "." + type);
         end
 
         function fdir = getFdir(obj, subdirs)
-            % GETFDIR Get the Fdir of a subdirectory.
+            %GETFDIR Get the Fdir of a subdirectory.
             arguments
                 obj spiky.ephys.Session
             end
@@ -50,7 +50,7 @@ classdef Session < spiky.core.Metadata
         end
 
         function info = getInfo(obj)
-            % GETINFO Get the session info.
+            %GETINFO Get the session info.
             info = obj.loadData("spiky.ephys.SessionInfo.mat");
             if ~exist(info.FpthDat(1), "file")
                 for ii = 1:numel(info.FpthDat)
@@ -63,18 +63,42 @@ classdef Session < spiky.core.Metadata
             end
         end
 
-        function spikes = getSpikes(obj)
-            % GETSPIKES Get the spikes of the session.
+        function [spikes, units] = getSpikes(obj, options)
+            %GETSPIKES Get the spikes of the session.
+            arguments
+                obj spiky.ephys.Session
+                options.ConvertRegionNames (1, 1) logical = true
+            end
             spikes = obj.loadData("spiky.ephys.SpikeInfo.mat");
+            spikes = spikes.Spikes;
+            units = vertcat(spikes.Neuron);
+            for ii = 1:height(spikes)
+                spikes(ii).Neuron.Waveform{1} = []; % clear waveform to save memory
+            end
+            if options.ConvertRegionNames
+                map = spiky.config.loadConfig("brainRegionMap");
+                [regions, ~, idcRegions] = unique(units.Region);
+                regions = string(regions);
+                regions = replace(regions, lineBoundary("start")+"l"|"r", "");
+                names = string(fieldnames(map));
+                for ii = 1:numel(names)
+                    regions = replace(regions, names(ii), map.(names(ii)));
+                end
+                regions = categorical(regions);
+                units.Region = regions(idcRegions);
+                for ii = 1:height(spikes)
+                    spikes(ii).Neuron.Region = units.Region(ii);
+                end
+            end
         end
 
         function minos = getMinos(obj)
-            % GETMINOS Get the minos of the session.
+            %GETMINOS Get the minos of the session.
             minos = obj.loadData("spiky.minos.MinosInfo.mat");
         end
 
         function tr = getTransform(obj)
-            % GETTRANSFORM Get the transform of the session.
+            %GETTRANSFORM Get the transform of the session.
             tr = obj.loadData("spiky.minos.Transform.mat");
         end
         

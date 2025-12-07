@@ -1,5 +1,5 @@
-classdef (Abstract) GroupedStat < spiky.core.TimeTable
-    % GroupedStat Abstract class representing grouped statistics
+classdef GroupedStat < spiky.core.TimeTable
+    %GROUPEDSTAT Base class representing grouped statistics
     %
     % The first dimension is time and the second dimension is the groups, which can be neurons or
     % events, the third dimension is the samples.
@@ -28,7 +28,7 @@ classdef (Abstract) GroupedStat < spiky.core.TimeTable
             arguments
                 time double = []
                 data = []
-                groups (:, 1) = []
+                groups (:, 1) = NaN(width(data), 1)
                 groupIndices cell = cell(height(groups), 1)
             end
             if isempty(time) && isempty(data) && isempty(groups)
@@ -79,6 +79,32 @@ classdef (Abstract) GroupedStat < spiky.core.TimeTable
             end
             [~, idc] = feval(filter, obj.Groups);
             obj = obj(:, idc, :);
+        end
+
+        function h = boxchart(obj, plotOps, options)
+            %BOXCHART Plot the accuracy as box charts
+            %
+            %   h = BOXCHART(obj, plotOps, options)
+            %
+            %   obj: GroupedStat object
+            %   plotOps: options passed to boxchart()
+            %   Name-Value pairs:
+            %       Parent: parent axes for the plot
+            %
+            %   h: handle to the boxchart
+            arguments
+                obj spiky.stat.GroupedStat
+                plotOps.?matlab.graphics.chart.primitive.BoxChart
+                options.Parent matlab.graphics.axis.Axes = gca
+            end
+            plotArgs = namedargs2cell(plotOps);
+            data = obj.Data(1, :, :);
+            g = repmat(categorical(obj.Groups'), 1, 1, size(data, 3));
+            h1 = boxchart(options.Parent, g(:), data(:), plotArgs{:});
+            box off
+            if nargout>0
+                h = h1;
+            end
         end
     end
 end

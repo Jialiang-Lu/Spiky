@@ -1,5 +1,5 @@
 classdef Parameter < spiky.core.MappableArray
-    % PARAMETER A parameter that can be changed during an experiment
+    %PARAMETER A parameter that can be changed during an experiment
 
     properties
         Name string
@@ -33,7 +33,7 @@ classdef Parameter < spiky.core.MappableArray
         end
 
         function value = get(obj, time)
-            % GET Get the value of the parameter at a specific time point
+            %GET Get the value of the parameter at a specific time point
             %
             %   time: time point(s), double or spiky.core.Events
             %
@@ -55,7 +55,7 @@ classdef Parameter < spiky.core.MappableArray
         end
 
         function periods = getPeriods(obj, value, partialMatch)
-            % GETPERIODS Get the periods when the parameter has a specific value
+            %GETPERIODS Get the periods when the parameter has a specific value
             %
             %   value: value(s) or function handle
             %   partialMatch: whether to use partial match
@@ -102,7 +102,7 @@ classdef Parameter < spiky.core.MappableArray
         end
 
         function obj = syncTime(obj, func)
-            % SYNCTIME Synchronize events to a synchronization object
+            %SYNCTIME Synchronize events to a synchronization object
             %
             %   obj: parameter(s)
             %   func: function to transform the time

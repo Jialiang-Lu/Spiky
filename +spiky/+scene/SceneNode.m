@@ -1,9 +1,9 @@
-classdef SceneNode < spiky.core.TimeTable & matlab.mixin.CustomCompactDisplayProvider
-    % SCENENODE represents a node in a scene graph structure
+classdef SceneNode < spiky.core.PeriodsTable & matlab.mixin.CustomCompactDisplayProvider
+    %SCENENODE represents a node in a scene graph structure
 
     methods (Static)
         function obj = uniform(n, name, type)
-            % UNIFORM Create a uniform SceneNode with specified number of entries
+            %UNIFORM Create a uniform SceneNode with specified number of entries
             %
             %   n: number of entries in the SceneNode
             %   name: name of the scene node
@@ -16,14 +16,14 @@ classdef SceneNode < spiky.core.TimeTable & matlab.mixin.CustomCompactDisplayPro
                 type string = ""
             end
             
-            time = NaN(n, 1);
+            periods = NaN(n, 2);
             name = repmat(categorical(name), n, 1);
             type = repmat(categorical(type), n, 1);
             id = zeros(n, 1, "int32");
             pos = NaN(n, 3, "single");
             rot = NaN(n, 3, "single");
             proj = NaN(n, 3, "single");
-            obj = spiky.scene.SceneNode(time, name, type, id, pos, rot, proj);
+            obj = spiky.scene.SceneNode(periods, name, type, id, pos, rot, proj);
         end
 
         function b = isScalarRow()
@@ -36,10 +36,10 @@ classdef SceneNode < spiky.core.TimeTable & matlab.mixin.CustomCompactDisplayPro
     end
 
     methods
-        function obj = SceneNode(time, name, type, id, pos, rot, proj)
-            % SCENENODE Constructor for the SceneNode class
+        function obj = SceneNode(periods, name, type, id, pos, rot, proj)
+            %SCENENODE Constructor for the SceneNode class
             % 
-            %   time: time points for the scene node
+            %   periods: periods for the scene nodes
             %   name: names of the scene nodes
             %   type: types of the scene nodes (e.g., "Human", "Object", "Verb")
             %   id: unique identifiers for the scene nodes
@@ -47,16 +47,16 @@ classdef SceneNode < spiky.core.TimeTable & matlab.mixin.CustomCompactDisplayPro
             %   rot: rotations of the scene nodes in 3D space
             %   proj: projection vectors for the scene nodes
             arguments
-                time double = []
-                name categorical = categorical(NaN(numel(time), 1))
-                type categorical = categorical(NaN(numel(time), 1))
-                id int32 = zeros(numel(time), 1, "int32")
-                pos (:, 3) single = NaN(numel(time), 3, "single")
-                rot (:, 3) single = NaN(numel(time), 3, "single")
-                proj (:, 3) single = NaN(numel(time), 3, "single")
+                periods (:, 2) double = []
+                name categorical = categorical(NaN(height(periods), 1))
+                type categorical = categorical(NaN(height(periods), 1))
+                id int32 = zeros(height(periods), 1, "int32")
+                pos (:, 3) single = NaN(height(periods), 3, "single")
+                rot (:, 3) single = NaN(height(periods), 3, "single")
+                proj (:, 3) single = NaN(height(periods), 3, "single")
             end
             
-            n = numel(time);
+            n = height(periods);
             if n>1
                 if isscalar(name)
                     name = repmat(name, n, 1);
@@ -77,17 +77,24 @@ classdef SceneNode < spiky.core.TimeTable & matlab.mixin.CustomCompactDisplayPro
                     proj = repmat(proj, n, 1);
                 end
             end
-            obj.Time = time;
-            obj.Data = table(name, type, id, pos, rot, proj, ...
-                VariableNames=["Name", "Type", "Id", "Pos", "Rot", "Proj"]);
+            obj@spiky.core.PeriodsTable(periods, table(name, type, id, pos, rot, proj, ...
+                VariableNames=["Name", "Type", "Id", "Pos", "Rot", "Proj"]));
         end
 
         function b = ismissing(obj)
-            % ISMISSING Check if the SceneNode has missing data
+            %ISMISSING Check if the SceneNode has missing data
             %   b = ismissing(obj)
             %
             %   b: true if any of the data fields are missing, false otherwise
             b = ismissing(obj.Data.Name);
+        end
+
+        function str = string(obj)
+            %STRING Convert the SceneNode to a string representation
+            %   str = string(obj)
+            %
+            %   str: string representation of the SceneNode
+            str = compose("%s", string(cellstr(string(obj.Data.Name))));
         end
 
         function rep = compactRepresentationForSingleLine(obj, displayConfiguration, width)
@@ -95,7 +102,7 @@ classdef SceneNode < spiky.core.TimeTable & matlab.mixin.CustomCompactDisplayPro
             %     Annotation=compose("%s: %s", string(cellstr(string(obj.Data.Type))), ...
             %         string(cellstr(string(obj.Data.Name)))));
             rep = widthConstrainedDataRepresentation(obj, displayConfiguration, width, ...
-                Annotation=compose("%s ", string(cellstr(string(obj.Data.Name)))));
+                Annotation=string(obj)+" ");
         end
 
         function rep = compactRepresentationForColumn(obj, displayConfiguration, width)
@@ -103,7 +110,7 @@ classdef SceneNode < spiky.core.TimeTable & matlab.mixin.CustomCompactDisplayPro
             %     StringArray=compose("%s: %s", string(cellstr(string(obj.Data.Type))), ...
             %         string(cellstr(string(obj.Data.Name)))));
             rep = widthConstrainedDataRepresentation(obj, displayConfiguration, width, ...
-                StringArray=compose("%s ", string(cellstr(string(obj.Data.Name)))));
+                StringArray=string(obj)+" ");
         end
     end
 end

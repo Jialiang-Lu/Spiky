@@ -1,5 +1,5 @@
 function index = binarySearch(array, target, left, right)
-% BINARYSEARCH Search for a target in a sorted array
+%BINARYSEARCH Search for a target in a sorted array
 % index = binarySearch(array, target, left, right)
 %
 %   array: 1D sorted array of doubles
