@@ -2,6 +2,8 @@ classdef Classifier < spiky.stat.GroupedStat
     %CLASSIFIER Class representing an error-correcting output codes (ECOC) model classifier
     %
     %   First dimension is time, second dimension is brain regions, third dimension is conditions
+    %   Each element in Data is a CompactClassificationECOC object or 
+    %   ClassificationPartitionedLinearECOC object
 
     properties
         Conditions categorical % Conditions for classification
@@ -72,10 +74,10 @@ classdef Classifier < spiky.stat.GroupedStat
             b = ~isempty(obj) && isprop(obj.Data{1}, "Partition");
         end
 
-        function varargout = predict(obj, x, options)
+        function varargout = predict(obj, x, options, options2)
             %PREDICT Predict the class labels for the input data
             %
-            %   labels = PREDICT(obj, x)
+            %   labels = PREDICT(obj, x, ...)
             %
             %   obj: classifier
             %   x: input data
@@ -85,6 +87,8 @@ classdef Classifier < spiky.stat.GroupedStat
             %           "lossweighted")
             %       PosteriorMethod: method for posterior probability estimation, 
             %           either "kl" or "qp" (default: "kl")
+            %       Aggregate: if true, aggregate the predictions across time points and regions
+            %           (default: false)
             %
             %   labels: predicted class labels
 
@@ -95,6 +99,7 @@ classdef Classifier < spiky.stat.GroupedStat
                 options.Decoding {mustBeMember(options.Decoding, ["lossweighted", "lossbased"])} ...
                     = "lossweighted"
                 options.PosteriorMethod {mustBeMember(options.PosteriorMethod, ["kl", "qp"])} = "kl"
+                options2.Aggregate logical = false
             end
 
             if isempty(options.BinaryLoss)
@@ -132,8 +137,14 @@ classdef Classifier < spiky.stat.GroupedStat
             % nEvents = numel(obj.Data{1}.Y);
             labels = reshape(labels, [], obj.Length, obj.NGroups);
             labels = permute(labels, [2 1 3]);
+            labels = removecats(labels);
             events = obj.Data{1}.Y;
-            varargout{1} = spiky.trig.Labels(obj.Time, labels, events, obj.Groups);
+            varargout{1} = spiky.trig.Trig(obj.Time, labels, events, obj.Groups);
+            if options2.Aggregate
+                % Aggregate predictions across time points and regions
+                labelsAgg = mode(labels, [1 3]);
+                varargout{1} = spiky.trig.Trig(0, labelsAgg, events);
+            end
         end
 
         function n = get.NNeurons(obj)

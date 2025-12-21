@@ -86,6 +86,94 @@ classdef ScreenCapture < spiky.core.Metadata & handle
             obj.Frame = frame;
         end
 
+        function writeSrt(obj, t, s, filePath, options)
+            % WRITESRT Writes a .srt subtitle file from captions and timestamps.
+            %
+            %   writeSrt(obj, t, s, filePath, ...)
+            %
+            %   obj: ScreenCapture object
+            %   t: column vector of timestamps in seconds
+            %   s: column vector of caption strings
+            %   filePath: path to save the .srt file
+            %   Name-value arguments:
+            %       DefaultDurationSeconds: default duration for each caption (default: 1 second)
+            %       GapSeconds: gap between captions (default: 0.02 seconds)
+            %       MinDurationSeconds: minimum duration for each caption (default: 0.10 seconds)
+            %       SkipEmpty: whether to skip empty captions (default: true)
+            %       UseWindowsNewline: whether to use Windows-style newlines (default: true)
+            %       TrimWhitespace: whether to trim whitespace from captions (default: true)
+
+            arguments
+                obj spiky.minos.ScreenCapture
+                t (:, 1) double {mustBeFinite, mustBeNonnegative}
+                s (:, 1) string
+                filePath string = extractBefore(obj.Path, "."+alphanumericsPattern+lineBoundary)+".srt"
+                options.DefaultDurationSeconds double {mustBePositive} = 1
+                options.GapSeconds double {mustBeNonnegative} = 0.5
+                options.MinDurationSeconds double {mustBePositive} = 0.10
+                options.SkipEmpty logical = true
+                options.UseWindowsNewline logical = false
+                options.TrimWhitespace logical = true
+            end
+
+            %% Validate inputs
+            nLines = size(s, 1);
+            assert(height(t)==nLines, ...
+                "The number of timestamps and captions must be the same.");
+            if options.UseWindowsNewline
+                newlineStr = sprintf("\r\n");
+            else
+                newlineStr = newline;
+            end
+
+            %% Compute end times
+            t = obj.Sync.Sync.Fit(t);
+            startSeconds = t;
+            endSeconds = [t(2:end) - options.GapSeconds; t(end) + options.DefaultDurationSeconds];
+            endSeconds = max(endSeconds, startSeconds + options.MinDurationSeconds);
+
+            %% Open file (UTF-8)
+            [fid, msg] = fopen(filePath, "w", "n", "UTF-8");
+            if fid < 0
+                error("Failed to open file: %s", msg);
+            end
+            cleaner = onCleanup(@() fclose(fid));
+
+            %% Write SRT blocks
+            idx = 0;
+            for ii = 1:nLines
+                caption = s(ii);
+                if options.TrimWhitespace
+                    caption = strtrim(caption);
+                end
+                if options.SkipEmpty && strlength(caption) == 0
+                    continue
+                end
+                caption = replace(caption, ["\r\n", "\n", "\r"], newlineStr);
+                idx = idx + 1;
+                startStr = formatSrtTime(startSeconds(ii));
+                endStr = formatSrtTime(endSeconds(ii));
+                timeLine = startStr + " --> " + endStr;
+                block = string(idx) + newlineStr + timeLine + newlineStr + caption + newlineStr + newlineStr;
+                fprintf(fid, "%s", block);
+            end
+
+            function timeStr = formatSrtTime(secondsValue)
+                % FORMATSRTTIME Converts seconds to SRT timestamp format "HH:MM:SS,mmm".
+                secondsValue = max(0, secondsValue);
+                totalMs = round(secondsValue * 1000);
+                ms = mod(totalMs, 1000);
+                totalSec = floor(totalMs / 1000);
+                ss = mod(totalSec, 60);
+                totalMin = floor(totalSec / 60);
+                mm = mod(totalMin, 60);
+                hh = floor(totalMin / 60);
+                timeStr = compose("%02d:%02d:%02d,%03d", hh, mm, ss, ms);
+                timeStr = timeStr(1);
+            end
+        end
+
+
         function t = get.CurrentTime(obj)
             if ~obj.IsOpen
                 error("Video file is not open")

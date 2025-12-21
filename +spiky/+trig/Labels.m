@@ -1,14 +1,6 @@
 classdef Labels < spiky.trig.Trig
     %LABELS Class representing labels for events
 
-    properties
-        Groups (:, 1)
-    end
-
-    properties (Dependent)
-        NGroups double
-    end
-
     methods (Static)
         function dimNames = getDimNames()
             %GETDIMNAMES Get the dimension names of the TimeTable
@@ -34,10 +26,6 @@ classdef Labels < spiky.trig.Trig
             obj.EventDim = 2;
             obj.Events_ = events;
             obj.Groups = groups;
-        end
-
-        function n = get.NGroups(obj)
-            n = size(obj.Data, 3);
         end
 
         function [h, hError] = plot(obj, cats, lineSpec, plotOps, options)

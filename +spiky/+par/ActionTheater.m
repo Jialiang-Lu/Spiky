@@ -245,6 +245,14 @@ classdef ActionTheater < spiky.par.Paradigm
             if exist(fpth, "file") && ~options.Recalculate
                 tmp = load(fpth, "zetaTests");
                 zetaTests = tmp.zetaTests;
+                names = string(fieldnames(zetaTests));
+                unitsAll = zetaTests.(names(1)).Groups;
+                units = vertcat(spikes.Neuron);
+                isValid = ismember(string(unitsAll), string(units));
+                for ii = 1:length(names)
+                    z = zetaTests.(names(ii));
+                    zetaTests.(names(ii)) = z(:, isValid);
+                end
             else
                 zetaTests = struct();
                 idcVis = find(obj.Graph.IsVisibility);

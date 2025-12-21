@@ -1,6 +1,10 @@
 classdef Subspaces < spiky.stat.GroupedStat
     %SUBSPACES Class representing a set of subspaces
 
+    properties
+        Partition % Partition of the data used to compute the subspaces
+    end
+
     methods
         function obj = Subspaces(time, data, groups, groupIndices)
             %SUBSPACES Create a new instance of Subspaces
@@ -143,12 +147,12 @@ classdef Subspaces < spiky.stat.GroupedStat
                     ses = data.Neuron.Session(1);
                     data.Neuron = spiky.core.Neuron.zeros(nBases*nGroups);
                     data.Neuron.Session = repmat(ses, height(data.Neuron), 1);
-                    data.Neuron.Region = categorical(repelem(string(obj.Groups), nBases));
-                    data.Neuron.Group = repelem((1:nGroups)', nBases);
+                    data.Neuron.Region = categorical(repelem(string(obj.Groups), nBases, 1));
+                    data.Neuron.Group = repelem((1:nGroups)', nBases, 1);
                     data.Neuron.Id = repmat((1:nBases)', nGroups, 1);
                 end
                 if isa(data, "spiky.trig.TrigFr")
-                    data.Samples = obj.Groups;
+                    data.Samples = (1:nSamples)';
                 end
             else
                 data = C;

@@ -24,6 +24,222 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             %       1 means obj(idx) equals obj(idx, :), 2 means obj(idx) equals obj(:, idx), etc.
             index = 3;
         end
+
+        function [f, g] = multiTimeSoftmaxObjective(theta, X, yInt, Ymat, ...
+            pLocal, nLocal, Tlocal, d, Klocal, lambda, lambdaBias, timeAgg, betaTime)
+            %MULTITIMESOFTMAXOBJECTIVE Computes multi-time softmax loss and gradient with shared U.
+            arguments
+                theta (:, 1) double
+                X double
+                yInt (:, 1) double
+                Ymat double
+                pLocal (1, 1) double
+                nLocal (1, 1) double
+                Tlocal (1, 1) double
+                d (1, 1) double
+                Klocal (1, 1) double
+                lambda (1, 1) double
+                lambdaBias (1, 1) double
+                timeAgg (1, 1) string
+                betaTime (1, 1) double
+            end
+
+            [U1, W, b] = spiky.trig.TrigFr.unpackThetaMulti(theta, pLocal, d, Klocal, Tlocal);
+
+            fPerTime = zeros(Tlocal, 1);
+            gUtime = zeros(pLocal, d, Tlocal);
+            gWtime = zeros(d, Klocal, Tlocal);
+            gbtime = zeros(Klocal, Tlocal);
+
+            for tt = 1:Tlocal
+                Xtt = X(:, :, tt);
+                Z = U1' * Xtt; % d-by-n
+                S = squeeze(W(:, :, tt))' * Z + b(:, tt); % K-by-n
+
+                [logZ, P] = spiky.trig.TrigFr.logsumexpMat(S);
+
+                nll = -sum(sum(Ymat .* (S - logZ), 1)) / nLocal;
+                reg = 0.5 * lambda * sum(W(:, :, tt).^2, "all") ...
+                    + 0.5 * lambdaBias * sum(b(:, tt).^2);
+                fPerTime(tt) = nll + reg;
+
+                R = (P - Ymat); % K-by-n
+                gWtime(:, :, tt) = (Z * R') / nLocal + lambda * W(:, :, tt);
+                gbtime(:, tt) = sum(R, 2) / nLocal + lambdaBias * b(:, tt);
+                gUtime(:, :, tt) = (Xtt * (W(:, :, tt) * R)') / nLocal;
+            end
+
+            if Tlocal <= 1 || timeAgg == "sum"
+                f = sum(fPerTime);
+                alpha = ones(Tlocal, 1);
+            else
+                beta = betaTime;
+                fMin = min(fPerTime);
+                exps = exp(-beta * (fPerTime - fMin));
+                Zsum = sum(exps);
+                alpha = exps / Zsum;
+                f = fMin - (1 / beta) * log(Zsum);
+            end
+
+            gU = zeros(pLocal, d);
+            gW = zeros(d, Klocal, Tlocal);
+            gb = zeros(Klocal, Tlocal);
+            for tt = 1:Tlocal
+                gU = gU + alpha(tt) * gUtime(:, :, tt);
+                gW(:, :, tt) = alpha(tt) * gWtime(:, :, tt);
+                gb(:, tt) = alpha(tt) * gbtime(:, tt);
+            end
+
+            g = spiky.trig.TrigFr.packThetaMulti(gU, gW, gb, pLocal, d, Klocal, Tlocal);
+        end
+
+        function [f, g] = multiTimeSmoothedHingeObjective(theta, X, yInt, ...
+            Klocal, pLocal, nLocal, Tlocal, d, lambda, lambdaBias, tau, timeAgg, betaTime)
+        %MULTITIMESMOOTHEDHINGEOBJECTIVE Computes multi-time smoothed hinge loss and gradient.
+            arguments
+                theta (:, 1) double
+                X double
+                yInt (:, 1) double
+                Klocal (1, 1) double
+                pLocal (1, 1) double
+                nLocal (1, 1) double
+                Tlocal (1, 1) double
+                d (1, 1) double
+                lambda (1, 1) double
+                lambdaBias (1, 1) double
+                tau (1, 1) double
+                timeAgg (1, 1) string
+                betaTime (1, 1) double
+            end
+
+            [U1, W, b] = spiky.trig.TrigFr.unpackThetaMulti(theta, pLocal, d, Klocal, Tlocal);
+
+            fPerTime = zeros(Tlocal, 1);
+            gUtime = zeros(pLocal, d, Tlocal);
+            gWtime = zeros(d, Klocal, Tlocal);
+            gbtime = zeros(Klocal, Tlocal);
+
+            for tt = 1:Tlocal
+                Xtt = X(:, :, tt);
+                Z = U1' * Xtt; % d-by-n
+                S = squeeze(W(:, :, tt))' * Z + b(:, tt); % K-by-n
+
+                Sy = S(sub2ind([Klocal nLocal], yInt', 1:nLocal));
+                M = 1 + S - Sy;
+                mask = true(Klocal, nLocal);
+                mask(sub2ind([Klocal nLocal], yInt', 1:nLocal)) = false;
+
+                E = zeros(Klocal, nLocal);
+                E(mask) = exp(M(mask) / tau);
+                sumE = sum(E, 1);
+                loss = tau * sum(log(1 + sumE)) / nLocal;
+
+                reg = 0.5 * lambda * sum(W(:, :, tt).^2, "all") ...
+                    + 0.5 * lambdaBias * sum(b(:, tt).^2);
+                fPerTime(tt) = loss + reg;
+
+                denom = 1 + sumE;
+                Alpha = E ./ denom; % K-by-n
+
+                sumAlpha = sum(Alpha, 1);
+                Alpha(sub2ind([Klocal nLocal], yInt', 1:nLocal)) = -sumAlpha;
+
+                gWtime(:, :, tt) = (Z * Alpha') / nLocal + lambda * W(:, :, tt);
+                gbtime(:, tt) = sum(Alpha, 2) / nLocal + lambdaBias * b(:, tt);
+                gUtime(:, :, tt) = (Xtt * (W(:, :, tt) * Alpha)') / nLocal;
+            end
+
+            if Tlocal <= 1 || timeAgg == "sum"
+                f = sum(fPerTime);
+                alpha = ones(Tlocal, 1);
+            else
+                beta = betaTime;
+                fMin = min(fPerTime);
+                exps = exp(-beta * (fPerTime - fMin));
+                Zsum = sum(exps);
+                alpha = exps / Zsum;
+                f = fMin - (1 / beta) * log(Zsum);
+            end
+
+            gU = zeros(pLocal, d);
+            gW = zeros(d, Klocal, Tlocal);
+            gb = zeros(Klocal, Tlocal);
+            for tt = 1:Tlocal
+                gU = gU + alpha(tt) * gUtime(:, :, tt);
+                gW(:, :, tt) = alpha(tt) * gWtime(:, :, tt);
+                gb(:, tt) = alpha(tt) * gbtime(:, tt);
+            end
+
+            g = spiky.trig.TrigFr.packThetaMulti(gU, gW, gb, pLocal, d, Klocal, Tlocal);
+        end
+
+        function [c, ceq] = orthoConstraintsMulti(theta, pLocal, d, Klocal, Tlocal)
+        %ORTHOCONSTRAINTSMULTI Enforces U' * U = I as nonlinear equality constraints.
+            arguments
+                theta (:, 1) double
+                pLocal (1, 1) double
+                d (1, 1) double
+                Klocal (1, 1) double %#ok<INUSD>
+                Tlocal (1, 1) double %#ok<INUSD>
+            end
+
+            [U1, ~, ~] = spiky.trig.TrigFr.unpackThetaMulti(theta, pLocal, d, Klocal, Tlocal);
+            G = U1' * U1 - eye(d);
+            c = [];
+            ceq = G(:);
+        end
+
+        function theta = packThetaMulti(U, W, b, pLocal, d, Klocal, Tlocal)
+        %PACKTHETAMULTI Packs U, W, b into a single parameter vector.
+            arguments
+                U double
+                W double
+                b double
+                pLocal (1, 1) double
+                d (1, 1) double
+                Klocal (1, 1) double
+                Tlocal (1, 1) double
+            end
+
+            theta = zeros(pLocal * d + d * Klocal * Tlocal + Klocal * Tlocal, 1);
+            idx = 0;
+            theta(idx + (1:(pLocal * d))) = U(:);
+            idx = idx + pLocal * d;
+            theta(idx + (1:(d * Klocal * Tlocal))) = W(:);
+            idx = idx + d * Klocal * Tlocal;
+            theta(idx + (1:(Klocal * Tlocal))) = b(:);
+        end
+
+        function [U, W, b] = unpackThetaMulti(theta, pLocal, d, Klocal, Tlocal)
+        %UNPACKTHETAMULTI Unpacks a parameter vector into U, W, b.
+            arguments
+                theta (:, 1) double
+                pLocal (1, 1) double
+                d (1, 1) double
+                Klocal (1, 1) double
+                Tlocal (1, 1) double
+            end
+
+            idx = 0;
+            U = reshape(theta(idx + (1:(pLocal * d))), pLocal, d);
+            idx = idx + pLocal * d;
+            W = reshape(theta(idx + (1:(d * Klocal * Tlocal))), d, Klocal, Tlocal);
+            idx = idx + d * Klocal * Tlocal;
+            b = reshape(theta(idx + (1:(Klocal * Tlocal))), Klocal, Tlocal);
+        end
+
+        function [logZ, P] = logsumexpMat(S)
+        %LOGSUMEXPMAT Computes log-sum-exp normalization and softmax probabilities.
+            arguments
+                S double
+            end
+
+            Smax = max(S, [], 1);
+            E = exp(S - Smax);
+            Z = sum(E, 1);
+            logZ = Smax + log(Z);
+            P = E ./ Z;
+        end
     end
 
     methods
@@ -113,6 +329,43 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 se.Data = permute(se1, [2 1 3 4]);
                 se.Events = names;
             end
+        end
+
+        function groupedFr = group(obj, options)
+            %GROUP Group the triggered firing rate by neuron region
+            %   groupedFr = group(obj, options)
+            %
+            %   obj: triggered firing rate object
+            %   Name-value arguments:
+            %       GroupTime: group the time dimension as well
+            %       Permute: permutation of the dimensions
+            %
+            %   groupedFr: grouped triggered firing rate object
+            arguments
+                obj spiky.trig.TrigFr
+                options.GroupTime logical = false
+                options.Permute double = 1:5
+            end
+            [groupNames, ~, idcGroups] = unique(obj.Neuron.Region);
+            groupIndices = arrayfun(@(x) find(idcGroups==x), unique(idcGroups), ...
+                UniformOutput=false);
+            nGroups = numel(groupNames);
+            if options.GroupTime
+                data = cell(height(obj), nGroups);
+                for ii = 1:height(obj)
+                    for jj = 1:nGroups
+                        data{ii, jj} = permute(obj.Data(ii, :, groupIndices{jj}, :, :), options.Permute);
+                    end
+                end
+                t = obj.Time;
+            else
+                data = cell(1, nGroups);
+                for jj = 1:nGroups
+                    data{1, jj} = permute(obj.Data(:, :, groupIndices{jj}, :, :), options.Permute);
+                end
+                t = 0;
+            end
+            groupedFr = spiky.stat.GroupedStat(t, data, groupNames, groupIndices);
         end
 
         function obj = flatten(obj)
@@ -759,6 +1012,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 options.Learners = "svm"
                 options.Coding string {mustBeMember(options.Coding, ["onevsall", "onevsone"])} = "onevsall"
                 options.KFold double = []
+                options.Partition = []
                 options.FitPosterior logical = false
                 options.ClassNames = []
                 options.GroupIndices = []
@@ -767,6 +1021,25 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 options.TimeDependent logical = true
             end
 
+            if size(obj.Data, 4)>1 % Data is already partitioned
+                nFolds = size(obj.Data, 4);
+                assert(~isempty(options.Partition), ...
+                    "Partition must be provided when data is already partitioned");
+                assert(nFolds==options.Partition.NumTestSets, ...
+                    "Partition size must match the fourth dimension of the data");
+                mdls = cell(nFolds, 1);
+                objs = arrayfun(@(ii) subsref(obj, substruct("()", {':', ':', ':', ii})), ...
+                    (1:nFolds)', UniformOutput=false);
+                for ii = 1:nFolds
+                    options1 = options;
+                    options1.Partition = cvpartition(CustomPartition=options.Partition.test(ii));
+                    optionsCell = namedargs2cell(options1);
+                    mdls{ii} = objs{ii}.fitcecoc(labels, window, idcEvents, ...
+                        optionsCell{:});
+                end
+                mdls = cat(3, mdls{:});
+                return
+            end
             if isempty(window)
                 window = obj.Time([1 end]);
             end
@@ -778,7 +1051,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 t = 0;
             end
             if isempty(idcEvents)
-                idcEvents = 1:obj.NEvents;
+                idcEvents = 1:width(obj.Data);
             elseif islogical(idcEvents)
                 idcEvents = find(idcEvents);
             end
@@ -842,20 +1115,25 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                     X1 = reshape(X(idcNeurons, idcCondition, :), numel(idcNeurons), []);
                     y1 = repmat(labels(idcCondition), nT1, 1);
                 end
-                if isempty(options.KFold)
+                if isempty(options.Partition) && ~isempty(options.KFold)
+                    if options.TimeDependent
+                        cv = cvpartition(labels(idcCondition), KFold=options.KFold);
+                    else
+                        cv1 = cvpartition(labels(idcCondition), KFold=options.KFold);
+                        idcTest = repmat(cv1.test("all"), nT1, 1);
+                        cv = cvpartition(CustomPartition=idcTest);
+                    end
+                elseif ~isempty(options.Partition)
+                    cv = options.Partition;
+                else
+                    cv = [];
+                end
+                if isempty(cv)
                     mdls{ii} = fitcecoc(X1, y1, ...
                         Coding=options.Coding, ObservationsIn="columns", Learners=options.Learners, ...
                         ClassNames=options.ClassNames, Options=optionsFit, Verbose=1, ...
                         FitPosterior=options.FitPosterior, Prior="uniform");
                 elseif options.TimeDependent
-                    mdls{ii} = fitcecoc(X1, y1, ...
-                        Coding=options.Coding, ObservationsIn="columns", Learners=options.Learners, ...
-                        ClassNames=options.ClassNames, KFold=options.KFold, Options=optionsFit, ...
-                        Verbose=1, FitPosterior=options.FitPosterior, Prior="uniform");
-                else
-                    cv1 = cvpartition(labels(idcCondition), KFold=options.KFold);
-                    idcTest = repmat(cv1.test("all"), nT1, 1);
-                    cv = cvpartition(CustomPartition=idcTest);
                     mdls{ii} = fitcecoc(X1, y1, ...
                         Coding=options.Coding, ObservationsIn="columns", Learners=options.Learners, ...
                         ClassNames=options.ClassNames, CVPartition=cv, Options=optionsFit, ...
@@ -865,6 +1143,441 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             end
             mdls = spiky.stat.Classifier(t, mdls, categorical(options.GroupNames(:)), ...
                 options.GroupIndices, conditionSet);
+        end
+
+        function [classifier, subspaces, metrics] = learnDiscriminantSubspace(obj, labels, ...
+            nDims, options)
+            %LEARNDISCRIMINANTSUBSPACE Learn low-dimensional subspaces U that minimize
+            %   classification risk AFTER projection, jointly with classifier parameters
+            %   in the projected space, with a single shared subspace over time.
+            %
+            %   [classifier, subspaces, metrics] = LEARNDISCRIMINANTSUBSPACE( ...
+            %       obj, labels, nDims, Name=Value, ...)
+            %
+            %   obj: nTime x nEvents x nNeurons data (spiky.trig.TrigFr)
+            %   labels: nEvents x 1 categorical labels (same for all time points)
+            %   nDims:  number of dimensions for the subspace
+            %
+            %   Name-Value arguments for subspace learning:
+            %       EventIndices: indices of events to use (default: all events)
+            %       Window: time window for learning, relative to trigger (default: [-Inf Inf])
+            %       Type: type of loss function, either "softmax" or "hinge"
+            %           (default: "softmax")
+            %       Lambda: L2 penalty on classifier weights W (default: 1e-3)
+            %       LambdaBias: L2 penalty on classifier bias b (default: 0)
+            %       Tau: smoothness (temperature) for smoothed hinge loss (default: 0.5)
+            %       Init: initialization for U, either "pca", "lda", or "random"
+            %           (default: "lda")
+            %       Solver: fmincon algorithm, either "sqp" or "interior-point"
+            %           (default: "sqp")
+            %       MaxIter: maximum number of fmincon iterations (default: 500)
+            %
+            %   Name-Value arguments for classifier training:
+            %       Learners: base learners for ECOC, "svm" or "logistic" (default: "svm")
+            %       Coding: coding scheme for ECOC, "onevsall" or "onevsone"
+            %           (default: "onevsall")
+            %       KFold: number of CV folds, empty for no CV (default: [])
+            %       FitPosterior: if true, fit posterior probabilities (default: false)
+            %
+            %   classifier: spiky.stat.Classifier trained on projected data
+            %   subspaces: spiky.stat.Subspaces object, with a single U shared over time
+            %       for each group (brain region)
+            %   metrics: spiky.stat.GroupedStat with struct fields:
+            %       .TrainLoss, .TrainAcc, .Confusion (peak over time)
+
+            arguments
+                obj spiky.trig.TrigFr % nTime x nEvents x nNeurons data
+                labels (:, 1) categorical % nEvents x 1 labels
+                nDims (1, 1) double
+                options.EventIndices = 1:obj.NEvents
+                options.Window (1, 2) double = [-Inf Inf]
+                options.Type string {mustBeMember(options.Type, ["softmax" "hinge"])} = "softmax"
+                options.Lambda double = 1e-3
+                options.LambdaBias double = 0
+                options.Tau double = 0.5
+                options.Init string {mustBeMember(options.Init, ["pca" "lda" "random"])} = "lda"
+                options.Solver string {mustBeMember(options.Solver, ["sqp" "interior-point"])} = "sqp"
+                options.MaxIter double = 500
+                options.Learners = "svm"
+                options.Coding string {mustBeMember(options.Coding, ["onevsall", "onevsone"])} ...
+                    = "onevsall"
+                options.KFold double = []
+                options.Partition = []
+                options.FitPosterior logical = false
+                options.EventDim string {mustBeMember(options.EventDim, ["rows", "columns"])} = "columns"
+            end
+
+            trigFr = subsref(obj, substruct("()", {':', options.EventIndices, ':'}));
+            labels = removecats(labels);
+            if options.EventDim=="columns"
+                nEvents = width(trigFr);
+            else
+                nEvents = height(trigFr);
+            end
+            if nEvents < numel(labels)
+                labels = labels(options.EventIndices);
+            end
+
+            %% Basic checks and grouping by brain region
+            assert(nEvents == numel(labels), ...
+                "The number of events in trigFr and labels must be the same");
+
+            groupedFr = subsref(trigFr, substruct("()", { ...
+                trigFr.Time >= options.Window(1) & trigFr.Time <= options.Window(2), ':', ':'}));
+            nT = height(trigFr);
+            if options.EventDim=="columns"
+                groupedFr = groupedFr.group(Permute=[3 2 1]); % each cell: nNeurons x nEvents x nTime
+            else
+                groupedFr = groupedFr.group(Permute=[3 1 2]); % each cell: nNeurons x nTime x nEvents
+            end
+            nGroups = width(groupedFr);
+            if isempty(options.KFold) && isempty(options.Partition)
+                isTrain = true(size(labels));
+                Xs = groupedFr.Data;
+                nFolds = 1;
+            else
+                if isempty(options.Partition)
+                    options.Partition = cvpartition(labels, KFold=options.KFold);
+                else
+                    options.KFold = options.Partition.NumTestSets;
+                end
+                isTrain = options.Partition.training("all");
+                nFolds = options.KFold;
+                Xs = cell(1, nGroups, nFolds);
+                for ii = 1:nGroups
+                    for jj = 1:nFolds
+                        idcTrain = options.Partition.training(jj);
+                        Xs{1, ii, jj} = groupedFr.Data{ii}(:, idcTrain, :);
+                    end
+                end
+            end
+
+            %% Convert labels to integer codes 1..K and one-hot matrix Y (K x nEvents)
+            yNumeric = double(labels);
+            classes = unique(yNumeric(:)');
+            K = numel(classes);
+            assert(all(classes == 1:K), ...
+                "Labels must map to consecutive integer codes 1..K internally");
+            nEvents = numel(labels);
+            Y = zeros(K, nEvents);
+            Y(sub2ind([K nEvents], yNumeric', 1:nEvents)) = 1;
+
+            subspaces = cell(1, nGroups, nFolds);
+            metrics = cell(1, nGroups, nFolds);
+
+            pb = spiky.plot.ProgressBar(nGroups*nFolds, "Learning discriminant subspaces", ...
+                Parallel=false);
+
+            %% Learn one shared subspace per group (brain region)
+            for ii = 1:nGroups*nFolds
+                [~, idxFold] = ind2sub([nGroups, nFolds], ii);
+                idcFold = isTrain(:, idxFold);
+                X = Xs{ii}; % nNeurons x nEvents x nTime
+                d = nDims;
+                [p, n, Tlocal] = size(X);
+
+                % ----- per-group shared-subspace optimization (inlined) -----
+                yInt = yNumeric(idcFold);
+                Ymat = Y(:, idcFold);
+                Klocal = K;
+                opts = options;
+
+                pLocal = p;
+                nLocal = n;
+
+                lambda = opts.Lambda;
+                lambdaBias = opts.LambdaBias;
+
+                % Single-time case: behave like original implementation
+                if Tlocal <= 1
+                    timeAgg = "sum";
+                else
+                    % Soft-min over time to emphasize peak (best time point)
+                    timeAgg = "softmin";
+                end
+                betaTime = 5; % larger => closer to hard min over time
+
+                % ---------- Initialize U (p x d) ----------
+                switch opts.Init
+                    case "lda"
+                        if Tlocal > 1
+                            Xmean = mean(X, 3); % average over time: p x n
+                        else
+                            Xmean = X(:, :, 1);
+                        end
+
+                        % LDA initializer (regularized)
+                        Xmat = Xmean;
+                        [pLocalLda, nLocalLda] = size(Xmat);
+                        classesLocal = unique(yInt(:)');
+                        KlocalLda = numel(classesLocal);
+                        mu = mean(Xmat, 2);
+
+                        S_B = zeros(pLocalLda, pLocalLda);
+                        S_W = zeros(pLocalLda, pLocalLda);
+
+                        for kk = 1:KlocalLda
+                            idx = (yInt == classesLocal(kk));
+                            Xk = Xmat(:, idx);
+                            nk = size(Xk, 2);
+                            if nk == 0
+                                continue
+                            end
+                            muk = mean(Xk, 2);
+                            S_B = S_B + (nk / nLocalLda) * (muk - mu) * (muk - mu)';
+                            Xkc = Xk - muk;
+                            if nk > 1
+                                S_W = S_W + (nk / nLocalLda) * (Xkc * Xkc' / (nk - 1));
+                            end
+                        end
+
+                        epsSw = 1e-3 * trace(S_W) / max(pLocalLda, 1);
+                        S_W = S_W + epsSw * eye(pLocalLda);
+
+                        [Vw, Dw] = eig(S_W, "vector");
+                        Dw = max(Dw, 1e-12);
+                        Swm12 = Vw * diag(1 ./ sqrt(Dw)) * Vw';
+                        B = Swm12 * S_B * Swm12;
+
+                        nVec = min([d, KlocalLda - 1, pLocalLda]);
+                        if nVec < 1
+                            [Qtmp, ~] = qr(randn(pLocalLda, d), 0);
+                            U0 = Qtmp(:, 1:d);
+                        else
+                            [V, ~] = eigs(B, nVec, "largestreal", ...
+                                "SubSpaceDimension", min(2 * nVec + 2, pLocalLda));
+                            Utmp = Swm12 * V;
+
+                            [Q, ~] = qr(Utmp, 0);
+                            U0 = Q(:, 1:min([d, size(Q, 2)]));
+                            if size(U0, 2) < d
+                                [Q2, ~] = qr(randn(pLocalLda, d - size(U0, 2)), 0);
+                                U0 = orth([U0, Q2(:, 1:(d - size(U0, 2)))]);
+                            end
+                        end
+
+                    case "pca"
+                        if Tlocal > 1
+                            Xcat = reshape(X, pLocal, nLocal * Tlocal);
+                        else
+                            Xcat = X(:, :, 1);
+                        end
+                        Xc = Xcat - mean(Xcat, 2);
+                        [Up, ~, ~] = svd(Xc, "econ");
+                        U0 = Up(:, 1:d);
+
+                    case "random"
+                        [Q, ~] = qr(randn(pLocal, d), 0);
+                        U0 = Q;
+                end
+
+                % Initialize classifier parameters in projected space
+                W0 = zeros(d, Klocal, Tlocal);
+                b0 = zeros(Klocal, Tlocal);
+
+                theta0 = spiky.trig.TrigFr.packThetaMulti(U0, W0, b0, pLocal, d, Klocal, Tlocal);
+
+                % Objective across time with shared U
+                switch opts.Type
+                    case "softmax"
+                        obj1 = @(theta) spiky.trig.TrigFr.multiTimeSoftmaxObjective(theta, X, yInt, Ymat, ...
+                            pLocal, nLocal, Tlocal, d, Klocal, ...
+                            lambda, lambdaBias, timeAgg, betaTime);
+                    case "hinge"
+                        obj1 = @(theta) spiky.trig.TrigFr.multiTimeSmoothedHingeObjective(theta, X, yInt, ...
+                            Klocal, pLocal, nLocal, Tlocal, d, ...
+                            lambda, lambdaBias, opts.Tau, timeAgg, betaTime);
+                end
+
+                nonlcon = @(theta) spiky.trig.TrigFr.orthoConstraintsMulti(theta, pLocal, d, Klocal, Tlocal);
+
+                fminconOpts = optimoptions("fmincon", ...
+                    "Algorithm", opts.Solver, ...
+                    "SpecifyObjectiveGradient", true, ...
+                    "SpecifyConstraintGradient", false, ...
+                    "MaxIterations", opts.MaxIter, ...
+                    "Display", "final-detailed", ...
+                    "UseParallel", true, ...
+                    "ConstraintTolerance", 1e-8, ...
+                    "OptimalityTolerance", 1e-6, ...
+                    "StepTolerance", 1e-10);
+
+                problem = struct( ...
+                    "objective", obj1, ...
+                    "x0", theta0, ...
+                    "nonlcon", nonlcon, ...
+                    "solver", "fmincon", ...
+                    "options", fminconOpts, ...
+                    "Aineq", [], "bineq", [], ...
+                    "Aeq", [], "beq", [], ...
+                    "lb", [], "ub", []);
+
+                [thetaOpt, ~, ~] = fmincon(problem);
+
+                [U, W, b] = spiky.trig.TrigFr.unpackThetaMulti(thetaOpt, pLocal, d, Klocal, Tlocal);
+
+                % ----- compute per-time training metrics and take peak time (inlined) -----
+                losses = zeros(Tlocal, 1);
+                accs = zeros(Tlocal, 1);
+                confs = cell(Tlocal, 1);
+
+                for tt = 1:Tlocal
+                    Xtt = X(:, :, tt);
+                    Z = U' * Xtt;
+                    S = squeeze(W(:, :, tt))' * Z + b(:, tt); % K-by-n
+
+                    switch opts.Type
+                        case "softmax"
+                            [logZ, P] = spiky.trig.TrigFr.logsumexpMat(S);
+                            ce = -sum(sum(Ymat .* (S - logZ), 1)) / nLocal;
+                            losses(tt) = ce;
+                            [~, yhat] = max(P, [], 1);
+
+                        case "hinge"
+                            Sy = S(sub2ind([Klocal nLocal], yInt', 1:nLocal));
+                            M = 1 + S - Sy;
+                            mask = true(Klocal, nLocal);
+                            mask(sub2ind([Klocal nLocal], yInt', 1:nLocal)) = false;
+                            E = zeros(Klocal, nLocal);
+                            E(mask) = exp(M(mask) / opts.Tau);
+                            sumE = sum(E, 1);
+                            loss = opts.Tau * sum(log(1 + sumE)) / nLocal;
+                            losses(tt) = loss;
+                            [~, yhat] = max(S, [], 1);
+                    end
+
+                    accs(tt) = mean(yhat(:) == yInt);
+                    confs{tt} = confusionmat(yInt, yhat(:), "Order", 1:Klocal);
+                end
+
+                [trainAcc, bestIdx] = max(accs);
+                trainLoss = losses(bestIdx);
+                confMat = confs{bestIdx};
+                % ----- end per-group inlined block -----
+
+                subspaces{ii} = spiky.stat.Coords(zeros(p, 1), U);
+
+                m = struct( ...
+                    "TrainLoss", trainLoss, ...
+                    "TrainAcc", trainAcc, ...
+                    "Confusion", confMat);
+                metrics{ii} = m;
+
+                pb.step
+            end
+
+            subspaces = spiky.stat.Subspaces(0, subspaces, ...
+                groupedFr.Groups, groupedFr.GroupIndices);
+            subspaces.Partition = options.Partition;
+
+            metrics = spiky.stat.GroupedStat(0, cell2mat(metrics), ...
+                groupedFr.Groups, groupedFr.GroupIndices);
+
+            trigFrProj = subspaces.project(trigFr);
+            classifier = trigFrProj.fitcecoc(labels, ...
+                Learners=options.Learners, Coding=options.Coding, ...
+                FitPosterior=options.FitPosterior, Partition=options.Partition);
+        end
+
+        function detector = trainEventDetector(obj, labels, bases, options)
+            %TRAINEVENTDETECTOR Train event detector using SVM classifiers
+            %
+            %   detector = trainEventDetector(obj, labels, bases, ...)
+            %
+            %   obj: triggered firing rate object
+            %   labels: TimeTable of event labels (categorical)
+            %   bases: TimeCoords object for feature extraction
+            %   Name-value arguments:
+            %       EventWindow: time window around each event to exclude from negative
+            %           samples (default: [-0.5, 0.5] seconds)
+            %       HistoryLength: length of history to consider for features (default: 0.5
+            %           seconds or min basis time)
+            %       NegativeSampleRatio: ratio of negative to positive samples (default: 5)
+            %       Learners: type of base learners for ECOC (default: "svm")
+            %       KFold: number of folds for cross-validation (default: 3)
+            %       Coding: coding scheme for ECOC, "onevsall" or "onevsone" (default: "onevsall")
+            %       NDims: number of dimensions for feature projection (default: 3)
+            %
+            arguments
+                obj spiky.trig.TrigFr
+                labels spiky.core.TimeTable
+                bases spiky.stat.TimeCoords = spiky.stat.TimeCoords.empty
+                options.EventWindow double = [-0.5, 0.5]
+                options.HistoryLength double = spiky.utils.ternary(isempty(bases), 0.5, -min(bases.Time))
+                options.NegativeSampleRatio double = 5
+                options.Learners = "svm"
+                options.KFold double = 3
+                options.Coding string {mustBeMember(options.Coding, ["onevsall", "onevsone"])} = "onevsall"
+                options.NDims double = 3
+            end
+
+            %% Validate inputs
+            if istable(labels.Data)
+                labels.Data = labels.Data{:, 1};
+            end
+            assert(isvector(labels.Data), "Labels data must be a vector");
+            assert(iscategorical(labels.Data), "Labels data must be categorical");
+
+            %% Prepare features
+            nT = height(obj);
+            % groupedFr = obj.group(Permute=[1 3 2]); % 1 x nGroups of cell: nTime x nNeurons
+            % nGroups = width(groupedFr);
+            % if ~isempty(bases)
+            %     features = cellfun(@(x) bases.expand(spiky.core.TimeTable(obj.Time, x)), ...
+            %         groupedFr.Data, UniformOutput=false);
+            % else
+            %     features = groupedFr.Data;
+            % end
+            if ~isempty(bases)
+                obj1 = bases.expand(obj);
+            else
+                obj1 = obj;
+            end
+
+            %% Prepare labels and samples
+            labels = labels(labels.Time>options.HistoryLength, :);
+            res = obj.Time(2)-obj.Time(1);
+            idcLabelPos = min(round((labels.Time-obj.Time(1))/res)+1, height(obj));
+            [~, idcExclude] = obj.inPeriods(labels.Time+options.EventWindow);
+            idcInclude = setdiff((1:height(obj))', idcExclude);
+            nPos = numel(idcLabelPos);
+            nNeg = min(round(nPos*options.NegativeSampleRatio), numel(idcInclude));
+            idcLabelNeg = randsample(idcInclude, nNeg);
+            idcLabel = [idcLabelPos; idcLabelNeg];
+            y = [labels.Data; repelem(categorical("none"), nNeg, 1)];
+            [idcLabel, idcSort] = sort(idcLabel);
+            y = y(idcSort);
+            % Xs = cellfun(@(x) x.Data(idcLabel, :), features, UniformOutput=false);
+            obj1 = subsref(obj1, substruct("()", {idcLabel, ':', ':'}));
+
+            %% Prepare cross-validation partition
+            tPartition = linspace(obj.Time(1), obj.Time(end), options.KFold+1);
+            prdPartition = spiky.core.Periods([tPartition(1:end-1)', tPartition(2:end)']);
+            [~, ~, idcPartition] = prdPartition.haveEvents(obj.Time(idcLabel));
+            partition = cvpartition(CustomPartition=idcPartition);
+            
+            %% Train event detector
+            % optionsFit = statset(UseParallel=true);
+            % mdls = cell(1, nGroups);
+            % pb = spiky.plot.ProgressBar(nGroups, "Training event detectors", Parallel=true);
+            % parfor ii = 1:nGroups
+            %     X = Xs{ii};
+            %     mdls{ii} = fitcecoc(X', y, Coding=options.Coding, ObservationsIn="columns", ...
+            %         Learners=options.Learners, CVPartition=partition, Options=optionsFit, ...
+            %         Verbose=1, FitPosterior=true, Prior="uniform");
+            %     pb.step
+            % end
+            [mdl, ss] = obj1.learnDiscriminantSubspace(y, options.NDims, ...
+                Learners=options.Learners, Coding=options.Coding, Partition=partition, ...
+                FitPosterior=true, EventDim="rows");
+            
+            %% Create EventDetector object
+            detector = spiky.stat.EventDetector(0, mdl, groupedFr.Groups, groupedFr.GroupIndices);
+            detector.Subspaces = ss;
+            detector.Bases = bases;
+            detector.Partition = options.Partition;
+            detector.PartitionPeriods = prdPartition;
+            detector.Options = options;
         end
 
         function mdls = fitglm(obj, factors, modelspec, window, idcEvents, options)

@@ -1,4 +1,5 @@
 classdef Trig < spiky.core.TimeTable
+    %TRIG Base class representing a general event-triggered data structure
 
     properties (Hidden)
         Events_ (:, 1)
@@ -7,11 +8,13 @@ classdef Trig < spiky.core.TimeTable
     properties
         EventDim (1, 1) double = 1
         Window (:, :) double
+        Groups (:, 1)
     end
 
     properties (Dependent)
         Events (:, 1)
         NEvents (1, 1) double
+        NGroups double
     end
 
     methods (Static)
@@ -19,11 +22,28 @@ classdef Trig < spiky.core.TimeTable
             %GETDIMNAMES Get the dimension names of the TimeTable
             %
             %   dimNames: dimension names
-            dimNames = ["Time" "Events"];
+            dimNames = ["Time" "Events" "Groups"];
         end
     end
 
     methods
+        function obj = Trig(time, data, events, groups)
+            arguments
+                time double = []
+                data = []
+                events (:, 1) = NaN(width(data), 1)
+                groups (:, 1) = NaN(size(data, 3), 1)
+            end
+            if isempty(time) && isempty(data)
+                return
+            end
+            obj.Time = time;
+            obj.Data = data;
+            obj.EventDim = 2;
+            obj.Events_ = events;
+            obj.Groups = groups;
+        end
+
         function t = get.Events(obj)
             if obj.EventDim == 1
                 t = obj.Time;
@@ -48,16 +68,8 @@ classdef Trig < spiky.core.TimeTable
             end
         end
 
-        % function varargout = subsref(obj, s)
-        %     [varargout{1:nargout}] = builtin("subsref", obj, s);
-        % end
-
-        % function obj = subsasgn(obj, s, varargin)
-        %     obj = builtin("subsasgn", obj, s, varargin{:});
-        % end
-
-        % function varargout = size(obj, varargin)
-        %     [varargout{1:nargout}] = builtin("size", obj, varargin{:});
-        % end
+        function n = get.NGroups(obj)
+            n = size(obj.Data, 3);
+        end
     end
 end

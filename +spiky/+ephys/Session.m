@@ -65,9 +65,15 @@ classdef Session < spiky.core.Metadata
 
         function [spikes, units] = getSpikes(obj, options)
             %GETSPIKES Get the spikes of the session.
+            %   [spikes, units] = getSpikes(obj, ...)
+            %
+            %   Name-value arguments:
+            %       ConvertRegionNames: whether to convert region names using brainRegionMap
+            %       RegionSubset: subset of regions to keep
             arguments
                 obj spiky.ephys.Session
                 options.ConvertRegionNames (1, 1) logical = true
+                options.RegionSubset string = string.empty
             end
             spikes = obj.loadData("spiky.ephys.SpikeInfo.mat");
             spikes = spikes.Spikes;
@@ -89,6 +95,11 @@ classdef Session < spiky.core.Metadata
                 for ii = 1:height(spikes)
                     spikes(ii).Neuron.Region = units.Region(ii);
                 end
+            end
+            if ~isempty(options.RegionSubset)
+                idcKeep = ismember(units.Region, options.RegionSubset);
+                spikes = spikes(idcKeep, :);
+                units = units(idcKeep, :);
             end
         end
 

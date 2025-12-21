@@ -167,6 +167,17 @@ classdef TimeCoords < spiky.stat.Coords & spiky.core.TimeTable
             obj@spiky.stat.Coords(origin, bases, time);
         end
 
+        function obj = flip(obj)
+            %FLIP Flip the time axis and basis functions
+            %
+            %   obj = FLIP(obj)
+            %
+            %   obj: TimeCoords object
+
+            obj.Time = -flipud(obj.Time);
+            obj.Bases = flipud(obj.Bases);
+        end
+
         function tt = expand(obj, tt, idcBases)
             %EXPAND Expand the TimeTable using the coordinate system
             %
@@ -185,6 +196,9 @@ classdef TimeCoords < spiky.stat.Coords & spiky.core.TimeTable
             if islogical(tt.Data)
                 tt.Data = double(tt.Data);
             end
+            if isa(tt, "spiky.trig.TrigFr")
+                tt.Data = permute(tt.Data, [1 3 2]); % nT x nNeurons x nEvents
+            end
             assert(isnumeric(tt.Data), "Data in tt must be numeric");
             assert(abs(obj.Time(2)-obj.Time(1)-tt.Time(2)+tt.Time(1))<1e-10, ...
                 "The temporal resolution of the TimeTable must be the same as that of the TimeCoords");
@@ -194,13 +208,17 @@ classdef TimeCoords < spiky.stat.Coords & spiky.core.TimeTable
             end
             nObs = width(tt);
             nT = height(tt);
-            data = zeros(nT, nObs*obj.NBases);
+            data = zeros(nT, nObs*obj.NBases, size(tt.Data, 3));
             for ii = 1:numel(idcBases)
                 data1 = convn(tt.Data, obj.Bases(:, idcBases(ii)), "full");
                 % data(:, (ii-1)*nObs+(1:nObs)) = data1(idx0:idx0+nT-1, :);
-                data(:, ii:obj.NBases:end) = data1(idx0:idx0+nT-1, :); % bases varies fastest
+                data(:, ii:obj.NBases:end, :) = data1(idx0:idx0+nT-1, :, :); % bases varies fastest
             end
             tt.Data = data;
+            if isa(tt, "spiky.trig.TrigFr")
+                tt.Data = permute(tt.Data, [1 3 2]); % nT x nEvents x (nBases*nNeurons)
+                tt.Neuron = repelem(tt.Neuron, obj.NBases, 1);
+            end
         end
 
         function plot(obj)
