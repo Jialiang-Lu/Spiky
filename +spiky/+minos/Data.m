@@ -1,4 +1,4 @@
-classdef Data < spiky.core.ArrayTable
+classdef Data < spiky.core.Array
 
     properties (Constant, Hidden)
         LogPattern = "\[(?<timestamp>\d+)\] (?<name>[\w\.]+) \(?(?<type>.*?)\)? ?= (?<value>[^\r\n]*)";
@@ -257,7 +257,7 @@ classdef Data < spiky.core.ArrayTable
 
         % function obj = subsasgn(obj, s, varargin)
         %     if isequal(obj, [])
-        %         obj = spiky.core.TimeTable.empty;
+        %         obj = spiky.core.EventsTable;
         %     end
         %     switch s(1).type
         %         case '.'

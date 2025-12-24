@@ -6,11 +6,11 @@ classdef MinosInfo < spiky.core.Metadata
         Paradigms spiky.minos.Paradigm
         Sync spiky.ephys.EventGroup
         Eye spiky.minos.EyeData
-        Player spiky.core.TimeTable
-        Display spiky.core.TimeTable
-        Input spiky.core.TimeTable
-        ExperimenterInput spiky.core.TimeTable
-        Reward spiky.core.TimeTable
+        Player spiky.core.EventsTable
+        Display spiky.core.EventsTable
+        Input spiky.core.EventsTable
+        ExperimenterInput spiky.core.EventsTable
+        Reward spiky.core.EventsTable
     end
 
     methods (Static)
@@ -24,7 +24,7 @@ classdef MinosInfo < spiky.core.Metadata
             %   obj: Minos info object
 
             arguments
-                info spiky.ephys.SessionInfo = spiky.ephys.SessionInfo.empty
+                info spiky.ephys.SessionInfo = spiky.ephys.SessionInfo
                 options.MinPhotodiodeGap double = 0.05
                 options.Plot = true
             end
@@ -51,9 +51,9 @@ classdef MinosInfo < spiky.core.Metadata
             if length(idcStart)~=length(idcStop)
                 error("Start and stop paradigm events do not match")
             end
-            parPeriods = sync.Inv(double([log.Data.Timestamp(idcStart) ...
+            parIntervals = sync.Inv(double([log.Data.Timestamp(idcStart) ...
                 log.Data.Timestamp(idcStop)])/1e7);
-            parPeriodsNames = strrep(extractAfter(log.Data.Value(idcStart), ...
+            parIntervalsNames = strrep(extractAfter(log.Data.Value(idcStart), ...
                 "Paradigm "), " ", "");
             fiPars = spiky.core.FileInfo(fdir+filesep);
             fiPars = fiPars([fiPars.IsDir] & [fiPars.Name]~="Assets");
@@ -65,11 +65,11 @@ classdef MinosInfo < spiky.core.Metadata
             tPhotodiode = photodiode(idc, :).Time;
 
             for ii = length(parNames):-1:1
-                periods = spiky.core.Periods(parPeriods(...
-                    parPeriodsNames==parNames(ii), :));
+                intervals = spiky.core.Intervals(parIntervals(...
+                    parIntervalsNames==parNames(ii), :));
                 pars(ii, 1) = spiky.minos.Paradigm.load(...
                     fdir+filesep+parNamesSpace(ii), ...
-                    periods, sync.Inv, tPhotodiode);
+                    intervals, sync.Inv, tPhotodiode);
             end
             player = spiky.minos.Data(fullfile(fdir, "Player.bin"));
             display = spiky.minos.Data(fullfile(fdir, "Display.bin"));
@@ -94,19 +94,19 @@ classdef MinosInfo < spiky.core.Metadata
             %%
             obj.Eye = spiky.minos.EyeData.load(fdir, sync.Inv, fiveDot, tr, ...
                 obj.Vars.DisplayFov.Data.Data(1));
-            obj.Player = spiky.core.TimeTable(...
+            obj.Player = spiky.core.EventsTable(...
                 sync.Inv(double(player.Data.Timestamp)/1e7), ...
                 player.Data);
-            obj.Display = spiky.core.TimeTable(...
+            obj.Display = spiky.core.EventsTable(...
                 sync.Inv(double(display.Data.Timestamp)/1e7), ...
                 display.Data);
-            obj.Input = spiky.core.TimeTable(...
+            obj.Input = spiky.core.EventsTable(...
                 sync.Inv(double(input.Data.Timestamp)/1e7), ...
                 input.Data);
-            obj.ExperimenterInput = spiky.core.TimeTable(...
+            obj.ExperimenterInput = spiky.core.EventsTable(...
                 sync.Inv(double(experimenterInput.Data.Timestamp)/1e7), ...
                 experimenterInput.Data);
-            obj.Reward = spiky.core.TimeTable(...
+            obj.Reward = spiky.core.EventsTable(...
                 sync.Inv(double(reward.Data.Timestamp)/1e7), ...
                 reward.Data);
         end
@@ -142,7 +142,7 @@ classdef MinosInfo < spiky.core.Metadata
                 return
             end
             if ~exist(obj.Session.getFdir("Minos", "TransformRecord.bin"), "file")
-                tr = spiky.minos.Transform.empty;
+                tr = spiky.minos.Transform;
                 return
             end
             nr = obj.loadData("NameRecord.bin");
@@ -155,7 +155,7 @@ classdef MinosInfo < spiky.core.Metadata
             parfor ii = 1:nObjs
                 idc = idcObj==ii;
                 t1 = t(idc);
-                data1 = spiky.core.TimeTable(t1, table(Size=[sum(idc) 6], ...
+                data1 = spiky.core.EventsTable(t1, table(Size=[sum(idc) 6], ...
                     VariableTypes=["int64" "logical" "logical" "single" "single" "single"], ...
                     VariableNames=["Trial" "Active" "Visible" "Pos" "Rot" "Proj"]));
                 data1.Trial = data.Trial(idc);
@@ -195,7 +195,7 @@ classdef MinosInfo < spiky.core.Metadata
             %GETSCREENCAPTURE Get the screen capture data
             arguments
                 obj spiky.minos.MinosInfo
-                photodiode spiky.ephys.RecEvents = spiky.ephys.RecEvents.empty
+                photodiode spiky.ephys.RecEvents = spiky.ephys.RecEvents
             end
             fpthScreenCapture = obj.Session.getFpth("spiky.minos.ScreenCapture.mat");
             if exist(fpthScreenCapture, "file")

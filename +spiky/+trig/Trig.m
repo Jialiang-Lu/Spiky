@@ -1,4 +1,4 @@
-classdef Trig < spiky.core.TimeTable
+classdef Trig < spiky.core.EventsTable
     %TRIG Base class representing a general event-triggered data structure
 
     properties (Hidden)
@@ -19,7 +19,7 @@ classdef Trig < spiky.core.TimeTable
 
     methods (Static)
         function dimNames = getDimNames()
-            %GETDIMNAMES Get the dimension names of the TimeTable
+            %GETDIMNAMES Get the dimension names of the EventsTable
             %
             %   dimNames: dimension names
             dimNames = ["Time" "Events" "Groups"];

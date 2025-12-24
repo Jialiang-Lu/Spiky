@@ -53,7 +53,7 @@ classdef Correlogram
                 if ~isempty(tooShort)
                     warning("Epochs %s are followed by too-short gaps", strjoin(string(tooShort), " "));
                 end
-                [t, idc] = spiky.core.Periods(epochs).haveEvents(t);
+                [t, idc] = spiky.core.Intervals(epochs).haveEvents(t);
                 ids = ids(idc);
             end
             nEvents = numel(t);

@@ -9,14 +9,14 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
     
     methods (Static)
         function dimNames = getDimNames()
-            %GETDIMNAMES Get the dimension names of the TimeTable
+            %GETDIMNAMES Get the dimension names of the EventsTable
             %
             %   dimNames: dimension names
             dimNames = ["Time" "Neuron"];
         end
 
         function index = getScalarDimension()
-            %GETSCALARDIMENSION Get the scalar dimension of the ArrayTable
+            %GETSCALARDIMENSION Get the scalar dimension of the Array
             %
             %   index: index of the scalar dimension, 0 means no scalar dimension, 
             %       1 means obj(idx) equals obj(idx, :), 2 means obj(idx) equals obj(:, idx), etc.
@@ -35,7 +35,7 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             %       [0 window]
 
             arguments
-                spikes spiky.core.Spikes = spiky.core.Spikes.empty
+                spikes spiky.core.Spikes = spiky.core.Spikes
                 events = [] % (n, 1) double or spiky.core.Events
                 window double = [0, 1]
             end
@@ -48,7 +48,7 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             if isa(events, "spiky.core.Events")
                 events = events.Time;
                 prds = [events+window(1), events+window(end)];
-            elseif isa(events, "spiky.core.Periods")
+            elseif isa(events, "spiky.core.Intervals")
                 prds = events.Time;
                 events = events.Start;
                 window = prds;
@@ -66,11 +66,11 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             end
             nNeurons = numel(spikes);
             if nNeurons==1
-                s = spikes.inPeriods(prds, true, window(1));
+                s = spikes.inIntervals(prds, CellMode=true, Offset=window(1));
             else
                 s = cell(length(events), nNeurons);
                 for ii = 1:nNeurons
-                    s(:, ii) = spikes(ii).inPeriods(prds, true, window(1));
+                    s(:, ii) = spikes(ii).inIntervals(prds, CellMode=true, Offset=window(1));
                 end
             end
             obj.T_ = events;
@@ -327,7 +327,7 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             if strcmp(s(1).type, '()') && isscalar(s(1).subs)
                 s(1).subs = [{':'}, s(1).subs];
             end
-            [varargout{1:nargout}] = subsref@spiky.core.TimeTable(obj, s);
+            [varargout{1:nargout}] = subsref@spiky.core.EventsTable(obj, s);
         end
     end
 end

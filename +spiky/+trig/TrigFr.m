@@ -11,7 +11,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
 
     methods (Static)
         function dimNames = getDimNames()
-            %GETDIMNAMES Get the dimension names of the TimeTable
+            %GETDIMNAMES Get the dimension names of the EventsTable
             %
             %   dimNames: dimension names
             dimNames = ["Time" "Events" "Neuron" "Samples"];
@@ -252,7 +252,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 fr double = double.empty(0, 0, 0)
                 events (:, 1) = NaN(width(fr), 1)
                 window double {mustBeVector} = [0, 1]
-                neuron spiky.core.Neuron = spiky.core.Neuron.empty(0, 1)
+                neuron spiky.core.Neuron = spiky.core.Neuron
                 samples (:, 1) = NaN(size(fr, 4), 1)
             end
             obj.Start_ = start;
@@ -785,7 +785,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             for ii = 1:nUnits
                 [~, p(:, ii)] = ttest(obj.Data(is, :, ii), m(ii), Dim=2);
             end
-            p = spiky.core.TimeTable(obj.Time(is), p);
+            p = spiky.core.EventsTable(obj.Time(is), p);
         end
 
         function [ss, proj] = getSubspaces(obj, cats, idcEvents, options)
@@ -936,7 +936,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             end
 
             if height(obj)>1 && width(obj)==1
-                % if obj is a TimeTable with multiple time points, convert it to multiple events
+                % if obj is a EventsTable with multiple time points, convert it to multiple events
                 obj.Data = permute(obj.Data, [2 1 3]);
                 obj.Events_ = obj.Time;
                 obj.Time = obj.Time(1);
@@ -1485,7 +1485,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             %   detector = trainEventDetector(obj, labels, bases, ...)
             %
             %   obj: triggered firing rate object
-            %   labels: TimeTable of event labels (categorical)
+            %   labels: EventsTable of event labels (categorical)
             %   bases: TimeCoords object for feature extraction
             %   Name-value arguments:
             %       EventWindow: time window around each event to exclude from negative
@@ -1500,8 +1500,8 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             %
             arguments
                 obj spiky.trig.TrigFr
-                labels spiky.core.TimeTable
-                bases spiky.stat.TimeCoords = spiky.stat.TimeCoords.empty
+                labels spiky.core.EventsTable
+                bases spiky.stat.TimeCoords = spiky.stat.TimeCoords
                 options.EventWindow double = [-0.5, 0.5]
                 options.HistoryLength double = spiky.utils.ternary(isempty(bases), 0.5, -min(bases.Time))
                 options.NegativeSampleRatio double = 5
@@ -1523,7 +1523,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             % groupedFr = obj.group(Permute=[1 3 2]); % 1 x nGroups of cell: nTime x nNeurons
             % nGroups = width(groupedFr);
             % if ~isempty(bases)
-            %     features = cellfun(@(x) bases.expand(spiky.core.TimeTable(obj.Time, x)), ...
+            %     features = cellfun(@(x) bases.expand(spiky.core.EventsTable(obj.Time, x)), ...
             %         groupedFr.Data, UniformOutput=false);
             % else
             %     features = groupedFr.Data;
@@ -1538,7 +1538,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             labels = labels(labels.Time>options.HistoryLength, :);
             res = obj.Time(2)-obj.Time(1);
             idcLabelPos = min(round((labels.Time-obj.Time(1))/res)+1, height(obj));
-            [~, idcExclude] = obj.inPeriods(labels.Time+options.EventWindow);
+            [~, idcExclude] = obj.inIntervals(labels.Time+options.EventWindow);
             idcInclude = setdiff((1:height(obj))', idcExclude);
             nPos = numel(idcLabelPos);
             nNeg = min(round(nPos*options.NegativeSampleRatio), numel(idcInclude));
@@ -1552,7 +1552,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
 
             %% Prepare cross-validation partition
             tPartition = linspace(obj.Time(1), obj.Time(end), options.KFold+1);
-            prdPartition = spiky.core.Periods([tPartition(1:end-1)', tPartition(2:end)']);
+            prdPartition = spiky.core.Intervals([tPartition(1:end-1)', tPartition(2:end)']);
             [~, ~, idcPartition] = prdPartition.haveEvents(obj.Time(idcLabel));
             partition = cvpartition(CustomPartition=idcPartition);
             
@@ -1576,7 +1576,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             detector.Subspaces = ss;
             detector.Bases = bases;
             detector.Partition = options.Partition;
-            detector.PartitionPeriods = prdPartition;
+            detector.PartitionIntervals = prdPartition;
             detector.Options = options;
         end
 
@@ -1654,7 +1654,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             %   obj: triggered firing rate object
             %   labels: response variables
             %   Name-value arguments:
-            %       Periods: periods for the analysis
+            %       Intervals: intervals for the analysis
             %       Distribution: distribution for the GLM, one of "binomial", "poisson",
             %           "normal", "gamma", "inverse gaussian"
             %       Alpha: elastic net mixing parameter, between 0 and 1
@@ -1667,7 +1667,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             arguments
                 obj spiky.trig.TrigFr
                 labels spiky.stat.Labels
-                options.Periods = [] % (n, 2) double or spiky.core.Periods
+                options.Intervals = [] % (n, 2) double or spiky.core.Intervals
                 options.Distribution string {mustBeMember(options.Distribution, ...
                     ["binomial", "poisson", "normal", "gamma", "inverse gaussian"])} = "normal"
                 options.Alpha double {mustBeInRange(options.Alpha, 0, 1)} = 1
@@ -1681,11 +1681,11 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             end
             assert(height(labels)==height(obj), "Number of time points must match number of labels");
             names = compose("%s.%s.%d", labels.Name, labels.Class, labels.BaseIndex);
-            if ~isempty(options.Periods)
-                if isnumeric(options.Periods)
-                    options.Periods = spiky.core.Periods(options.Periods);
+            if ~isempty(options.Intervals)
+                if isnumeric(options.Intervals)
+                    options.Intervals = spiky.core.Intervals(options.Intervals);
                 end
-                [~, idc] = options.Periods.haveEvents(obj.Time);
+                [~, idc] = options.Intervals.haveEvents(obj.Time);
             else
                 idc = (1:height(obj))';
             end
@@ -1726,7 +1726,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             if strcmp(s(1).type, '()') && isscalar(s(1).subs)
                 s(1).subs = [{':', ':'}, s(1).subs];
             end
-            [varargout{1:nargout}] = subsref@spiky.core.TimeTable(obj, s);
+            [varargout{1:nargout}] = subsref@spiky.core.EventsTable(obj, s);
         end
     end
 end

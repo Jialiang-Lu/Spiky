@@ -1,4 +1,4 @@
-classdef Labels < spiky.core.TimeTable
+classdef Labels < spiky.core.EventsTable
     %LABELS Class for behavior and stimulus labels for training classifiers and linear models
 
     properties
@@ -18,52 +18,52 @@ classdef Labels < spiky.core.TimeTable
 
     methods (Static)
         function dimNames = getDimNames()
-            %GETDIMNAMES Get the dimension names of the TimeTable
+            %GETDIMNAMES Get the dimension names of the EventsTable
             %
             %   dimNames: dimension names
             dimNames = ["Time,Trial,Offset" "Name,IsEvent,Class,BaseIndex"];
         end
 
         function [data, isEvent] = preprocess(tt, t, mode)
-            %PREPROCESS Preprocess the input TimeTable for adding as labels
+            %PREPROCESS Preprocess the input EventsTable for adding as labels
             %
             %   [data, isEvent] = PREPROCESS(tt, t, mode)
             %
-            %   tt: input TimeTable or PeriodsTable or numeric array
+            %   tt: input EventsTable or IntervalsTable or numeric array
             %   t: time vector
             %   mode:
-            %       "event": tt is a TimeTable with event labels (default)
-            %       "state": tt is a TimeTable or PeriodsTable with state labels
-            %       "trigger": tt is a TimeTable where only the time points are taken as events
+            %       "event": tt is a EventsTable with event labels (default)
+            %       "state": tt is a EventsTable or IntervalsTable with state labels
+            %       "trigger": tt is a EventsTable where only the time points are taken as events
             %
             %   data: preprocessed data
             %   isEvent: if the data represents events
             arguments
-                tt % TimeTable or PeriodsTable or numeric array
+                tt % EventsTable or IntervalsTable or numeric array
                 t (:, 1) double
                 mode (1, 1) string {mustBeMember(mode, ["event" "state" "trigger"])} = "event"
             end
-            if isa(tt, "spiky.core.PeriodsTable")
+            if isa(tt, "spiky.core.IntervalsTable")
                 mode = "state";
                 data = tt.interp(t);
                 isEvent = false;
-            elseif isa(tt, "spiky.core.TimeTable") && mode=="state"
+            elseif isa(tt, "spiky.core.EventsTable") && mode=="state"
                 data = tt.interp(t, "previous");
                 isEvent = false;
-            elseif isa(tt, "spiky.core.TimeTable") && mode=="event"
+            elseif isa(tt, "spiky.core.EventsTable") && mode=="event"
                 data = tt.densify(t);
                 isEvent = true;
-            elseif isa(tt, "spiky.core.TimeTable") && mode=="trigger"
+            elseif isa(tt, "spiky.core.EventsTable") && mode=="trigger"
                 tt.Data = true(height(tt), 1);
                 data = tt.densify(t);
                 isEvent = true;
             elseif isnumeric(tt)
-                tt = spiky.core.TimeTable(tt, true(height(tt), 1));
+                tt = spiky.core.EventsTable(tt, true(height(tt), 1));
                 mode = "trigger";
                 data = tt.densify(t);
                 isEvent = true;
             else
-                error("Input must be a TimeTable or PeriodsTable.");
+                error("Input must be a EventsTable or IntervalsTable.");
             end
             if istable(data)
                 data = data{:, 1};
@@ -112,7 +112,7 @@ classdef Labels < spiky.core.TimeTable
             %ADDLABELS Add labels to the Labels object
             %   obj = ADDLABELS(obj, tt1, tt2, ...)
             %
-            %   tt1, tt2, ...: TimeTables with labels
+            %   tt1, tt2, ...: EventsTables with labels
             arguments
                 obj spiky.stat.Labels
             end
@@ -128,17 +128,17 @@ classdef Labels < spiky.core.TimeTable
             %ADDLABEL Add a single label to the Labels object
             %   obj = ADDLABEL(obj, tt, options)
             %
-            %   tt: TimeTable or PeriodsTable with labels
+            %   tt: EventsTable or IntervalsTable with labels
             %   Name-Value pairs:
             %       Name: name of the label (default: "LabelN" where N is the next available index)
             %       Mode:
-            %           "event": tt is a TimeTable with event labels (default)
-            %           "state": tt is a TimeTable or PeriodsTable with state labels
-            %           "trigger": tt is a TimeTable where only the time points are taken as events
+            %           "event": tt is a EventsTable with event labels (default)
+            %           "state": tt is a EventsTable or IntervalsTable with state labels
+            %           "trigger": tt is a EventsTable where only the time points are taken as events
             %       Categorize: if true, convert the label data to categorical (default: false)
             arguments
                 obj spiky.stat.Labels
-                tt % spiky.core.TimeTable or spiky.core.PeriodsTable
+                tt % spiky.core.EventsTable or spiky.core.IntervalsTable
                 options.Name string = string.empty
                 options.Mode (1, 1) string {mustBeMember(options.Mode, ["event" "state" "trigger"])} = "event"
                 options.Categorize (1, 1) logical = false
@@ -162,18 +162,18 @@ classdef Labels < spiky.core.TimeTable
             %ADDEXPANDEDLABEL Add an expanded label to the Labels object
             %   obj = ADDEXPANDEDLABEL(obj, tt, bases)
             %
-            %   tt: TimeTable or PeriodsTable with labels
+            %   tt: EventsTable or IntervalsTable with labels
             %   bases: TimeCoords with basis functions
             %   Name-Value pairs:
             %       Name: name of the label
             %       Mode:
-            %           "event": tt is a TimeTable with event labels (default)
-            %           "state": tt is a TimeTable or PeriodsTable with state labels
-            %           "trigger": tt is a TimeTable where only the time points are taken as events
+            %           "event": tt is a EventsTable with event labels (default)
+            %           "state": tt is a EventsTable or IntervalsTable with state labels
+            %           "trigger": tt is a EventsTable where only the time points are taken as events
             arguments
                 obj spiky.stat.Labels
-                tt % spiky.core.TimeTable or spiky.core.PeriodsTable
-                bases spiky.stat.TimeCoords = spiky.stat.TimeCoords.empty
+                tt % spiky.core.EventsTable or spiky.core.IntervalsTable
+                bases spiky.stat.TimeCoords = spiky.stat.TimeCoords
                 options.Name string
                 options.Mode (1, 1) string {mustBeMember(options.Mode, ["event" "state" "trigger"])} = "event"
             end
@@ -181,7 +181,7 @@ classdef Labels < spiky.core.TimeTable
             [data, classes] = spiky.utils.flagsencode(data);
             n = width(data);
             if isEvent && ~isempty(bases)
-                data = bases.expand(spiky.core.TimeTable(obj.Time, data));
+                data = bases.expand(spiky.core.EventsTable(obj.Time, data));
                 data = data.Data;
                 basesIdc = repmat((1:bases.NBases).', n, 1);
                 classes = repelem(classes, bases.NBases, 1);
@@ -203,7 +203,7 @@ classdef Labels < spiky.core.TimeTable
             %   Name-Value pairs:
             arguments
                 obj spiky.stat.Labels
-                bases spiky.stat.TimeCoords = spiky.stat.TimeCoords.empty
+                bases spiky.stat.TimeCoords = spiky.stat.TimeCoords
                 options.ExcludeFromOneHot (1, :) string = string.empty
             end
 
@@ -238,7 +238,7 @@ classdef Labels < spiky.core.TimeTable
                     %     classes1 = [categorical("*"); classes1];
                     %     n1 = n1+1;
                     % end
-                    data1 = bases.expand(spiky.core.TimeTable(obj.Time, data1));
+                    data1 = bases.expand(spiky.core.EventsTable(obj.Time, data1));
                     data1 = data1.Data;
                     basesIdc1 = repmat((1:bases.NBases).', n, 1);
                     classes1 = repelem(classes1, bases.NBases, 1);

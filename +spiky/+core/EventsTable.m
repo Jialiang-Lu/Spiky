@@ -1,22 +1,28 @@
-classdef TimeTable < spiky.core.Events & spiky.core.ArrayTable
+classdef EventsTable < spiky.core.Events
     % TIMETABLE Represents data indexed by time points in seconds
 
     methods (Static)
-        function dimNames = getDimNames()
-            %GETDIMNAMES Get the dimension names of the TimeTable
+        function dimLabelNames = getDimLabelNames()
+            %GETDIMLABELNAMES Get the names of the label arrays for each dimension.
+            %   Each label array has the same height as the corresponding dimension of Data.
+            %   Each cell in the output is a string array of property names.
+            %   This method should be overridden by subclasses if dimension label properties is added.
             %
-            %   dimNames: dimension names
-            dimNames = "Time";
+            %   dimLabelNames: dimension label names
+            arguments (Output)
+                dimLabelNames (:, 1) cell
+            end
+            dimLabelNames = {"Time"};
         end
     end
 
     methods
-        function obj = TimeTable(varargin)
-            % TIMETABLE Create a new instance of TimeTable
+        function obj = EventsTable(varargin)
+            % TIMETABLE Create a new instance of EventsTable
             %
-            %   TimeTable(time, data) creates a non-uniformly sampled time table
-            %   TimeTable(start, step, data) creates a uniformly sampled time table
-            %   TimeTable(data) creates a uniformly sampled time table at 0, 1, 2,... seconds
+            %   EventsTable(time, data) creates a non-uniformly sampled time table
+            %   EventsTable(start, step, data) creates a uniformly sampled time table
+            %   EventsTable(data) creates a uniformly sampled time table at 0, 1, 2,... seconds
 
             if nargin==0
                 return
@@ -53,43 +59,27 @@ classdef TimeTable < spiky.core.Events & spiky.core.ArrayTable
             end
         end
 
-        function [obj, idc] = sort(obj, direction)
-            %SORT Sort data by time
-            %
-            %   direction: 'ascend' or 'descend'
-            %
-            %   obj: sorted TimeTable
-            %   idc: indices of the sorted data
-            arguments
-                obj spiky.core.TimeTable
-                direction string {mustBeMember(direction, ["ascend" "descend"])} = "ascend"
-            end
-
-            [obj, idc] = sort@spiky.core.Events(obj, direction);
-            obj.Data = obj.Data(idc, :);
-        end
-
         function out = interp(obj, t, method, extrap, options)
             %INTERP Interpolate the data at specific time points
             %
             %   out = interp(obj, t, varargin)
             %
-            %   obj: TimeTable
+            %   obj: EventsTable
             %   t: time points
             %   method: interpolation method
             %   extrap: extrapolation method
             %   options: options
-            %       AsTimeTable: return as TimeTable
+            %       AsEventsTable: return as EventsTable
             %
             %   out: interpolated data
 
             arguments
-                obj spiky.core.TimeTable
+                obj spiky.core.EventsTable
                 t
                 method string {mustBeMember(method, ["linear" "nearest" "next" "previous" "pchip" ...
                     "cubic" "v5cubic" "makima" "spline"])} = "nearest"
                 extrap = "extrap"
-                options.AsTimeTable (1, 1) logical = false
+                options.AsEventsTable (1, 1) logical = false
             end
             
             t = t(:);
@@ -115,31 +105,31 @@ classdef TimeTable < spiky.core.Events & spiky.core.ArrayTable
             else
                 error("Method %s is not supported for non-numeric data", method)
             end
-            if options.AsTimeTable
-                out = spiky.core.TimeTable(t, out);
+            if options.AsEventsTable
+                out = spiky.core.EventsTable(t, out);
             end
         end
 
-        function periods = findPeriods(obj, thr, mingap, minperiod, extrapolate)
-            %FINDPERIODS finds period intervals of the input crossing the threshold
+        function intervals = findIntervals(obj, thr, mingap, mininterval, extrapolate)
+            %FINDINTERVALS finds interval intervals of the input crossing the threshold
             %
-            %   periods = findPeriods(obj, thr, mingap, minperiod, extrapolate)
+            %   intervals = findIntervals(obj, thr, mingap, mininterval, extrapolate)
             %
-            %   obj: TimeTable
+            %   obj: EventsTable
             %   thr: threshold
-            %   mingap: minimum distance to be considered a different period. 
+            %   mingap: minimum distance to be considered a different interval. 
             %       Otherwise it gets concatenated
-            %   minperiod: minimum duration of a period to be considered
-            %   extrapolate: if true, periods end at the first value below the
+            %   mininterval: minimum duration of a interval to be considered
+            %   extrapolate: if true, intervals end at the first value below the
             %       threshold, not the last value above
             %
-            %   periods: Periods object
+            %   intervals: Intervals object
 
             arguments
-                obj spiky.core.TimeTable
+                obj spiky.core.EventsTable
                 thr (1, 1) double = 0
                 mingap (1, 1) double = NaN
-                minperiod (1, 1) double = 0
+                mininterval (1, 1) double = 0
                 extrapolate (1, 1) logical = false
             end
             if ~isvector(obj.Data)||(~isnumeric(obj.Data)&&~islogical(obj.Data))
@@ -160,9 +150,9 @@ classdef TimeTable < spiky.core.Events & spiky.core.ArrayTable
             end
             if isscalar(t) && isscalar(isCross)
                 if isCross
-                    periods = [t Inf];
+                    intervals = [t Inf];
                 else
-                    periods = double.empty(0, 2);
+                    intervals = double.empty(0, 2);
                 end
                 return
             end
@@ -172,39 +162,39 @@ classdef TimeTable < spiky.core.Events & spiky.core.ArrayTable
             tCross = t(isCross);
             tDiff = abs(diff([-Inf ; tCross ; Inf]));
             jumps = find(tDiff>mingap);
-            periods = [tCross(jumps(1:end-1)) tCross(jumps(2:end)-1)];
-            periods(diff(periods, [], 2)<minperiod, :)=[];
-            periods = spiky.core.Periods(periods);
+            intervals = [tCross(jumps(1:end-1)) tCross(jumps(2:end)-1)];
+            intervals(diff(intervals, [], 2)<mininterval, :)=[];
+            intervals = spiky.core.Intervals(intervals);
         end
 
         function out = densify(obj, t, options)
-            %DENSIFY Densify the TimeTable to a regular time grid
+            %DENSIFY Densify the EventsTable to a regular time grid
             %
             %   out = densify(obj, t, options)
             %
-            %   obj: TimeTable
+            %   obj: EventsTable
             %   t: time points to densify to
             %   Name-Value options:
-            %       IgnoreContent: ignore the content of the TimeTable
+            %       IgnoreContent: ignore the content of the EventsTable
             %       OneHot: return one-hot encoded data
-            %       AsTimeTable: return as TimeTable
+            %       AsEventsTable: return as EventsTable
             %
-            %   out: densified TimeTable
+            %   out: densified EventsTable
 
             arguments
-                obj spiky.core.TimeTable
+                obj spiky.core.EventsTable
                 t (:, 1) double
                 options.IgnoreContent (1, 1) logical = false
                 options.OneHot (1, 1) logical = false
                 options.AsTable (1, 1) logical = true
-                options.AsTimeTable (1, 1) logical = false
+                options.AsEventsTable (1, 1) logical = false
             end
             
             nT = length(t);
             res = t(2)-t(1);
             centers = (t(1:end-1)+t(2:end))/2;
             prds = [[centers(1)-res/2; centers] [centers; centers(end)+res/2]];
-            [~, idcObj, idcT] = obj.inPeriods(prds);
+            [~, idcObj, idcT] = obj.inIntervals(prds);
             if options.IgnoreContent
                 obj.Data = ones(height(obj.Data), 1);
             end
@@ -219,10 +209,10 @@ classdef TimeTable < spiky.core.Events & spiky.core.ArrayTable
                     obj.Data = data{:, ii};
                     out.(data.Properties.VariableNames{ii}) = ...
                         obj.densify(t, IgnoreContent=options.IgnoreContent, ...
-                        OneHot=options.OneHot, AsTimeTable=false);
+                        OneHot=options.OneHot, AsEventsTable=false);
                 end
-                if options.AsTimeTable
-                    out = spiky.core.TimeTable(t, out);
+                if options.AsEventsTable
+                    out = spiky.core.EventsTable(t, out);
                 end
                 return
             elseif iscell(data)
@@ -246,9 +236,21 @@ classdef TimeTable < spiky.core.Events & spiky.core.ArrayTable
                 out = zeros(nT, nD);
             end
             out(idcT, :) = data(idcObj, :);
-            if options.AsTimeTable
-                out = spiky.core.TimeTable(t, out);
+            if options.AsEventsTable
+                out = spiky.core.EventsTable(t, out);
             end
+        end
+    end
+
+    methods (Access=protected)
+        function data = getData(obj)
+            %GETDATA Get the Data property.
+            data = obj.Data_;
+        end
+
+        function obj = setData(obj, data)
+            %SETDATA Set the Data property.
+            obj.Data_ = data;
         end
     end
 end

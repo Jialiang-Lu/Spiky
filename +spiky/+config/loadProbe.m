@@ -19,7 +19,7 @@ function probe = loadProbe(probeName)
     probePath = fullfile(s.path, probeName + ".mat");
     fi = spiky.core.FileInfo(probePath);
     if isempty(fi)
-        probe = spiky.ephys.Probe.empty;
+        probe = spiky.ephys.Probe;
     else
         probe = spiky.ephys.Probe.load(probePath);
     end

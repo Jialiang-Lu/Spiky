@@ -8,7 +8,7 @@ classdef SpikeInfo < spiky.core.Metadata
     methods
         function obj = SpikeInfo(spikes, options)
             arguments
-                spikes (:, 1) spiky.core.Spikes = spiky.core.Spikes.empty
+                spikes (:, 1) spiky.core.Spikes = spiky.core.Spikes
                 options struct = struct
             end
             obj.Spikes = spikes;

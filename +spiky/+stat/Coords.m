@@ -1,4 +1,4 @@
-classdef Coords < spiky.core.ArrayTable
+classdef Coords < spiky.core.Array
     %COORDS Class representing a coordinate system in a N-D space
     %
     % Origin (NDims x 1 vector)
@@ -22,7 +22,7 @@ classdef Coords < spiky.core.ArrayTable
 
     methods (Static)
         function dimNames = getDimNames()
-            %GETDIMNAMES Get the dimension names of the TimeTable
+            %GETDIMNAMES Get the dimension names of the EventsTable
             %
             %   dimNames: dimension names
             dimNames = ["DimNames,Origin" "BasisNames"];
@@ -51,7 +51,7 @@ classdef Coords < spiky.core.ArrayTable
                 "The number of rows in bases must be the same as the length of origin");
             assert(height(dimNames)==height(origin), ...
                 "The number of rows in dimNames must be the same as the length of origin");
-            obj@spiky.core.ArrayTable(bases);
+            obj@spiky.core.Array(bases);
             obj.Origin = origin;
             obj.DimNames = dimNames;
             obj.BasisNames = basisNames;

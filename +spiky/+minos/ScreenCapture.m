@@ -4,7 +4,7 @@ classdef ScreenCapture < spiky.core.Metadata & handle
     properties
         Session spiky.ephys.Session
         Path string = ""
-        Sync spiky.ephys.EventGroup = spiky.ephys.EventGroup.empty
+        Sync spiky.ephys.EventGroup = spiky.ephys.EventGroup
     end
 
     properties (Transient)

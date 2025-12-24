@@ -1,4 +1,4 @@
-classdef SceneGraph < spiky.core.PeriodsTable
+classdef SceneGraph < spiky.core.IntervalsTable
     %SCENEGRAPH represents a scene graph structure for entities, attributes, and predicates
 
     properties
@@ -17,30 +17,30 @@ classdef SceneGraph < spiky.core.PeriodsTable
     end
 
     methods
-        function obj = SceneGraph(periods, subject, predicate, object, directObject)
+        function obj = SceneGraph(intervals, subject, predicate, object, directObject)
             %SCENEGRAPH Constructor for the SceneGraph class
             % 
-            %   periods: time periods for the scene graph
+            %   intervals: time intervals for the scene graph
             %   subject: SceneNode representing the subject
             %   predicate: SceneNode representing the predicate
             %   object: SceneNode representing the object
             %   directObject: SceneNode representing the direct object
             
             arguments
-                periods (:, 2) double = double.empty
-                subject spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(periods))
-                predicate spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(periods))
-                object spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(periods))
-                directObject spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(periods))
+                intervals (:, 2) double = double.empty
+                subject spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(intervals))
+                predicate spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(intervals))
+                object spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(intervals))
+                directObject spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(intervals))
             end
 
             if isempty(predicate)
-                predicate = spiky.scene.SceneNode.uniform(height(periods));
+                predicate = spiky.scene.SceneNode.uniform(height(intervals));
             end
             if isempty(object)
-                object = spiky.scene.SceneNode.uniform(height(periods));
+                object = spiky.scene.SceneNode.uniform(height(intervals));
             end
-            n = height(periods);
+            n = height(intervals);
             if n>1
                 if isrow(subject)
                     subject = repmat(subject, n, 1);
@@ -55,7 +55,7 @@ classdef SceneGraph < spiky.core.PeriodsTable
                     directObject = repmat(directObject, n, 1);
                 end
             end
-            obj.Time = periods;
+            obj.Time = intervals;
             obj.Data = table(subject, predicate, object, directObject, ...
                 VariableNames=["Subject", "Predicate", "Object", "DirectObject"]);
             obj.Entities = unique([subject{~ismissing(subject), ["Name" "Type"]};
@@ -114,11 +114,11 @@ classdef SceneGraph < spiky.core.PeriodsTable
             if isempty(t)
                 t = unique(per, "sorted");
             end
-            [~, idcT] = spiky.core.Periods(per).haveEvents(t);
+            [~, idcT] = spiky.core.Intervals(per).haveEvents(t);
             n = zeros(numel(t), 1);
             [c, idc1] = groupcounts(idcT);
             n(idc1) = c;
-            tt = spiky.core.TimeTable([-realmax; t], [0; n]);
+            tt = spiky.core.EventsTable([-realmax; t], [0; n]);
         end
 
         function tt = getIdenties(obj)
@@ -126,7 +126,7 @@ classdef SceneGraph < spiky.core.PeriodsTable
             %   tt = getIdenties(obj)
             data = obj.Data{obj.IsVisibility, "Subject"}.Data.Name;
             t = obj.Time(obj.IsVisibility, :);
-            tt = spiky.core.PeriodsTable([[-realmax t(1)]; t], [missing; data]).toTimeTable();
+            tt = spiky.core.IntervalsTable([[-realmax t(1)]; t], [missing; data]).toEventsTable();
         end
 
         function tt = getTransitions(obj)
@@ -150,7 +150,7 @@ classdef SceneGraph < spiky.core.PeriodsTable
             isAdd = sum(changes, 2)>0;
             oldCounts = sum(oldFlags, 2);
             newCounts = sum(newFlags, 2);
-            tt = spiky.core.TimeTable(t, table(isAdd, oldCounts, newCounts, ...
+            tt = spiky.core.EventsTable(t, table(isAdd, oldCounts, newCounts, ...
                 spiky.utils.flagsdecode(oldFlags, names), ...
                 spiky.utils.flagsdecode(newFlags, names), ...
                 spiky.utils.flagsdecode(abs(changes), names), ...
@@ -162,7 +162,7 @@ classdef SceneGraph < spiky.core.PeriodsTable
             %   tt = getVerbs(obj)
             data = obj.Data{obj.IsVerb, "Predicate"}.Data.Name;
             t = obj.Time(obj.IsVerb, :);
-            tt = spiky.core.PeriodsTable(t, data).toTimeTable();
+            tt = spiky.core.IntervalsTable(t, data).toEventsTable();
             tt = tt(~contains(string(tt.Data), "|"), :);
             tt = tt([true; tt.Data(2:end)~=tt.Data(1:end-1)], :); % remove consecutive duplicates
             tt.Data(ismissing(tt.Data)) = "Idle";
@@ -190,10 +190,10 @@ classdef SceneGraph < spiky.core.PeriodsTable
         end
 
         function str = toStrings(obj)
-            %TOSTRINGS Convert the SceneGraph object to a TimeTable of string representations
+            %TOSTRINGS Convert the SceneGraph object to a EventsTable of string representations
             
             strMiss = sprintf("\b");
-            str = spiky.core.TimeTable(obj.Time, compose("%s %s %s %s", ...
+            str = spiky.core.EventsTable(obj.Time, compose("%s %s %s %s", ...
                 fillmissing(string(obj.Data.Subject.Name), "constant", strMiss), ...
                 fillmissing(string(obj.Data.Predicate.Name), "constant", strMiss), ...
                 fillmissing(string(obj.Data.Object.Name), "constant", strMiss), ...
@@ -201,7 +201,7 @@ classdef SceneGraph < spiky.core.PeriodsTable
         end
 
         function obj = cat(~, varargin)
-            obj = cat@spiky.core.ArrayTable(1, varargin{:});
+            obj = cat@spiky.core.Array(1, varargin{:});
             obj.Entities = spiky.scene.SceneGraph.combineTbl("Entities", varargin{:});
             obj.Attributes = spiky.scene.SceneGraph.combineTbl("Attributes", varargin{:});
             obj.Predicates = spiky.scene.SceneGraph.combineTbl("Predicates", varargin{:});

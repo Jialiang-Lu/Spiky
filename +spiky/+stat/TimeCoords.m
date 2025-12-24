@@ -1,4 +1,4 @@
-classdef TimeCoords < spiky.stat.Coords & spiky.core.TimeTable
+classdef TimeCoords < spiky.stat.Coords & spiky.core.EventsTable
     %TIMECOORDS Class representing coordinate system whos dimensions are time
 
     methods (Static)
@@ -141,7 +141,7 @@ classdef TimeCoords < spiky.stat.Coords & spiky.core.TimeTable
         end
 
         function dimNames = getDimNames()
-            %GETDIMNAMES Get the dimension names of the TimeTable
+            %GETDIMNAMES Get the dimension names of the EventsTable
             %
             %   dimNames: dimension names
             dimNames = ["Time,Dims"];
@@ -179,18 +179,18 @@ classdef TimeCoords < spiky.stat.Coords & spiky.core.TimeTable
         end
 
         function tt = expand(obj, tt, idcBases)
-            %EXPAND Expand the TimeTable using the coordinate system
+            %EXPAND Expand the EventsTable using the coordinate system
             %
             %   tt = EXPAND(obj, tt)
             %
             %   obj: TimeCoords object
-            %   tt: TimeTable to expand, with numeric data nT x nObs and same temporal resolution
+            %   tt: EventsTable to expand, with numeric data nT x nObs and same temporal resolution
             %   idcBases: indices of the bases to use for expansion (default: all bases)
             %
-            %   tt: expanded TimeTable, with numeric data nT x (nBases*nObs)
+            %   tt: expanded EventsTable, with numeric data nT x (nBases*nObs)
             arguments
                 obj spiky.stat.TimeCoords
-                tt spiky.core.TimeTable
+                tt spiky.core.EventsTable
                 idcBases double = 1:obj.NBases
             end
             if islogical(tt.Data)
@@ -201,7 +201,7 @@ classdef TimeCoords < spiky.stat.Coords & spiky.core.TimeTable
             end
             assert(isnumeric(tt.Data), "Data in tt must be numeric");
             assert(abs(obj.Time(2)-obj.Time(1)-tt.Time(2)+tt.Time(1))<1e-10, ...
-                "The temporal resolution of the TimeTable must be the same as that of the TimeCoords");
+                "The temporal resolution of the EventsTable must be the same as that of the TimeCoords");
             idx0 = find(abs(obj.Time)<1e-10, 1);
             if isempty(idx0)
                 error("The TimeCoords must include time 0");

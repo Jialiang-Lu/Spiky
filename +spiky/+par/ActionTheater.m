@@ -3,7 +3,7 @@ classdef ActionTheater < spiky.par.Paradigm
 
     properties
         Graph spiky.scene.SceneGraph % Scene graph representing the actions and interactions
-        Fix spiky.core.PeriodsTable % Fixations during the paradigm
+        Fix spiky.core.IntervalsTable % Fixations during the paradigm
     end
 
     methods
@@ -137,7 +137,7 @@ classdef ActionTheater < spiky.par.Paradigm
             obj.Graph = obj.Graph.sort();
             %% Fixations
             fix = minos.Eye.FixationTargets;
-            fix = fix(fix.Start>=obj.Periods.Time(1) & fix.End<=obj.Periods.Time(end), :);
+            fix = fix(fix.Start>=obj.Intervals.Time(1) & fix.End<=obj.Intervals.Time(end), :);
             fix.Data.IsFace = ~ismissing(fix.Name) & fix.MinAngle<8 & ismember(fix.Part, ...
                 [spiky.minos.BodyPart.Head spiky.minos.BodyPart.UpperChest ...
                 spiky.minos.BodyPart.LeftArm spiky.minos.BodyPart.RightArm ...
@@ -163,7 +163,7 @@ classdef ActionTheater < spiky.par.Paradigm
             fix.Data.ActionRole = categorical(string(fix.Action)+string(fix.Role));
             fix.Data.OtherActionRole = categorical(string(fix.Action)+string(fix.OtherRole));
             %% Find non-fixated targets
-            prdTr = spiky.core.Periods.concat(tr.Period);
+            prdTr = spiky.core.Intervals.concat(tr.Interval);
             [~, idcFixInTr, idcTrInFix] = prdTr.haveEvents(fix.Start+0.05);
             idcFixValidTr = unique(idcFixInTr);
             tmp = categorical([tr(idcTrInFix).Name]');
@@ -211,9 +211,9 @@ classdef ActionTheater < spiky.par.Paradigm
             actions = obj.Graph.Predicates.Name(obj.Graph.Predicates.Name~="Walk" & ...
                 obj.Graph.Predicates.Type=="Verb");
             isAction = ismember(obj.Graph.Predicate.Name, actions);
-            ttSubjects = obj.Graph(isAction, "Subject").toTimeTable("start");
+            ttSubjects = obj.Graph(isAction, "Subject").toEventsTable("start");
             ttSubjects.Data = ttSubjects.Subject.Name;
-            ttObjects = obj.Graph(isAction, "Object").toTimeTable("start");
+            ttObjects = obj.Graph(isAction, "Object").toEventsTable("start");
             ttObjects.Data = ttObjects.Object.Name;
             dataActions = obj.Graph.Predicate.Name(isAction);
             for ii = 1:numel(actions)
@@ -292,8 +292,8 @@ classdef ActionTheater < spiky.par.Paradigm
                 spikes spiky.core.Spikes
                 res double = 0.05
             end
-            t1 = ceil(obj.Periods.Time(1)/res)*res;
-            t = t1:res:obj.Periods.Time(end);
+            t1 = ceil(obj.Intervals.Time(1)/res)*res;
+            t = t1:res:obj.Intervals.Time(end);
             trigCounts = spikes.trigCounts(t1, t);
         end
 
@@ -320,9 +320,9 @@ classdef ActionTheater < spiky.par.Paradigm
                 normalize logical = true
             end
             
-            t1 = ceil(obj.Periods.Time(1)/res)*res;
-            t = t1:res:obj.Periods.Time(end);
-            [t2, idcT] = obj.Periods.haveEvents(t);
+            t1 = ceil(obj.Intervals.Time(1)/res)*res;
+            t = t1:res:obj.Intervals.Time(end);
+            [t2, idcT] = obj.Intervals.haveEvents(t);
             parFr = spikes.trigFr(t1, t, HalfWidth=halfWidth, Kernel=kernel, Normalize=normalize);
             trigFr = parFr(idcT, :, :);
             trigFr.Data = permute(trigFr.Data, [2 1 3]);

@@ -51,14 +51,14 @@ classdef Subspaces < spiky.stat.GroupedStat
                     "LearnerIndex must be provided if data is a Classifier");
                 V = cellfun(@(x) x.BinaryLearners{options.LearnerIndex}.Beta, ...
                     data.Data, UniformOutput=false);
-            elseif isa(data, "spiky.core.TimeTable")
+            elseif isa(data, "spiky.core.EventsTable")
                 V = cellfun(@(x) permute(data.Data(:, :, x), [3 2 1]), obj.GroupIndices, ...
                     UniformOutput=false);
             elseif isnumeric(data)
                 V = cellfun(@(x) permute(data(:, :, x), [3 2 1]), obj.GroupIndices, ...
                     UniformOutput=false);
             else
-                error("Data must be a numeric array or a spiky.core.TimeTable or a spiky.stat.Classifier")
+                error("Data must be a numeric array or a spiky.core.EventsTable or a spiky.stat.Classifier")
             end
             nT = size(V{1}, 3);
             if nT~=height(obj)
@@ -106,12 +106,12 @@ classdef Subspaces < spiky.stat.GroupedStat
                 data
                 idcDim double = 1:obj.Data{1}.NBases
             end
-            if isa(data, "spiky.core.TimeTable")
+            if isa(data, "spiky.core.EventsTable")
                 V = data.Data;
             elseif isnumeric(data)
                 V = data;
             else
-                error("Data must be a numeric array or a spiky.core.TimeTable")
+                error("Data must be a numeric array or a spiky.core.EventsTable")
             end
             nT = size(V, 1);
             nEvents = size(V, 2);
@@ -141,7 +141,7 @@ classdef Subspaces < spiky.stat.GroupedStat
                     end
                 end
             end
-            if isa(data, "spiky.core.TimeTable")
+            if isa(data, "spiky.core.EventsTable")
                 data.Data = C;
                 if isa(data, "spiky.core.Spikes")
                     ses = data.Neuron.Session(1);
@@ -189,12 +189,12 @@ classdef Subspaces < spiky.stat.GroupedStat
                 data
                 idcDim double = 1:obj.Data{1}.NBases
             end
-            if isa(data, "spiky.core.TimeTable")
+            if isa(data, "spiky.core.EventsTable")
                 V = data.Data;
             elseif isnumeric(data)
                 V = data;
             else
-                error("Data must be a numeric array or a spiky.core.TimeTable")
+                error("Data must be a numeric array or a spiky.core.EventsTable")
             end
             nT = size(V, 1);
             nEvents = size(V, 2);
@@ -289,7 +289,7 @@ classdef Subspaces < spiky.stat.GroupedStat
             %   sim: similarity matrix, nT x nGroups x nSamples
             arguments
                 obj spiky.stat.Subspaces
-                other spiky.stat.Subspaces = spiky.stat.Subspaces.empty
+                other spiky.stat.Subspaces = spiky.stat.Subspaces
                 idcDims double = 1:obj.Data{1}.NBases
                 options.Metric string {mustBeMember(options.Metric, ["projection" "nuclear"])} = "projection"
             end

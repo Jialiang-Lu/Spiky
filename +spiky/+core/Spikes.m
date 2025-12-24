@@ -2,13 +2,28 @@ classdef Spikes < spiky.core.Events
     %SPIKES Spikes of a neuron
 
     properties
-        Neuron spiky.core.Neuron
+        Neuron (:, 1) spiky.core.Neuron
+    end
+
+    methods (Static)
+        function dimLabelNames = getDimLabelNames()
+            %GETDIMLABELNAMES Get the names of the label arrays for each dimension.
+            %   Each label array has the same height as the corresponding dimension of Data.
+            %   Each cell in the output is a string array of property names.
+            %   This method should be overridden by subclasses if dimension label properties is added.
+            %
+            %   dimLabelNames: dimension label names
+            arguments (Output)
+                dimLabelNames (:, 1) cell
+            end
+            dimLabelNames = {"Neuron"};
+        end
     end
 
     methods
         function obj = Spikes(neuron, time)
             arguments
-                neuron spiky.core.Neuron = spiky.core.Neuron.empty
+                neuron spiky.core.Neuron = spiky.core.Neuron
                 time = []
             end
             obj.Neuron = neuron;
@@ -121,7 +136,7 @@ classdef Spikes < spiky.core.Events
             %   obj: TrigFr object
 
             arguments
-                obj spiky.core.Spikes = spiky.core.Spikes.empty
+                obj spiky.core.Spikes = spiky.core.Spikes
                 events = [] % (n, 1) double or spiky.core.Events
                 window double {mustBeVector} = [0, 1]
                 options.HalfWidth double {mustBePositive} = 0.1
@@ -130,7 +145,7 @@ classdef Spikes < spiky.core.Events
                 options.Unit string {mustBeMember(options.Unit, ["Hz", "count"])} = "Hz"
             end
             if nargin==0 || isempty(obj)
-                fr = spiky.trig.TrigFr.empty;
+                fr = spiky.trig.TrigFr;
                 return
             end
             if isa(events, "spiky.core.Events")
@@ -150,11 +165,11 @@ classdef Spikes < spiky.core.Events
                 case "box"
                     fr = zeros(nT, nEvents, nNeurons);
                     prds = reshape(events'+t, [], 1);
-                    prds = spiky.core.Periods([prds-options.HalfWidth prds+options.HalfWidth]);
+                    prds = spiky.core.Intervals([prds-options.HalfWidth prds+options.HalfWidth]);
                     [prds, idcSort] = prds.sort();
                     idcSort2(idcSort) = 1:numel(idcSort);
                     parfor ii = 1:nNeurons
-                        [~, c] = spiky.mex.findInPeriods(obj(ii).Time, prds.Time);
+                        [~, c] = spiky.mex.findInIntervals(obj(ii).Time, prds.Time);
                         c = c(idcSort2)./options.HalfWidth/2;
                         if options.Normalize
                             c = (c-mean(c))./sqrt(mean(c)./options.HalfWidth/2);

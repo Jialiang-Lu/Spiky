@@ -1,4 +1,4 @@
-classdef RecEvents < spiky.core.TimeTable & spiky.core.MappableArray
+classdef RecEvents < spiky.core.EventsTable & spiky.core.MappableArray
 
     % properties (Dependent)
     %     Timestamp int64
@@ -16,7 +16,7 @@ classdef RecEvents < spiky.core.TimeTable & spiky.core.MappableArray
             arguments
                 time double = []
                 timestamp int64 = []
-                type spiky.ephys.ChannelType = spiky.ephys.ChannelType.empty
+                type spiky.ephys.ChannelType = spiky.ephys.ChannelType
                 channel int16 = []
                 name categorical = categorical.empty
                 rising logical = logical.empty
@@ -49,7 +49,7 @@ classdef RecEvents < spiky.core.TimeTable & spiky.core.MappableArray
                     message = repmat(message, size(time));
                 end
             end
-            obj@spiky.core.TimeTable(time, table(timestamp, type, channel, name, rising, message, ...
+            obj@spiky.core.EventsTable(time, table(timestamp, type, channel, name, rising, message, ...
                 VariableNames=["Timestamp" "Type" "Channel" "ChannelName" "Rising" "Message"]));
         end
 
@@ -199,15 +199,15 @@ classdef RecEvents < spiky.core.TimeTable & spiky.core.MappableArray
 
         function varargout = subsref(obj, s)
             s(1) = obj.useKey(s(1));
-            [varargout{1:nargout}] = subsref@spiky.core.TimeTable(obj, s);
+            [varargout{1:nargout}] = subsref@spiky.core.EventsTable(obj, s);
         end
 
         function obj = subsasgn(obj, s, varargin)
             if isequal(obj, [])
-                obj = spiky.ephys.RecEvents.empty;
+                obj = spiky.ephys.RecEvents;
             end
             s(1) = obj.useKey(s(1));
-            obj = subsasgn@spiky.core.TimeTable(obj, s, varargin{:});
+            obj = subsasgn@spiky.core.EventsTable(obj, s, varargin{:});
         end
 
         function n = numArgumentsFromSubscript(obj, s, indexingContext)

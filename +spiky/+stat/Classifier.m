@@ -18,7 +18,7 @@ classdef Classifier < spiky.stat.GroupedStat
 
     methods (Static)
         function dimNames = getDimNames()
-            %GETDIMNAMES Get the dimension names of the TimeTable
+            %GETDIMNAMES Get the dimension names of the EventsTable
             %
             %   dimNames: dimension names
             dimNames = ["Time" "Groups,GroupIndices" "Conditions"];
@@ -330,7 +330,7 @@ classdef Classifier < spiky.stat.GroupedStat
                 options.Window (1, 2) double = obj.Time([1 end])'
                 options.TimeDependent logical = true
                 options.FoldDependent logical = true
-                options.Subtract spiky.stat.Classifier = spiky.stat.Classifier.empty
+                options.Subtract spiky.stat.Classifier = spiky.stat.Classifier
                 options.SubtractDim double = 20
             end
             if ~obj.IsCrossValidated

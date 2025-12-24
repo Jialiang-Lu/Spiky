@@ -1,4 +1,4 @@
-classdef NeuronMetrics < spiky.core.ArrayTable
+classdef NeuronMetrics < spiky.core.Array
 
     methods
         function obj = NeuronMetrics()

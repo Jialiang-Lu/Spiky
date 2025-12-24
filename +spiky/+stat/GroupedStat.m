@@ -1,4 +1,4 @@
-classdef GroupedStat < spiky.core.TimeTable
+classdef GroupedStat < spiky.core.EventsTable
     %GROUPEDSTAT Base class representing grouped statistics
     %
     % The first dimension is time and the second dimension is the groups, which can be neurons or
@@ -16,7 +16,7 @@ classdef GroupedStat < spiky.core.TimeTable
 
     methods (Static)
         function dimNames = getDimNames()
-            %GETDIMNAMES Get the dimension names of the TimeTable
+            %GETDIMNAMES Get the dimension names of the EventsTable
             %
             %   dimNames: dimension names
             dimNames = ["Time" "Groups,GroupIndices"];

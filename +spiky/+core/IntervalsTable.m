@@ -1,84 +1,58 @@
-classdef PeriodsTable < spiky.core.Periods & spiky.core.ArrayTable
-    %PERIODSTABLE Represents data indexed by time intervals in seconds
+classdef IntervalsTable < spiky.core.Intervals
+    %INTERVALSTABLE Represents data indexed by time intervals in seconds
 
     methods (Static)
-        function dimNames = getDimNames()
-            %GETDIMNAMES Get the dimension names of the TimeTable
+        function dimLabelNames = getDimLabelNames()
+            %GETDIMLABELNAMES Get the names of the label arrays for each dimension.
+            %   Each label array has the same height as the corresponding dimension of Data.
+            %   Each cell in the output is a string array of property names.
+            %   This method should be overridden by subclasses if dimension label properties is added.
             %
-            %   dimNames: dimension names
-            dimNames = "Time";
+            %   dimLabelNames: dimension label names
+            arguments (Output)
+                dimLabelNames (:, 1) cell
+            end
+            dimLabelNames = {"Time"};
         end
     end
 
     methods
-        function obj = PeriodsTable(periods, data)
-            %PERIODSTABLE Create a new instance of PeriodsTable
+        function obj = IntervalsTable(intervals, data)
+            %INTERVALSTABLE Create a new instance of IntervalsTable
             %
-            %   PeriodsTable(periods, data) creates a new instance of PeriodsTable
+            %   IntervalsTable(intervals, data) creates a new instance of IntervalsTable
             %
-            %   periods: Nx2 matrix of start and end times
-            %   data: data associated with each period
+            %   intervals: Nx2 matrix of start and end times
+            %   data: data associated with each interval
             arguments
-                periods (:, 2) double = double.empty(0, 2)
+                intervals (:, 2) double = double.empty(0, 2)
                 data = []
             end
-            if isempty(periods) && isempty(data)
+            if isempty(intervals) && isempty(data)
                 return
             end
-            if height(periods) ~= height(data)
-                error("The number of periods and the number of rows in data must be the same")
-            end
-            obj.Time = periods;
+            assert(height(intervals)==height(data), ...
+                "The number of intervals and the number of rows in data must be the same")
+            obj.Time = intervals;
             obj.Data = data;
         end
 
-        function periods = and(obj, periods)
-            %AND Intersect with another periods object
-            periods = and@spiky.core.Periods(obj, periods);
-        end
-
-        function periods = or(obj, periods)
-            %OR Union with another periods object
-            periods = or@spiky.core.Periods(obj, periods);
-        end
-
-        function periods = minus(obj, periods)
-            %MINUS Subtract another periods object
-            periods = minus@spiky.core.Periods(obj, periods);
-        end
-
-        function [obj, idc] = sort(obj, direction)
-            %SORT Sort data by time
-            %
-            %   direction: 'ascend' or 'descend'
-            %
-            %   obj: sorted PeriodsTable
-            %   idc: indices of the sorted data
-            arguments
-                obj spiky.core.PeriodsTable
-                direction string {mustBeMember(direction, ["ascend" "descend"])} = "ascend"
-            end
-
-            [obj, idc] = sort@spiky.core.Periods(obj, direction);
-            obj.Data = obj.Data(idc, :);
-        end
-
-        function tt = toTimeTable(obj, mode)
-            %TOTIMETABLE Convert to TimeTable
+        function tt = toEventsTable(obj, mode)
+            %TOTIMETABLE Convert to EventsTable
             %   tt = TOTIMETABLE(obj)
             %
-            %   obj: PeriodsTable, which data must be categorial or logical
+            %   obj: IntervalsTable, which data must be categorial or logical
             %
-            %   tt: TimeTable
+            %   tt: EventsTable
             arguments
-                obj spiky.core.PeriodsTable
+                obj spiky.core.IntervalsTable
                 mode string {mustBeMember(mode, ["change" "start" "end"])} = "change"
             end
             switch mode
                 case "start"
-                    tt = spiky.core.TimeTable(obj.Time(:, 1), obj.Data);
+                    tt = spiky.core.EventsTable(obj.Time(:, 1), obj.Data);
                 case "end"
-                    tt = spiky.core.TimeTable(obj.Time(:, 2), obj.Data);
+                    tt = spiky.core.EventsTable(obj.Time(:, 2), obj.Data);
                 case "change"
                     data = obj.Data;
                     isTable = istable(data);
@@ -109,7 +83,7 @@ classdef PeriodsTable < spiky.core.Periods & spiky.core.ArrayTable
                     if ~isTable
                         data2 = data2.Data;
                     end
-                    tt = spiky.core.TimeTable(t, data2);
+                    tt = spiky.core.EventsTable(t, data2);
                 otherwise
                     error("Invalid mode");
             end
@@ -120,30 +94,30 @@ classdef PeriodsTable < spiky.core.Periods & spiky.core.ArrayTable
             %
             %   out = interp(obj, t, options)
             %
-            %   obj: PeriodsTable
+            %   obj: IntervalsTable
             %   t: time points
             %   options: Name-Value pairs for additional options
             %
             %   out: interpolated data
             arguments
-                obj spiky.core.PeriodsTable
+                obj spiky.core.IntervalsTable
                 t double
-                options.AsTimeTable (1, 1) logical = false
+                options.AsEventsTable (1, 1) logical = false
             end
             optionArgs = namedargs2cell(options);
-            out = obj.toTimeTable().interp(t, "previous", "extrap", optionArgs{:});
+            out = obj.toEventsTable().interp(t, "previous", "extrap", optionArgs{:});
         end
 
         function [h, hText] = plotStates(obj, plotOps)
             %PLOTSTATES Plot the states over time
             %   [h, hText] = PLOTSTATES(obj, options)
             %
-            %   obj: PeriodsTable, which data must be categorial or logical or string
+            %   obj: IntervalsTable, which data must be categorial or logical or string
             %
             %   h: line handle
             %   hText: text handle
             arguments
-                obj spiky.core.PeriodsTable
+                obj spiky.core.IntervalsTable
                 plotOps.?matlab.graphics.chart.primitive.Line
             end
             if istable(obj.Data)
@@ -164,6 +138,18 @@ classdef PeriodsTable < spiky.core.Periods & spiky.core.ArrayTable
             if nargout>0
                 h = h1;
             end
+        end
+    end
+
+    methods (Access=protected)
+        function data = getData(obj)
+            %GETDATA Get the Data property.
+            data = obj.Data_;
+        end
+
+        function obj = setData(obj, data)
+            %SETDATA Set the Data property.
+            obj.Data_ = data;
         end
     end
 end

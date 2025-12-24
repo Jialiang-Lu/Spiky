@@ -4,12 +4,12 @@ classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
     properties
         Name string
         Id int32
-        Data spiky.core.TimeTable
+        Data spiky.core.EventsTable
     end
 
     properties (Dependent)
         Time double
-        Period spiky.core.Periods
+        Interval spiky.core.Intervals
         Trial double
         Active logical
         Visible logical
@@ -24,10 +24,10 @@ classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
             arguments
                 name string = ""
                 id int32 = 0
-                data spiky.core.TimeTable = spiky.core.TimeTable
+                data spiky.core.EventsTable = spiky.core.EventsTable
             end
             if isempty(data)
-                data = spiky.core.TimeTable([], table(Size=[0 6], ...
+                data = spiky.core.EventsTable([], table(Size=[0 6], ...
                     VariableTypes=["int64" "logical" "logical" "single" "single" "single"], ...
                     VariableNames=["Trial" "Active" "Visible" "Pos" "Rot" "Proj"]));
             end
@@ -54,16 +54,16 @@ classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
             if isempty(obj)
                 return
             end
-            prds = spiky.core.Periods.concat(obj.Period);
-            [~, idcTr] = prds.haveEvents(time, true);
+            prds = spiky.core.Intervals.concat(obj.Interval);
+            [~, idcTr] = prds.haveEvents(time, CellMode=true);
             idcTr = ~cellfun(@isempty, idcTr);
             if ~any(idcTr)
-                obj = spiky.minos.Transform.empty;
+                obj = spiky.minos.Transform;
                 return
             end
             obj = obj(idcTr);
             for ii = 1:numel(obj)
-                obj(ii).Data = obj(ii).Data.interp(time, method, AsTimeTable=true);
+                obj(ii).Data = obj(ii).Data.interp(time, method, AsEventsTable=true);
             end
             indices = idcTr;
         end
@@ -131,8 +131,8 @@ classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
             proj = obj.Data.Proj;
         end
 
-        function period = get.Period(obj)
-            period = spiky.core.Periods([obj.Data.Time(1) obj.Data.Time(end)]);
+        function interval = get.Interval(obj)
+            interval = spiky.core.Intervals([obj.Data.Time(1) obj.Data.Time(end)]);
         end
 
         function gaze = getViewGaze(obj, height, width)
@@ -216,7 +216,7 @@ classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
                 rot(idcSort, :), proj(idcSort, :), ...
                 spiky.minos.EyeData.getGaze(proj(idcSort, :), fov), ...
                 VariableNames=["Index" "TimeIndex" "Trial" "Pos" "Rot" "Proj" "Ray"]);
-            pt = spiky.core.PeriodsTable(t(idcSort, :), data);
+            pt = spiky.core.IntervalsTable(t(idcSort, :), data);
         end
     end
 

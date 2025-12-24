@@ -1,8 +1,8 @@
-classdef Session < spiky.core.Metadata
+classdef Session < spiky.core.Array
     %SESSION information about a recording session.
 
-    properties (SetAccess = {?spiky.core.Metadata, ?spiky.ephys.Session})
-        Name string
+    properties (Dependent)
+        Name categorical
     end
 
     properties (Dependent)
@@ -15,27 +15,24 @@ classdef Session < spiky.core.Metadata
             % name: name of the session
             
             arguments
-                name string = ""
+                name categorical = categorical.empty
             end
             
-            if name==""
-                return
-            end
-            obj.Name = name;
+            obj@spiky.core.Array(name);
         end
 
         function fdir = get.Fdir(obj)
-            fdir = fullfile(spiky.config.loadConfig("fdirData"), obj.Name);
+            fdir = fullfile(spiky.config.loadConfig("fdirData"), string(obj.Name));
         end
 
         function out = eq(obj, other)
             %EQ Compare two sessions.
-            out = obj.Name == other.Name;
+            out = obj.Name==other.Name;
         end
 
         function fpth = getFpth(obj, type)
             %GETFPTH Get the Fpth to a file of a given type.
-            fpth = fullfile(obj.Fdir, obj.Name + "." + type);
+            fpth = fullfile(obj.Fdir, string(obj.Name)+"."+type);
         end
 
         function fdir = getFdir(obj, subdirs)
@@ -54,10 +51,10 @@ classdef Session < spiky.core.Metadata
             info = obj.loadData("spiky.ephys.SessionInfo.mat");
             if ~exist(info.FpthDat(1), "file")
                 for ii = 1:numel(info.FpthDat)
-                    info.FpthDat(ii) = fullfile(obj.Fdir, extractAfter(info.FpthDat(ii), obj.Name));
+                    info.FpthDat(ii) = fullfile(obj.Fdir, extractAfter(info.FpthDat(ii), string(obj.Name)));
                 end
                 for ii = 1:numel(info.FpthLfp)
-                    info.FpthLfp(ii) = fullfile(obj.Fdir, extractAfter(info.FpthLfp(ii), obj.Name));
+                    info.FpthLfp(ii) = fullfile(obj.Fdir, extractAfter(info.FpthLfp(ii), string(obj.Name)));
                 end
                 obj.saveMetaData(info);
             end
@@ -117,7 +114,7 @@ classdef Session < spiky.core.Metadata
             arguments
                 obj spiky.ephys.Session
                 options.FsLfp (1, 1) double = 1000
-                options.Period (1, 2) double = [0 Inf]
+                options.Interval (1, 2) double = [0 Inf]
                 options.BrainRegions string = "brain"
                 options.ChannelConfig = []
                 options.Probe = "NP1032"
@@ -170,7 +167,7 @@ classdef Session < spiky.core.Metadata
             %
             %   Examples:
             %   loadData(fn, "session.mat")
-            %   loadData(fn, "dat", chs, period, precisionOut, precisionIn)
+            %   loadData(fn, "dat", chs, interval, precisionOut, precisionIn)
             fpth = obj.getFpth(type);
             [~, ~, fext] = fileparts(fpth);
             switch fext
@@ -201,12 +198,12 @@ classdef Session < spiky.core.Metadata
             data.save(obj.getFpth(class(data)+".mat"));
         end
 
-        function [data, chInfo] = loadBinary(obj, type, chs, period, precisionOut, precisionIn)
+        function [data, chInfo] = loadBinary(obj, type, chs, interval, precisionOut, precisionIn)
             %LOADBINARY loads binary data into memory by default using memory mapping
             %
             %   type: dat, lfp or other file extensions
             %   chs: channels to load
-            %   period: time period to load [beg fin] (s) or indices (#sample)
+            %   interval: time interval to load [beg fin] (s) or indices (#sample)
             %   precisionOut: format of returned data
             %   precisionIn: format of stored data
             %
@@ -217,7 +214,7 @@ classdef Session < spiky.core.Metadata
                 obj spiky.ephys.Session
                 type string = "lfp"
                 chs double = []
-                period = [0 Inf]
+                interval = [0 Inf]
                 precisionOut string = "int16"
                 precisionIn string = "int16"
             end
@@ -262,16 +259,16 @@ classdef Session < spiky.core.Metadata
                 chs = ch2;
             end
             nChLoad = length(chs);
-            if isscalar(period)
-                period = [0 period];
+            if isscalar(interval)
+                interval = [0 interval];
             end
-            if length(period)<=2
-                period = round(period*fs);
-                period = [max(period(1), 1) min(period(2), nSample)];
-                nSampleLoad = diff(period)+1;
-                idc = period(1):period(2);
+            if length(interval)<=2
+                interval = round(interval*fs);
+                interval = [max(interval(1), 1) min(interval(2), nSample)];
+                nSampleLoad = diff(interval)+1;
+                idc = interval(1):interval(2);
             else
-                idc = period(:)';
+                idc = interval(:)';
                 nSampleLoad = length(idc);
             end
             
@@ -285,7 +282,14 @@ classdef Session < spiky.core.Metadata
             end
             chInfo = chInfo(chs, :);
             
-            end
-            
+        end
+        
+        function name = get.Name(obj)
+            name = obj.Data;
+        end
+
+        function obj = set.Name(obj, name)
+            obj.Data = name;
+        end
     end
 end

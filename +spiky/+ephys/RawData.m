@@ -25,7 +25,7 @@ classdef RawData
             end
             channelNameSet = unique(channelNames);
             fi = spiky.core.FileInfo(fpth);
-            events = spiky.ephys.RecEvents.empty;
+            events = spiky.ephys.RecEvents;
             if exist(fpth, "dir")
                 if isequal([fi.Name], "TTL")
                     fpth = fullfile(fpth, "TTL");
@@ -377,7 +377,7 @@ classdef RawData
                 fsLfp double = 1000
                 resampleDat logical = false
                 resampleLfp logical = true
-                syncs spiky.core.Sync = spiky.core.Sync.empty
+                syncs spiky.core.Sync = spiky.core.Sync
             end
 
             switch obj.Type
