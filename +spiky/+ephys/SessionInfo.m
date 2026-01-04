@@ -1,7 +1,8 @@
-classdef SessionInfo < spiky.core.Metadata
+classdef SessionInfo
+    %SESSIONINFO Class containing information about an ephys session
     
     properties
-        Session spiky.ephys.Session
+        Session spiky.ephys.Session = spiky.ephys.Session
         NChannels double
         Fs double
         FsLfp double
@@ -9,8 +10,8 @@ classdef SessionInfo < spiky.core.Metadata
         NSamplesLfp double
         Duration double
         Precision string
-        ChannelGroups spiky.ephys.ChannelGroup
-        EventGroups spiky.ephys.EventGroup
+        ChannelGroups spiky.ephys.ChannelGroup = spiky.ephys.ChannelGroup
+        EventGroups spiky.ephys.EventGroup = spiky.ephys.EventGroup
         Options struct
     end
 

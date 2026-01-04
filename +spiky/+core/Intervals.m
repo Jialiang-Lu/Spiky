@@ -1,4 +1,4 @@
-classdef Intervals < spiky.core.Array
+classdef Intervals < spiky.core.ArrayBase
     %INTERVALS Class representing time intervals, left closed and right open
 
     properties
@@ -11,6 +11,20 @@ classdef Intervals < spiky.core.Array
         ChunkDuration double
         Start double
         End double
+    end
+
+    methods (Static)
+        function dataNames = getDataNames()
+            %GETDATANAMES Get the names of all data properties.
+            %   These properties must all have the same size. The first one is assumed to be the 
+            %   main Data property.
+            %
+            %   dataNames: data property names
+            arguments (Output)
+                dataNames (:, 1) string
+            end
+            dataNames = "Time";
+        end
     end
 
     methods (Static, Hidden)

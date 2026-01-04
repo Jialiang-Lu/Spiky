@@ -1,27 +1,28 @@
-classdef ChannelGroup < spiky.core.Metadata & spiky.core.MappableArray
+classdef ChannelGroup < spiky.core.MappableArray & spiky.core.Array
     %CHANNELGROUP Class representing a group of channels
+    %
+    %   Fields:
+    %       Name: name of the channel group
+    %       NChannels: number of channels in the group
+    %       ChannelType: type of the channels
+    %       ChannelNames: names of the channels
+    %       Probe: probe information
+    %       BitVolts: conversion factor from digital units to volts
+    %       ToMv: conversion factor from raw to millivolts
     
-    properties %(SetAccess = {?spiky.core.Metadata, ?spiky.ephys.ChannelGroup})
-        Name string
-        NChannels (1, 1) double
-        ChannelType (1, 1) spiky.ephys.ChannelType = spiky.ephys.ChannelType.Neural
-        ChannelNames (:, 1) string
-        Probe spiky.ephys.Probe
-        BitVolts (1, 1) double
-        ToMv (1, 1) double
-    end
-
     methods (Static)
         function obj = createExtGroup(channelType, channelNames, bitVolts, toMv)
+            %CREATEEXTGROUP Create a standard external channel group
             arguments
                 channelType spiky.ephys.ChannelType
-                channelNames (:, 1) string
+                channelNames (:, 1) cell
                 bitVolts (1, 1) double = 0.195
                 toMv (1, 1) double = 1e-3
             end
             nChannels = numel(channelNames);
             probe = spiky.ephys.Probe();
-            obj = spiky.ephys.ChannelGroup(string(channelType), nChannels, channelType, channelNames, probe, bitVolts, toMv);
+            obj = spiky.ephys.ChannelGroup(string(channelType), nChannels, channelType, ...
+                channelNames, probe, bitVolts, toMv);
         end
     end
 
@@ -29,27 +30,18 @@ classdef ChannelGroup < spiky.core.Metadata & spiky.core.MappableArray
         function obj = ChannelGroup(name, nChannels, channelType, channelNames, probe, ...
             bitVolts, toMv)
             %CHANNELGROUP Create a new instance of ChannelGroup
-
             arguments
-                name string = ""
-                nChannels (1, 1) double = 0
-                channelType (1, 1) spiky.ephys.ChannelType = spiky.ephys.ChannelType.Neural
-                channelNames (:, 1) string = ""
-                probe spiky.ephys.Probe = spiky.ephys.Probe
-                bitVolts (1, 1) double = 0.195
-                toMv (1, 1) double = 1e-3
+                name (:, 1) string = string.empty
+                nChannels (:, 1) double = []
+                channelType (:, 1) spiky.ephys.ChannelType = spiky.ephys.ChannelType.empty
+                channelNames (:, 1) cell = {}
+                probe (:, 1) spiky.ephys.Probe = spiky.ephys.Probe.empty
+                bitVolts (:, 1) double = [] % 0.195
+                toMv (:, 1) double = [] % 1e-3
             end
-
-            obj.Name = name;
-            obj.NChannels = nChannels;
-            obj.ChannelType = channelType;
-            obj.ChannelNames = channelNames;
-            if isempty(probe)
-                probe = spiky.ephys.Probe();
-            end
-            obj.Probe = probe;
-            obj.BitVolts = bitVolts;
-            obj.ToMv = toMv;
+            obj = obj.initTable(Name=name, NChannels=nChannels, ...
+                ChannelType=channelType, ChannelNames=channelNames, ...
+                Probe=probe, BitVolts=bitVolts, ToMv=toMv);
         end
 
         function [ch, idcGroup] = getChannel(obj, idc, resample)

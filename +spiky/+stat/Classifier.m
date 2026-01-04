@@ -17,11 +17,17 @@ classdef Classifier < spiky.stat.GroupedStat
     end
 
     methods (Static)
-        function dimNames = getDimNames()
-            %GETDIMNAMES Get the dimension names of the EventsTable
+        function dimLabelNames = getDimLabelNames()
+            %GETDIMLABELNAMES Get the names of the label arrays for each dimension.
+            %   Each label array has the same height as the corresponding dimension of Data.
+            %   Each cell in the output is a string array of property names.
+            %   This method should be overridden by subclasses if dimension label properties is added.
             %
-            %   dimNames: dimension names
-            dimNames = ["Time" "Groups,GroupIndices" "Conditions"];
+            %   dimLabelNames: dimension label names
+            arguments (Output)
+                dimLabelNames (:, 1) cell
+            end
+            dimLabelNames = {"Time"; ["Groups"; "GroupIndices"]; "Conditions"};
         end
 
         function d = dist(obj1, obj2, metric, param)

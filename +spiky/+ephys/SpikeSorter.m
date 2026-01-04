@@ -1,4 +1,5 @@
 classdef SpikeSorter
+    
     properties
         Fpth string
         Probe struct

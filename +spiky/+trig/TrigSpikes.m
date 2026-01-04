@@ -8,19 +8,17 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
     end
     
     methods (Static)
-        function dimNames = getDimNames()
-            %GETDIMNAMES Get the dimension names of the EventsTable
+        function dimLabelNames = getDimLabelNames()
+            %GETDIMLABELNAMES Get the names of the label arrays for each dimension.
+            %   Each label array has the same height as the corresponding dimension of Data.
+            %   Each cell in the output is a string array of property names.
+            %   This method should be overridden by subclasses if dimension label properties is added.
             %
-            %   dimNames: dimension names
-            dimNames = ["Time" "Neuron"];
-        end
-
-        function index = getScalarDimension()
-            %GETSCALARDIMENSION Get the scalar dimension of the Array
-            %
-            %   index: index of the scalar dimension, 0 means no scalar dimension, 
-            %       1 means obj(idx) equals obj(idx, :), 2 means obj(idx) equals obj(:, idx), etc.
-            index = 2;
+            %   dimLabelNames: dimension label names
+            arguments (Output)
+                dimLabelNames (:, 1) cell
+            end
+            dimLabelNames = {"Time"; "Neuron"};
         end
     end
 
@@ -76,7 +74,7 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             obj.T_ = events;
             obj.Window = window;
             obj.Data = s;
-            obj.Neuron = vertcat(spikes.Neuron);
+            obj.Neuron = spikes.Neuron;
         end
 
         function fr = get.Fr(obj)

@@ -1,16 +1,41 @@
-classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
+classdef Paradigm < spiky.core.MappableArray
     %PARADIGM represents paradigm data
 
     properties
         Name string
-        Intervals spiky.core.Intervals
-        Trials spiky.core.EventsTable
-        TrialInfo spiky.core.EventsTable
-        Vars spiky.core.Parameter
         Latency double
+        Intervals spiky.core.ObjArray = spiky.core.ObjArray % ObjArray of spiky.core.Intervals
+        Trials spiky.core.ObjArray = spiky.core.ObjArray % ObjArray of spiky.core.EventsTable
+        TrialInfo spiky.core.ObjArray = spiky.core.ObjArray % ObjArray of spiky.core.EventsTable
+        Vars spiky.core.Parameter = spiky.core.Parameter
     end
 
     methods (Static)
+        function dataNames = getDataNames()
+            %GETDATANAMES Get the names of all data properties.
+            %   These properties must all have the same size. The first one is assumed to be the 
+            %   main Data property.
+            %
+            %   dataNames: data property names
+            arguments (Output)
+                dataNames (:, 1) string
+            end
+            dataNames = ["Trials"; "TrialInfo"; "Vars"];
+        end
+
+        function dimLabelNames = getDimLabelNames()
+            %GETDIMLABELNAMES Get the names of the label arrays for each dimension.
+            %   Each label array has the same height as the corresponding dimension of Data.
+            %   Each cell in the output is a string array of property names.
+            %   This method should be overridden by subclasses if dimension label properties is added.
+            %
+            %   dimLabelNames: dimension label names
+            arguments (Output)
+                dimLabelNames (:, 1) cell
+            end
+            dimLabelNames = {["Name"; "Latency"; "Intervals"]};
+        end
+
         function obj = load(fdir, intervals, func, photodiode)
             %LOAD Load a paradigm from a directory
             %
@@ -104,25 +129,26 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
                         double(trials.Data.Type(idx));
                 end
             end
-            obj = spiky.minos.Paradigm(name, intervals, spiky.core.EventsTable(...
-                func(double(data.Timestamp)/1e7), data), info, log.getParameters(func), latency);
+            obj = spiky.minos.Paradigm(name, {intervals}, ...
+                {spiky.core.EventsTable(func(double(data.Timestamp)/1e7), data)}, ...
+                {info}, log.getParameters(func), latency);
         end
     end
 
     methods
         function obj = Paradigm(name, intervals, trials, trialInfo, vars, latency)
             arguments
-                name string = ""
-                intervals spiky.core.Intervals = spiky.core.Intervals
-                trials spiky.core.EventsTable = spiky.core.EventsTable
-                trialInfo spiky.core.EventsTable = spiky.core.EventsTable
-                vars spiky.core.Parameter = spiky.core.Parameter
-                latency double = NaN
+                name (:, 1) string = string.empty
+                intervals (:, 1) cell = {} % cell array of spiky.core.Intervals
+                trials (:, 1) cell = {} % cell array of spiky.core.EventsTable
+                trialInfo (:, 1) cell = {} % cell array of spiky.core.EventsTable
+                vars (:, 1) spiky.core.Parameter = spiky.core.Parameter
+                latency (:, 1) double = double.empty
             end
             obj.Name = name;
-            obj.Intervals = intervals;
-            obj.Trials = trials;
-            obj.TrialInfo = trialInfo;
+            obj.Intervals = spiky.core.ObjArray(intervals);
+            obj.Trials = spiky.core.ObjArray(trials);
+            obj.TrialInfo = spiky.core.ObjArray(trialInfo);
             obj.Vars = vars;
             obj.Latency = latency;
         end
@@ -137,7 +163,7 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
             %
             %   trials: trials
             arguments
-                obj spiky.minos.Paradigm
+                obj (1, 1) spiky.minos.Paradigm
             end
             arguments (Repeating)
                 var string
@@ -150,7 +176,7 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
             end
             prds = cell(length(var), 1);
             for ii = length(var):-1:1
-                prds{ii} = obj.Vars(var{ii}).getIntervals(value{ii});
+                prds{ii} = obj.Vars.(var{ii}).getIntervals(value{ii});
             end
             intervals = spiky.core.Intervals.intersect(prds{:});
             [~, idc1] = intervals.haveEvents(obj.Trials.Time);
@@ -158,7 +184,7 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
         end
     end
 
-    methods (Access = protected)
+    methods (Access=protected)
         function key = getKey(obj)
             key = obj.Name;
         end

@@ -1,4 +1,4 @@
-classdef ChannelConfig < spiky.core.Metadata
+classdef ChannelConfig
     %CHANNELCONFIG Class representing a configuration of non-neural channels
 
     properties

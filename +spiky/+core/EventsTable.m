@@ -1,4 +1,4 @@
-classdef EventsTable < spiky.core.Events
+classdef EventsTable < spiky.core.Events & spiky.core.Array
     % TIMETABLE Represents data indexed by time points in seconds
 
     methods (Static)
@@ -13,6 +13,18 @@ classdef EventsTable < spiky.core.Events
                 dimLabelNames (:, 1) cell
             end
             dimLabelNames = {"Time"};
+        end
+
+        function dataNames = getDataNames()
+            %GETDATANAMES Get the names of all data properties.
+            %   These properties must all have the same size. The first one is assumed to be the 
+            %   main Data property.
+            %
+            %   dataNames: data property names
+            arguments (Output)
+                dataNames (:, 1) string
+            end
+            dataNames = "Data";
         end
     end
 
@@ -239,18 +251,6 @@ classdef EventsTable < spiky.core.Events
             if options.AsEventsTable
                 out = spiky.core.EventsTable(t, out);
             end
-        end
-    end
-
-    methods (Access=protected)
-        function data = getData(obj)
-            %GETDATA Get the Data property.
-            data = obj.Data_;
-        end
-
-        function obj = setData(obj, data)
-            %SETDATA Set the Data property.
-            obj.Data_ = data;
         end
     end
 end

@@ -1,4 +1,6 @@
 classdef Vector
+    %VECTOR Utility class for vector operations
+    
     methods (Static)
         function a = angle(v1, v2, dim)
             %ANGLE Compute the angle between two vectors

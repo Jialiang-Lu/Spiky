@@ -1,39 +1,52 @@
-classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
+classdef Transform < spiky.core.MappableObjArray
     %TRANSFORM Class representing a transformation of an object
+    %
+    %   Properties:
+    %       Name (string): name of the transform
+    %       Id (int32): id of the transform
+    %       Time (double): time points of the transform
+    %       Trial (int64): trial number
+    %       Active (logical): whether the object is active
+    %       Visible (logical): whether the object is visible
+    %       Pos (single): position (Nx3xM array, M is number of body parts)
+    %       Rot (single): rotation (Nx3xM array, M is number of body parts)
+    %       Proj (single): projection (Nx3xM array, M is number of body parts)
 
     properties
         Name string
         Id int32
-        Data spiky.core.EventsTable
     end
 
     properties (Dependent)
-        Time double
-        Interval spiky.core.Intervals
-        Trial double
-        Active logical
-        Visible logical
-        Pos double
-        Rot double
-        Proj double
-        IsHuman logical
+        IsHuman % whether the object is human
+        Interval % time interval of the transform
+    end
+
+    methods (Static)
+        function dimLabelNames = getDimLabelNames()
+            %GETDIMLABELNAMES Get the names of the label arrays for each dimension.
+            %   Each label array has the same height as the corresponding dimension of Data.
+            %   Each cell in the output is a string array of property names.
+            %   This method should be overridden by subclasses if dimension label properties is added.
+            %
+            %   dimLabelNames: dimension label names
+            arguments (Output)
+                dimLabelNames (:, 1) cell
+            end
+            dimLabelNames = {["Name"; "Id"]};
+        end
     end
 
     methods
         function obj = Transform(name, id, data)
             arguments
-                name string = ""
-                id int32 = 0
-                data spiky.core.EventsTable = spiky.core.EventsTable
+                name (:, 1) string = string.empty
+                id (:, 1) int32 = int32.empty
+                data (:, 1) cell = {} % cell array of spiky.core.IntervalsTable
             end
-            if isempty(data)
-                data = spiky.core.EventsTable([], table(Size=[0 6], ...
-                    VariableTypes=["int64" "logical" "logical" "single" "single" "single"], ...
-                    VariableNames=["Trial" "Active" "Visible" "Pos" "Rot" "Proj"]));
-            end
+            obj@spiky.core.MappableObjArray(data, Class="spiky.core.IntervalsTable");
             obj.Name = name;
             obj.Id = id;
-            obj.Data = data;
         end
 
         function [obj, indices] = interp(obj, time, method)
@@ -63,37 +76,13 @@ classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
             end
             obj = obj(idcTr);
             for ii = 1:numel(obj)
-                obj(ii).Data = obj(ii).Data.interp(time, method, AsEventsTable=true);
+                obj{ii} = obj{ii}.interp(time, method, AsEventsTable=true);
             end
             indices = idcTr;
         end
 
-        function time = get.Time(obj)
-            time = obj.Data.Time;
-        end
-
-        function trial = get.Trial(obj)
-            trial = obj.Data.Trial;
-        end
-
-        function active = get.Active(obj)
-            active = obj.Data.Active;
-        end
-
-        function visible = get.Visible(obj)
-            if ismember("Visible", obj.Data.Data.Properties.VariableNames)
-                visible = any(obj.Data.Visible, 3);
-            else
-                visible = true(height(obj.Data), 1);
-            end
-        end
-
-        function pos = get.Pos(obj)
-            pos = obj.Data.Pos;
-        end
-
         function isHuman = get.IsHuman(obj)
-            isHuman = size(obj.Data.Pos, 3)==12;
+            isHuman = size(obj.Pos, 3)==12;
         end
 
         function pos = getPos(obj, bodyPart, time)
@@ -123,16 +112,8 @@ classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
             proj = obj.getVec("Proj", bodyPart, time);
         end
 
-        function rot = get.Rot(obj)
-            rot = obj.Data.Rot;
-        end
-
-        function proj = get.Proj(obj)
-            proj = obj.Data.Proj;
-        end
-
         function interval = get.Interval(obj)
-            interval = spiky.core.Intervals([obj.Data.Time(1) obj.Data.Time(end)]);
+            interval = spiky.core.Intervals([obj.Time(1) obj.Time(end)]);
         end
 
         function gaze = getViewGaze(obj, height, width)
@@ -162,7 +143,7 @@ classdef Transform < spiky.core.MappableArray & spiky.core.Metadata
                 bodyPart = (1:12)';
             end
             bodyPart = bodyPart(:);
-            vec = obj.Data.(vecName);
+            vec = obj.(vecName);
             if isstring(bodyPart)
                 bodyPart = bodyPart(ismember(bodyPart, enumeration("spiky.minos.BodyPart")));
                 bodyPart = double(spiky.minos.BodyPart(bodyPart))+1;

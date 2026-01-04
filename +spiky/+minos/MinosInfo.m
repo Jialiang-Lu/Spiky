@@ -1,4 +1,4 @@
-classdef MinosInfo < spiky.core.Metadata
+classdef MinosInfo
 
     properties
         Session spiky.ephys.Session
@@ -63,7 +63,6 @@ classdef MinosInfo < spiky.core.Metadata
             [~, idc] = photodiode.findContinuous(options.MinPhotodiodeGap);
             idc = unique(cell2mat(cellfun(@(x) x([1 end])', idc, UniformOutput=false)));
             tPhotodiode = photodiode(idc, :).Time;
-
             for ii = length(parNames):-1:1
                 intervals = spiky.core.Intervals(parIntervals(...
                     parIntervalsNames==parNames(ii), :));
@@ -86,14 +85,14 @@ classdef MinosInfo < spiky.core.Metadata
                 double(log.Data{[1 end], 1})', sync);
             obj.getScreenCapture(photodiode(idc, :));
             tr = obj.getTransform();
-            if ismember("FiveDot", [obj.Paradigms.Name])
+            if isfield(obj.Paradigms, "FiveDot")
                 fiveDot = obj.Paradigms.FiveDot;
             else
                 fiveDot = [];
             end
             %%
             obj.Eye = spiky.minos.EyeData.load(fdir, sync.Inv, fiveDot, tr, ...
-                obj.Vars.DisplayFov.Data.Data(1));
+                obj.Vars.DisplayFov.get(0));
             obj.Player = spiky.core.EventsTable(...
                 sync.Inv(double(player.Data.Timestamp)/1e7), ...
                 player.Data);
@@ -152,6 +151,9 @@ classdef MinosInfo < spiky.core.Metadata
             [objs, ~, idcObj] = unique(data.Data(:, ["Id" "NameIndex"]), "rows", "stable");
             nObjs = height(objs);
             pb = spiky.plot.ProgressBar(nObjs, "Calculating transforms", Parallel=true);
+            names = strings(nObjs, 1);
+            ids = int32.zeros(nObjs, 1);
+            tbls = cell(nObjs, 1);
             parfor ii = 1:nObjs
                 idc = idcObj==ii;
                 t1 = t(idc);
@@ -173,21 +175,23 @@ classdef MinosInfo < spiky.core.Metadata
                 else
                     % human
                     if hasVisibility
-                        data1.Visible = reshape(data.Data{idc, 6:4:end}, [], 1, 12);
+                        data1.Visible = any(reshape(data.Data{idc, 6:4:end}, [], 1, 12), 3);
                         data1.Pos = reshape(data.Data{idc, 7:4:end}, [], 3, 12);
                         data1.Rot = reshape(data.Data{idc, 8:4:end}, [], 3, 12);
                         data1.Proj = reshape(data.Data{idc, 9:4:end}, [], 3, 12);
                     else
-                        data1.Visible = true(height(data1), 1, 12);
+                        data1.Visible = true(height(data1), 1);
                         data1.Pos = reshape(data.Data{idc, 6:3:end}, [], 3, 12);
                         data1.Rot = reshape(data.Data{idc, 7:3:end}, [], 3, 12);
                         data1.Proj = reshape(data.Data{idc, 8:3:end}, [], 3, 12);
                     end
                 end
-                tr(ii, 1) = spiky.minos.Transform(nr.Name(objs.NameIndex(ii)+1), ...
-                    objs.Id(ii), data1);
+                names(ii) = nr.Name(objs.NameIndex(ii)+1);
+                ids(ii) = objs.Id(ii);
+                tbls{ii} = data1;
                 pb.step;
             end
+            tr = spiky.minos.Transform(names, ids, tbls);
             obj.Session.saveMetaData(tr);
         end
 
@@ -209,7 +213,7 @@ classdef MinosInfo < spiky.core.Metadata
                 reader = VideoReader(fpthVideo);
                 n = reader.NumFrames;
                 sz = [reader.Height reader.Width];
-                pos = obj.Vars.DisplayPhotodiodePosition.Data{1};
+                pos = obj.Vars.DisplayPhotodiodePosition.get(0);
                 switch pos
                     case "TopLeft"
                         pos = [0 0];

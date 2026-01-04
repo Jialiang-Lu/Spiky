@@ -14,6 +14,18 @@ classdef IntervalsTable < spiky.core.Intervals
             end
             dimLabelNames = {"Time"};
         end
+
+        function dataNames = getDataNames()
+            %GETDATANAMES Get the names of all data properties.
+            %   These properties must all have the same size. The first one is assumed to be the 
+            %   main Data property.
+            %
+            %   dataNames: data property names
+            arguments (Output)
+                dataNames (:, 1) string
+            end
+            dataNames = "Data";
+        end
     end
 
     methods
@@ -138,18 +150,6 @@ classdef IntervalsTable < spiky.core.Intervals
             if nargout>0
                 h = h1;
             end
-        end
-    end
-
-    methods (Access=protected)
-        function data = getData(obj)
-            %GETDATA Get the Data property.
-            data = obj.Data_;
-        end
-
-        function obj = setData(obj, data)
-            %SETDATA Set the Data property.
-            obj.Data_ = data;
         end
     end
 end

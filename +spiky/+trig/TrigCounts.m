@@ -44,7 +44,7 @@ classdef TrigCounts < spiky.trig.TrigFr
             obj.EventDim = 2;
             obj.Events_ = events;
             obj.Window = window;
-            obj.Neuron = vertcat(spikes.Neuron);
+            obj.Neuron = spikes.Neuron;
             obj.Options = options;
             obj.Bernoulli = options.Bernoulli;
         end

@@ -1,4 +1,4 @@
-classdef ScreenCapture < spiky.core.Metadata & handle
+classdef ScreenCapture < handle
     %SCREENCAPTURE Class representing a screen capture video
 
     properties

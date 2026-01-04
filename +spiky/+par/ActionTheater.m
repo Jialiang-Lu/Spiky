@@ -247,7 +247,7 @@ classdef ActionTheater < spiky.par.Paradigm
                 zetaTests = tmp.zetaTests;
                 names = string(fieldnames(zetaTests));
                 unitsAll = zetaTests.(names(1)).Groups;
-                units = vertcat(spikes.Neuron);
+                units = spikes.Neuron;
                 isValid = ismember(string(unitsAll), string(units));
                 for ii = 1:length(names)
                     z = zetaTests.(names(ii));

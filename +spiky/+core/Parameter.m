@@ -1,19 +1,9 @@
-classdef Parameter < spiky.core.MappableArray
+classdef Parameter < spiky.core.MappableObjArray
     %PARAMETER A parameter that can be changed during an experiment
-    %
-    %   Fields:
-    %       Name: name
-    %       Type: class type in the stimulus presentation program
-    %       Data: cell array of spiky.core.EventsTable objects representing the values at
-    %               different time points
 
     properties
-        Name (:, 1) string % Name of the parameter
-        Type (:, 1) string % Type of the parameter in the stimulus presentation program
-    end
-
-    properties (Dependent)
-        Time (:, 1) double % Time points when the parameter changes
+        Name string
+        Type string % Type in the stimulus presentation program
     end
 
     methods (Static)
@@ -27,28 +17,21 @@ classdef Parameter < spiky.core.MappableArray
             arguments (Output)
                 dimLabelNames (:, 1) cell
             end
-            dimLabelNames = {["Name" "Type"]};
+            dimLabelNames = {["Name"; "Type"]};
         end
     end
 
     methods
-        function obj = Parameter(name, type, data)
+        function obj = Parameter(name, type, array)
             arguments
-                name (:, 1) string = ""
-                type (:, 1) string = ""
-                data (:, 1) cell = {}
+                name (:, 1) string = string.empty
+                type (:, 1) string = string.empty
+                array (:, 1) cell = {} % cell array of spiky.core.EventsTable
             end
-            assert(all(cellfun(@(x) isa(x, "spiky.core.EventsTable"), data)), ...
-                "All values must be spiky.core.EventsTable objects");
+            obj@spiky.core.MappableObjArray(array, Class="spiky.core.EventsTable");
             obj.Name = name;
             obj.Type = type;
-            obj.Data = data;
             obj.verifyDimLabels();
-        end
-
-        function varargout = get.Time(obj)
-            t = cellfun(@(x) x.Time, obj.Data, UniformOutput=false);
-            [varargout{1:numel(t)}] = t{:};
         end
 
         function value = get(obj, time)
@@ -66,8 +49,8 @@ classdef Parameter < spiky.core.MappableArray
             else
                 intervals = spiky.core.Intervals([[-Inf; obj.Time(2:end)], [obj.Time(2:end); Inf]]);
                 [~, ~, idc] = intervals.haveEvents(time);
-                value = obj.Data{1}.Data(idc);
-                if iscell(obj.Data{1}.Data)
+                value = obj.Data(idc);
+                if iscell(obj.Data)
                     value = value{:};
                 end
             end
@@ -98,11 +81,11 @@ classdef Parameter < spiky.core.MappableArray
             else
                 h = value;
             end
-            if iscell(obj.Data{1}.Data)
+            if iscell(obj.Data)
                 h = @(c) cellfun(h, c);
             end
             n = length(obj.Time);
-            idc = find(h(obj.Data{1}.Data));
+            idc = find(h(obj.Data));
             if isempty(idc)
                 intervals = spiky.core.Intervals;
                 return
@@ -119,24 +102,6 @@ classdef Parameter < spiky.core.MappableArray
             end
             intervals = spiky.core.Intervals(t);
         end
-
-        function obj = syncTime(obj, func)
-            %SYNCTIME Synchronize events to a synchronization object
-            %
-            %   obj: parameter(s)
-            %   func: function to transform the time
-            %
-            %   obj: updated parameter(s)
-
-            arguments
-                obj spiky.core.Parameter
-                func
-            end
-
-            for ii = 1:height(obj.Data)
-                obj.Data{ii}.Time = func(obj.Data{ii}.Time);
-            end
-        end    
     end
 
     methods (Access = protected)

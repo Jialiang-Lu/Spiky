@@ -1,56 +1,32 @@
 classdef RecEvents < spiky.core.EventsTable & spiky.core.MappableArray
-
-    % properties (Dependent)
-    %     Timestamp int64
-    %     Type spiky.ephys.ChannelType
-    %     Channel int16
-    %     ChannelName categorical
-    %     Rising logical
-    %     Message string
-    % end
+    %RECEVENTS Digital events recorded during electrophysiology experiments
+    %
+    %   Fields:
+    %       Time: time points in seconds
+    %       Timestamp: timestamps in samples
+    %       Type: spiky.ephys.ChannelType object representing the type of the channel
+    %       Channel: channel number
+    %       ChannelName: name of the channel
+    %       Rising: logical indicating whether the event is rising (true) or falling (false)
+    %       Message: message associated with the event
 
     methods
         function obj = RecEvents(time, timestamp, type, channel, name, rising, message)
             %RECEVENTS Create a new instance of RecEvents
 
             arguments
-                time double = []
-                timestamp int64 = []
-                type spiky.ephys.ChannelType = spiky.ephys.ChannelType
-                channel int16 = []
-                name categorical = categorical.empty
-                rising logical = logical.empty
-                message string = string.empty
+                time (:, 1) double = []
+                timestamp (:, 1) int64 = []
+                type (:, 1) spiky.ephys.ChannelType = spiky.ephys.ChannelType.empty
+                channel (:, 1) int16 = []
+                name (:, 1) categorical = categorical.empty
+                rising (:, 1) logical = logical.empty
+                message (:, 1) string = string.empty
             end
 
-            time = time(:);
-            timestamp = timestamp(:);
-            type = type(:);
-            channel = channel(:);
-            name = name(:);
-            rising = rising(:);
-            message = message(:);
-            if ~isempty(time) && ~isscalar(time)
-                if isscalar(type)
-                    type = repmat(type, size(time));
-                end
-                if isscalar(channel)
-                    channel = repmat(channel, size(time));
-                end
-                if isempty(name)
-                    name = categorical(strings(size(time)));
-                elseif isscalar(name)
-                    name = repmat(name, size(time));
-                end
-                if isscalar(rising)
-                    rising = repmat(rising, size(time));
-                end
-                if isscalar(message)
-                    message = repmat(message, size(time));
-                end
-            end
-            obj@spiky.core.EventsTable(time, table(timestamp, type, channel, name, rising, message, ...
-                VariableNames=["Timestamp" "Type" "Channel" "ChannelName" "Rising" "Message"]));
+            obj.Time = time;
+            obj = obj.initTable(Timestamp=timestamp, Type=type, Channel=channel, ...
+                ChannelName=name, Rising=rising, Message=message);
         end
 
         function [sync, obj2] = syncWith(obj, obj2, name, tol, options)
@@ -194,37 +170,6 @@ classdef RecEvents < spiky.core.EventsTable & spiky.core.MappableArray
             ylim([-0.1, 1.1]);
             if nargout>0
                 h = h1;
-            end
-        end
-
-        function varargout = subsref(obj, s)
-            s(1) = obj.useKey(s(1));
-            [varargout{1:nargout}] = subsref@spiky.core.EventsTable(obj, s);
-        end
-
-        function obj = subsasgn(obj, s, varargin)
-            if isequal(obj, [])
-                obj = spiky.ephys.RecEvents;
-            end
-            s(1) = obj.useKey(s(1));
-            obj = subsasgn@spiky.core.EventsTable(obj, s, varargin{:});
-        end
-
-        function n = numArgumentsFromSubscript(obj, s, indexingContext)
-            [s(1), use] = obj.useKey(s(1));
-            switch s(1).type
-                case '{}'
-                    s(1).type = '()';
-            end
-            if isscalar(s)
-                if use
-                    n = 1;
-                else
-                    n = builtin("numArgumentsFromSubscript", obj, s, indexingContext);
-                end
-            else
-                obj = subsref(obj, s(1));
-                n = numArgumentsFromSubscript(obj, s(2:end), indexingContext);
             end
         end
     end

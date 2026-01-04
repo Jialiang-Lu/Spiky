@@ -1,4 +1,4 @@
-classdef (Abstract) MappableArray < spiky.core.Array
+classdef (Abstract) MappableArray < spiky.core.ArrayBase
     %MAPABLEARRAY Class for arrays that can be referenced by key
 
     properties (Access=protected, Dependent)
@@ -32,6 +32,10 @@ classdef (Abstract) MappableArray < spiky.core.Array
                         use = true;
                     end
                 case "Dot"
+                    if isprop(obj, op.Name) || ...
+                        (obj.IsTable && ismember(op.Name, obj.Data.Properties.VariableNames))
+                        return
+                    end
                     isKey = [obj.Key]==op.Name;
                     if any(isKey)
                         idc = {isKey, ':', ':', ':', ':'};
@@ -50,7 +54,7 @@ classdef (Abstract) MappableArray < spiky.core.Array
                 end
                 [varargout{1:nargout}] = obj.(indexOp(2:end));
             else
-                [varargout{1:nargout}] = parenReference@spiky.core.Array(obj, indexOp);
+                [varargout{1:nargout}] = parenReference@spiky.core.ArrayBase(obj, indexOp);
             end
         end
 
@@ -74,7 +78,7 @@ classdef (Abstract) MappableArray < spiky.core.Array
                 obj = obj.subIndex(idc, objNew);
                 obj.verifyDimLabels();
             else
-                obj = parenAssign@spiky.core.Array(obj, indexOp, varargin{:});
+                obj = parenAssign@spiky.core.ArrayBase(obj, indexOp, varargin{:});
             end
         end
 
@@ -88,7 +92,7 @@ classdef (Abstract) MappableArray < spiky.core.Array
                 end
                 n = listLength(obj, indexOp(2:end), indexContext);
             else
-                n = parenListLength@spiky.core.Array(obj, indexOp, indexContext);
+                n = parenListLength@spiky.core.ArrayBase(obj, indexOp, indexContext);
             end
         end
 
@@ -97,7 +101,7 @@ classdef (Abstract) MappableArray < spiky.core.Array
             if use
                 [varargout{1:nargout}] = obj.Data(idc{:});
             else
-                [varargout{1:nargout}] = braceReference@spiky.core.Array(obj, indexOp);
+                [varargout{1:nargout}] = braceReference@spiky.core.ArrayBase(obj, indexOp);
             end
         end
 
@@ -113,7 +117,7 @@ classdef (Abstract) MappableArray < spiky.core.Array
                 obj.Data(idc{:}) = data;
                 obj.verifyDimLabels();
             else
-                obj = braceAssign@spiky.core.Array(obj, indexOp, varargin{:});
+                obj = braceAssign@spiky.core.ArrayBase(obj, indexOp, varargin{:});
             end
         end
 
@@ -126,7 +130,7 @@ classdef (Abstract) MappableArray < spiky.core.Array
                 end
                 n = listLength(obj.Data(idc{:}), indexOp(2:end), indexContext);
             else
-                n = braceListLength@spiky.core.Array(obj, indexOp, indexContext);
+                n = braceListLength@spiky.core.ArrayBase(obj, indexOp, indexContext);
             end
         end
 
@@ -140,7 +144,7 @@ classdef (Abstract) MappableArray < spiky.core.Array
                 end
                 [varargout{1:nargout}] = obj.(indexOp(2:end));
             else
-                [varargout{1:nargout}] = dotReference@spiky.core.Array(obj, indexOp);
+                [varargout{1:nargout}] = dotReference@spiky.core.ArrayBase(obj, indexOp);
             end
         end
 
@@ -156,7 +160,7 @@ classdef (Abstract) MappableArray < spiky.core.Array
                 obj = obj.subIndex(idc, objNew);
                 obj.verifyDimLabels();
             else
-                obj = dotAssign@spiky.core.Array(obj, indexOp, varargin{:});
+                obj = dotAssign@spiky.core.ArrayBase(obj, indexOp, varargin{:});
             end
         end
 
@@ -170,7 +174,7 @@ classdef (Abstract) MappableArray < spiky.core.Array
                 end
                 n = listLength(obj, indexOp(2:end), indexContext);
             else
-                n = dotListLength@spiky.core.Array(obj, indexOp, indexContext);
+                n = dotListLength@spiky.core.ArrayBase(obj, indexOp, indexContext);
             end
         end
     end

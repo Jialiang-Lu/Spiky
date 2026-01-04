@@ -2,11 +2,17 @@ classdef Labels < spiky.trig.Trig
     %LABELS Class representing labels for events
 
     methods (Static)
-        function dimNames = getDimNames()
-            %GETDIMNAMES Get the dimension names of the EventsTable
+        function dimLabelNames = getDimLabelNames()
+            %GETDIMLABELNAMES Get the names of the label arrays for each dimension.
+            %   Each label array has the same height as the corresponding dimension of Data.
+            %   Each cell in the output is a string array of property names.
+            %   This method should be overridden by subclasses if dimension label properties is added.
             %
-            %   dimNames: dimension names
-            dimNames = ["Time" "Events" "Groups"];
+            %   dimLabelNames: dimension label names
+            arguments (Output)
+                dimLabelNames (:, 1) cell
+            end
+            dimLabelNames = {"Time"; "Events"; "Groups"};
         end
     end
 

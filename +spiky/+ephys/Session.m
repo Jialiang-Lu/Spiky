@@ -1,7 +1,7 @@
-classdef Session < spiky.core.Array
+classdef Session < spiky.core.ArrayBase
     %SESSION information about a recording session.
 
-    properties (Dependent)
+    properties
         Name categorical
     end
 
@@ -9,16 +9,28 @@ classdef Session < spiky.core.Array
         Fdir string
     end
 
+    methods (Static)
+        function dataNames = getDataNames()
+            %GETDATANAMES Get the names of all data properties.
+            %   These properties must all have the same size. The first one is assumed to be the 
+            %   main Data property.
+            %
+            %   dataNames: data property names
+            arguments (Output)
+                dataNames (:, 1) string
+            end
+            dataNames = "Name";
+        end
+    end
+
     methods
         function obj = Session(name)
             % Constructor for Session class.
             % name: name of the session
-            
             arguments
                 name categorical = categorical.empty
             end
-            
-            obj@spiky.core.Array(name);
+            obj = obj.setData(name);
         end
 
         function fdir = get.Fdir(obj)
@@ -74,7 +86,7 @@ classdef Session < spiky.core.Array
             end
             spikes = obj.loadData("spiky.ephys.SpikeInfo.mat");
             spikes = spikes.Spikes;
-            units = vertcat(spikes.Neuron);
+            units = spikes.Neuron;
             for ii = 1:height(spikes)
                 spikes(ii).Neuron.Waveform{1} = []; % clear waveform to save memory
             end
@@ -115,7 +127,7 @@ classdef Session < spiky.core.Array
                 obj spiky.ephys.Session
                 options.FsLfp (1, 1) double = 1000
                 options.Interval (1, 2) double = [0 Inf]
-                options.BrainRegions string = "brain"
+                options.BrainRegions (:, 1) string = "brain"
                 options.ChannelConfig = []
                 options.Probe = "NP1032"
                 options.MainProbe (1, 1) double = 1
@@ -192,10 +204,10 @@ classdef Session < spiky.core.Array
             %   data: metadata to save
             arguments
                 obj spiky.ephys.Session
-                data spiky.core.Metadata
+                data
             end
 
-            data.save(obj.getFpth(class(data)+".mat"));
+            spiky.core.Metadata.saveObj(data, obj.getFpth(class(data)+".mat"));
         end
 
         function [data, chInfo] = loadBinary(obj, type, chs, interval, precisionOut, precisionIn)
@@ -282,14 +294,6 @@ classdef Session < spiky.core.Array
             end
             chInfo = chInfo(chs, :);
             
-        end
-        
-        function name = get.Name(obj)
-            name = obj.Data;
-        end
-
-        function obj = set.Name(obj, name)
-            obj.Data = name;
         end
     end
 end

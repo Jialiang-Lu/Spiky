@@ -140,11 +140,17 @@ classdef TimeCoords < spiky.stat.Coords & spiky.core.EventsTable
             obj = spiky.stat.TimeCoords(t+options.TimeOffset, zeros(numel(t), 1), B);
         end
 
-        function dimNames = getDimNames()
-            %GETDIMNAMES Get the dimension names of the EventsTable
+        function dimLabelNames = getDimLabelNames()
+            %GETDIMLABELNAMES Get the names of the label arrays for each dimension.
+            %   Each label array has the same height as the corresponding dimension of Data.
+            %   Each cell in the output is a string array of property names.
+            %   This method should be overridden by subclasses if dimension label properties is added.
             %
-            %   dimNames: dimension names
-            dimNames = ["Time,Dims"];
+            %   dimLabelNames: dimension label names
+            arguments (Output)
+                dimLabelNames (:, 1) cell
+            end
+            dimLabelNames = {["Time"; "Dims"]};
         end
     end
 

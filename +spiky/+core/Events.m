@@ -1,4 +1,4 @@
-classdef Events < spiky.core.Array
+classdef Events < spiky.core.ArrayBase
     %EVENTS Class representing discrete events in Time.
     
     properties (Hidden)
@@ -16,6 +16,20 @@ classdef Events < spiky.core.Array
         Step double % Step in seconds
         IsUniform logical % Whether the events are uniformly spaced
         Fs double % Sampling frequency if uniform
+    end
+
+    methods (Static)
+        function dataNames = getDataNames()
+            %GETDATANAMES Get the names of all data properties.
+            %   These properties must all have the same size. The first one is assumed to be the 
+            %   main Data property.
+            %
+            %   dataNames: data property names
+            arguments (Output)
+                dataNames (:, 1) string
+            end
+            dataNames = "Time";
+        end
     end
 
     methods
@@ -332,7 +346,7 @@ classdef Events < spiky.core.Array
                     (y>f.a*f.c-f.b+f.d).*(y-f.d-f.b)./f.a, f.a, f.d-f.b, gof);
             end
             if options.Plot
-                spiky.plot.fig
+                figure
                 plot(t1, td-td(1), "ro", t1, f(t1)-t1-td(1), "b.-");
                 xlabel("t1");
                 ylabel('td-td(1)');
@@ -357,18 +371,6 @@ classdef Events < spiky.core.Array
             if nargout>0
                 h = h1;
             end
-        end
-    end
-
-    methods (Access=protected)
-        function data = getData(obj)
-            %GETDATA Get the Data property.
-            data = obj.Time;
-        end
-
-        function obj = setData(obj, data)
-            %SETDATA Set the Data property.
-            obj.Time = data;
         end
     end
 end

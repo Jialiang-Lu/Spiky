@@ -74,7 +74,7 @@ classdef Zeta < spiky.stat.GroupedStat
             data = struct("P", p, "Z", z, "D", d, ...
                 "Onset", onset, "HalfPeak", halfPeak, "Peak", peak, ...
                 "Offset", offset, "PeakFr", peakFr);
-            groups = vertcat(spikes.Neuron);
+            groups = spikes.Neuron;
             obj@spiky.stat.GroupedStat(0, data, groups);
             obj.Window = window;
             obj.Events = events;

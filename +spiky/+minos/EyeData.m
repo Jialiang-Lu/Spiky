@@ -1,4 +1,4 @@
-classdef EyeData < spiky.core.Metadata
+classdef EyeData
 
     properties
         Data spiky.core.EventsTable

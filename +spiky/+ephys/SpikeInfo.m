@@ -1,4 +1,5 @@
-classdef SpikeInfo < spiky.core.Metadata
+classdef SpikeInfo
+    %SPIKEINFO Class containing information about all sorted spikes of a session
 
     properties
         Spikes spiky.core.Spikes

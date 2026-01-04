@@ -25,7 +25,7 @@ classdef FileInfo
             end
             fi = dir(name);
             if isempty(fi)
-                obj = spiky.core.FileInfo;
+                obj = spiky.core.FileInfo.empty;
                 return
             end
             fi(strcmp({fi.name}', ".")) = [];
