@@ -11,7 +11,7 @@ classdef EventGroup < spiky.core.MappableArray
     properties
         Name string
         Type spiky.ephys.ChannelType
-        Events spiky.core.ObjArray = spiky.core.ObjArray % ObjArray of spiky.ephys.RecEvents
+        Events spiky.core.ObjArray % ObjArray of spiky.ephys.RecEvents
         TsRange double
         Sync spiky.core.Sync
     end
@@ -20,7 +20,7 @@ classdef EventGroup < spiky.core.MappableArray
         NSamples double
     end
 
-        methods (Static)
+    methods (Static)
         function dataNames = getDataNames()
             %GETDATANAMES Get the names of all data properties.
             %   These properties must all have the same size. The first one is assumed to be the 
@@ -67,7 +67,7 @@ classdef EventGroup < spiky.core.MappableArray
         end
 
         function n = get.NSamples(obj)
-            n = diff(obj.TsRange)+1;
+            n = diff(obj.TsRange, 1, 2)+1;
         end
     end
 

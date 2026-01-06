@@ -1,6 +1,4 @@
-classdef (Abstract) ArrayBase < matlab.mixin.indexing.RedefinesParen & ...
-    matlab.mixin.indexing.RedefinesBrace & ...
-    matlab.mixin.indexing.RedefinesDot
+classdef (Abstract) ArrayBase
     %ARRAYBASE Base class for array-like data structures with dimension labels.
 
     properties (Dependent)
@@ -19,12 +17,6 @@ classdef (Abstract) ArrayBase < matlab.mixin.indexing.RedefinesParen & ...
     end
 
     methods (Static)
-        function obj = empty(varargin)
-            %EMPTY Create an empty array object.
-            obj = [];
-            % error("Empty array not supported. Use default constructor instead.");
-        end
-
         function dimLabelNames = getDimLabelNames()
             %GETDIMLABELNAMES Get the names of the label arrays for each dimension.
             %   Each label array has the same height as the corresponding dimension of Data.
@@ -282,7 +274,6 @@ classdef (Abstract) ArrayBase < matlab.mixin.indexing.RedefinesParen & ...
                 names = labelNames{ii};
                 for jj = 1:numel(names)
                     name = names(jj);
-                    assert(isprop(obj, name), "Property '%s' not found.", name);
                     assert(height(obj.(name))==size(obj, ii), ...
                         "Property '%s' height does not match dimension %d of Data.", ...
                         name, ii);
@@ -290,12 +281,12 @@ classdef (Abstract) ArrayBase < matlab.mixin.indexing.RedefinesParen & ...
             end
         end
 
-        function obj = reshape(obj, varargin)
-            assert(isempty(obj), "Reshape is only supported for empty Array objects.");
-        end
-
         function varargout = size(obj, varargin)
-            if obj.IsTable
+            if isempty(obj)
+                [varargout{1:nargout}] = size(double.empty(0, 1), varargin{:});
+                return
+            end
+            if istable(obj.getData(1))
                 % Treat table as a column vector for size purposes
                 sz = size(obj.getData(), varargin{:});
                 if isempty(varargin)
@@ -315,6 +306,14 @@ classdef (Abstract) ArrayBase < matlab.mixin.indexing.RedefinesParen & ...
             else
                 [varargout{1:nargout}] = size(obj.getData(), varargin{:});
             end
+        end
+
+        function obj = horzcat(varargin)
+            obj = cat(2, varargin{:});
+        end
+
+        function obj = vertcat(varargin)
+            obj = cat(1, varargin{:});
         end
 
         function obj = cat(dim, varargin)
@@ -359,18 +358,198 @@ classdef (Abstract) ArrayBase < matlab.mixin.indexing.RedefinesParen & ...
 
         function tf = get.IsTable(obj)
             tf = istable(obj.getData());
+            if isempty(tf)
+                tf = false;
+            end
         end
 
         function tf = get.IsCell(obj)
             tf = iscell(obj.getData());
+            if isempty(tf)
+                tf = false;
+            end
         end
 
         function tf = get.IsStruct(obj)
             tf = isstruct(obj.getData());
+            if isempty(tf)
+                tf = false;
+            end
+        end
+
+        function varargout = subsref(obj, s)
+            if isempty(obj)
+                [varargout{1:nargout}] = builtin("subsref", obj, s);
+                return
+            end
+            s = obj.processSubstruct(s);
+            switch s(1).type
+                case '()'
+                    obj = obj.subIndex(s(1).subs);
+                    if isscalar(s)
+                        varargout{1} = obj;
+                        return
+                    end
+                    [varargout{1:nargout}] = subsref(obj, s(2:end));
+                case '{}'
+                    if isscalar(s)
+                        [varargout{1:nargout}] = obj.subIndexData(s(1).subs);
+                        return
+                    end
+                    data = obj.subIndexData(s(1).subs);
+                    [varargout{1:nargout}] = subsref(data, s(2:end));
+                case '.'
+                    if obj.isProperty(s(1).subs)
+                        if isscalar(s)
+                            [varargout{1:nargout}] = builtin("subsref", obj, s);
+                            return
+                        end
+                        obj = builtin("subsref", obj, s(1));
+                        [varargout{1:nargout}] = subsref(obj, s(2:end));
+                        return
+                    end
+                    if obj.isMethod(s(1).subs)
+                        idx = 1;
+                        if numel(s)>1 && strcmp(s(2).type, '()')
+                            idx = 2;
+                        end
+                        if numel(s)==idx
+                            [varargout{1:nargout}] = builtin("subsref", obj, s);
+                            return
+                        end
+                        obj = builtin("subsref", obj, s(1:idx));
+                        [varargout{1:nargout}] = subsref(obj, s(idx+1:end));
+                    end
+                    data = obj.getData().(s(1).subs);
+                    if isscalar(s)
+                        varargout{1} = data;
+                        return
+                    end
+                    [varargout{1:nargout}] = subsref(data, s(2:end));
+                otherwise
+                    error("Unsupported subscript type '%s'.", s(1).type);
+            end
+        end
+
+        function obj = subsasgn(obj, s, varargin)
+            if isequal(obj, [])
+                obj = feval(class(varargin{1}));
+            end
+            s = obj.processSubstruct(s);
+            switch s(1).type
+                case '()'
+                    if isscalar(s)
+                        obj = obj.subIndex(s(1).subs, varargin{:});
+                        obj.verifyDimLabels();
+                        return
+                    end
+                    objNew = obj.subIndex(s(1).subs);
+                    objNew = subsasgn(objNew, s(2:end), varargin{:});
+                    obj = obj.subIndex(s(1).subs, objNew);
+                    obj.verifyDimLabels();
+                case '{}'
+                    if isscalar(s)
+                        obj = obj.subIndexData(s(1).subs, varargin{:});
+                        return
+                    end
+                    data = obj.subIndexData(s(1).subs);
+                    data = subsasgn(data, s(2:end), varargin{:});
+                    obj = obj.subIndexData(s(1).subs, data);
+                    obj.verifyDimLabels();
+                case '.'
+                    if obj.isProperty(s(1).subs)
+                        obj = builtin("subsasgn", obj, s, varargin{:});
+                        obj.verifyDimLabels();
+                        return
+                    end
+                    data = obj.getData().(s(1).subs);
+                    if isscalar(s)
+                        [data] = varargin{:};
+                    else
+                        data = subsasgn(data, s(2:end), varargin{:});
+                    end
+                    data1 = obj.getData();
+                    data1.(s(1).subs) = data;
+                    obj = obj.setData(data1);
+                    obj.verifyDimLabels();
+                otherwise
+                    error("Unsupported subscript type '%s'.", s(1).type);
+            end
+        end
+
+        function n = numArgumentsFromSubscript(obj, s, indexingContext)
+            if isa(obj, "spiky.core.ArrayBase")
+                s = obj.processSubstruct(s);
+            end
+            switch s(1).type
+                case '()'
+                    if isscalar(s)
+                        n = 1;
+                        return
+                    end
+                    obj = subsref(obj, s(1));
+                    n = numArgumentsFromSubscript(obj, s(2:end), indexingContext);
+                case '{}'
+                    if obj.IsCell || obj.IsTable
+                        n = numArgumentsFromSubscript(obj.getData(), s, indexingContext);
+                    elseif ~isscalar(s)
+                        data = obj.getData();
+                        data = data(s(1).subs{:});
+                        n = numArgumentsFromSubscript(data, s(2:end), indexingContext);
+                    else
+                        n = 1;
+                    end
+                case '.'
+                    if isscalar(s)
+                        if ~strcmp(s.subs, "getData")
+                            n = 1;
+                        else
+                            n = builtin("numArgumentsFromSubscript", obj, s, indexingContext);
+                        end
+                        return
+                    end
+                    obj = subsref(obj, s(1));
+                    n = numArgumentsFromSubscript(obj, s(2:end), indexingContext);
+                otherwise
+                    error("Unsupported subscript type '%s'.", s(1).type);
+            end
+        end
+
+        function ind = end(obj,k,n)
+            sz = size(obj);
+            if k < n
+                ind = sz(k);
+            else
+                ind = prod(sz(k:end));
+            end
+        end
+
+        function tf = isempty(obj)
+            tf = builtin("isempty", obj);
+            if ~tf && isempty(obj.getData())
+                tf = true;
+            end
         end
     end
 
     methods (Access=protected)
+        function tf = isProperty(obj, name)
+            meta = metaclass(obj);
+            tf = ismember(name, {meta.PropertyList.Name});
+        end
+
+        function tf = isMethod(obj, name)
+            meta = metaclass(obj);
+            tf = ismember(name, {meta.MethodList.Name});
+        end
+
+        function s = processSubstruct(obj, s)
+            %PROCESSSUBSTRUCT Process subscript structure before subsref/subsasgn.
+            %
+            %   s: subscript structure
+            % Default implementation does nothing
+        end
+
         function obj = initTable(obj, varargin)
             assert(mod(numel(varargin), 2)==0, ...
                 "Table initialization requires name-value pairs.");
@@ -393,10 +572,19 @@ classdef (Abstract) ArrayBase < matlab.mixin.indexing.RedefinesParen & ...
             obj = obj.setData(table(values{:}, VariableNames=names));
         end
 
-        function varargout = getData(obj)
+        function varargout = getData(obj, n)
             %GETDATA Get the Data properties.
+            arguments (Input)
+                obj
+                n (1, 1) double = 0
+            end
             dataNames = obj.getDataNames();
-            for ii = nargout:-1:1
+            if n==0
+                n = numel(dataNames);
+            else
+                n = min(n, numel(dataNames));
+            end
+            for ii = n:-1:1
                 varargout{ii} = obj.(dataNames(ii));
             end
         end
@@ -418,7 +606,7 @@ classdef (Abstract) ArrayBase < matlab.mixin.indexing.RedefinesParen & ...
             arguments (Repeating)
                 varargin
             end
-            if obj.IsTable || (~isempty(varargin) && varargin{1}.IsTable)
+            if obj.IsTable || (~isempty(varargin) && ~isempty(varargin{1}) && varargin{1}.IsTable)
                 idcDims{2} = ':';
                 idcDims = idcDims(1:2);
             end
@@ -428,21 +616,24 @@ classdef (Abstract) ArrayBase < matlab.mixin.indexing.RedefinesParen & ...
             datas = cell(n, 1);
             [datas{:}] = obj.getData();
             if isempty(varargin)
-                datas = cellfun(@(x) x(idcDims{:}), datas, UniformOutput=false);
+                datas = cellfun(@(x) subsref(x, substruct('()', idcDims)), datas, UniformOutput=false);
                 obj = obj.setData(datas{:});
             else
                 objNew = varargin{1};
                 for ii = 1:n
                     name = dataNames(ii);
                     p = obj.(name);
-                    if isequal(p, [])
-                        clear p
-                    end
                     if isequal(objNew, [])
-                        p(idcDims{:}) = [];
+                        p = subsasgn(p, substruct('()', idcDims), []);
                     else
+                        if isempty({objNew.(name)})
+                            continue
+                        end
                         pNew = objNew.(name);
-                        p(idcDims{:}) = pNew;
+                        if ~any(size(p)) && isa(pNew, "spiky.core.ArrayBase")
+                            p = feval(class(pNew));
+                        end
+                        p = subsasgn(p, substruct('()', idcDims), pNew);
                     end
                     obj.(name) = p;
                 end
@@ -464,8 +655,11 @@ classdef (Abstract) ArrayBase < matlab.mixin.indexing.RedefinesParen & ...
                 end
                 for jj = 1:numel(names)
                     name = names(jj);
+                    if isempty({obj.(name)})
+                        continue
+                    end
                     p = obj.(name);
-                    if isequal(p, [])
+                    if isequal(p, []) || ~any(size(p))
                         clear p
                     end
                     if isempty(varargin)
@@ -479,49 +673,6 @@ classdef (Abstract) ArrayBase < matlab.mixin.indexing.RedefinesParen & ...
                     end
                 end
             end
-        end
-
-        function obj = resize(obj, newSize)
-            sz = arrayfun(@(x) 1:x, newSize, UniformOutput=false);
-            obj = obj.subIndex(sz);
-        end
-
-        function varargout = parenReference(obj, indexOp)
-            obj = obj.subIndex(indexOp(1).Indices);
-            if isscalar(indexOp)
-                varargout{1} = obj;
-                return
-            end
-            [varargout{1:nargout}] = obj.(indexOp(2:end));
-        end
-
-        function obj = parenAssign(obj, indexOp, varargin)
-            if isequal(obj, [])
-                obj = feval(class(varargin{1}));
-            end
-            if isscalar(indexOp)
-                obj1 = varargin{1};
-                obj = obj.subIndex(indexOp(1).Indices, obj1);
-                obj.verifyDimLabels();
-                return
-            end
-            objNew = obj.subIndex(indexOp(1).Indices);
-            [objNew.(indexOp(2:end))] = varargin{:};
-            obj = obj.subIndex(indexOp(1).Indices, objNew);
-            obj.verifyDimLabels();
-        end
-
-        function obj = parenDelete(obj, indexOp)
-            obj = obj.subIndex(indexOp(1).Indices, []);
-        end
-
-        function n = parenListLength(obj, indexOp, indexContext)
-            if isscalar(indexOp)
-                n = 1;
-                return
-            end
-            obj = obj.subIndex(indexOp(1).Indices);
-            n = listLength(obj, indexOp(2:end), indexContext);
         end
 
         function varargout = subIndexData(obj, idcDims, varargin)
@@ -543,68 +694,9 @@ classdef (Abstract) ArrayBase < matlab.mixin.indexing.RedefinesParen & ...
             end
         end
 
-        function varargout = braceReference(obj, indexOp)
-            if isscalar(indexOp)
-                [varargout{1:nargout}] = obj.subIndexData(indexOp(1).Indices);
-                return
-            end
-            data = obj.subIndexData(indexOp(1).Indices);
-            [varargout{1:nargout}] = data.(indexOp(2:end));
-        end
-
-        function obj = braceAssign(obj, indexOp, varargin)
-            if isscalar(indexOp)
-                obj = obj.subIndexData(indexOp(1).Indices, varargin{:});
-                return
-            end
-            data = obj.subIndexData(indexOp(1).Indices);
-            [data.(indexOp(2:end))] = varargin{:};
-            obj = obj.subIndexData(indexOp(1).Indices, data);
-            obj.verifyDimLabels();
-        end
-
-        function n = braceListLength(obj, indexOp, indexContext)
-            if obj.IsCell || obj.IsTable
-                n = listLength(obj.getData(), indexOp, indexContext);
-            elseif ~isscalar(indexOp)
-                data = obj.getData();
-                data = data(indexOp(1).Indices{:});
-                n = listLength(data, indexOp(2:end), indexContext);
-            else
-                n = 1;
-            end
-        end
-
-        function checkField(obj, name)
-            assert((obj.IsTable && ismember(name, obj.getData().Properties.VariableNames)) || ...
-                (obj.IsStruct && isfield(obj.getData(), name)), ...
-                "Unrecognized field '%s' for class '%s'.", name, class(obj));
-        end
-
-        function varargout = dotReference(obj, indexOp)
-            obj.checkField(indexOp(1).Name);
-            [varargout{1:nargout}] = obj.getData().(indexOp(1).Name);
-            if isscalar(indexOp)
-                return
-            end
-            [varargout{1:nargout}] = varargout{1}.(indexOp(2:end));
-        end
-
-        function obj = dotAssign(obj, indexOp, varargin)
-            obj.checkField(indexOp(1).Name);
-            data = obj.getData().(indexOp(1).Name);
-            if isscalar(indexOp)
-                [data] = varargin{:};
-            else
-                [data.(indexOp(2:end))] = varargin{:};
-            end
-            obj.getData().(indexOp(1).Name) = data;
-            obj.verifyDimLabels();
-        end
-
-        function n = dotListLength(obj, indexOp, indexContext)
-            obj.checkField(indexOp(1).Name);
-            n = listLength(obj.getData(), indexOp, indexContext);
+        function obj = resize(obj, newSize)
+            sz = arrayfun(@(x) 1:x, newSize, UniformOutput=false);
+            obj = obj.subIndex(sz);
         end
     end
 end

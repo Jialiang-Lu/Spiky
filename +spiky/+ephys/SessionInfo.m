@@ -2,7 +2,7 @@ classdef SessionInfo
     %SESSIONINFO Class containing information about an ephys session
     
     properties
-        Session spiky.ephys.Session = spiky.ephys.Session
+        Session spiky.ephys.Session
         NChannels double
         Fs double
         FsLfp double
@@ -10,8 +10,8 @@ classdef SessionInfo
         NSamplesLfp double
         Duration double
         Precision string
-        ChannelGroups spiky.ephys.ChannelGroup = spiky.ephys.ChannelGroup
-        EventGroups spiky.ephys.EventGroup = spiky.ephys.EventGroup
+        ChannelGroups spiky.ephys.ChannelGroup
+        EventGroups spiky.ephys.EventGroup
         Options struct
     end
 
@@ -257,8 +257,9 @@ classdef SessionInfo
             arguments
                 obj
                 options.MinPhotodiodeGap double = 0.05
+                options.Plot logical = true
             end
-            options.Plot = ~exist(obj.Session.getFpth("spiky.minos.MinosInfo.mat"), "file");
+            % options.Plot = ~exist(obj.Session.getFpth("spiky.minos.MinosInfo.mat"), "file");
             optionsCell = namedargs2cell(options);
             minos = spiky.minos.MinosInfo.load(obj, optionsCell{:});
             fprintf("Saving ...\n");
@@ -487,16 +488,12 @@ classdef SessionInfo
             idcGroup = idcGroup(idcGood);
             sessions = repmat(obj.Session, nNeurons, 1);
             groupNames = categorical([obj.ChannelGroups(idcGroup).Name]');
-            waveforms = arrayfun(@(x) spiky.lfp.Lfp(tStart, obj.Fs, data.waveform(x, :)), ...
-                idcGood, UniformOutput=false);
+            % waveforms = arrayfun(@(x) spiky.lfp.Lfp(tStart, obj.Fs, data.waveform(x, :)), ...
+            %     idcGood, UniformOutput=false);
             neurons = spiky.core.Neuron(sessions, idcGroup, data.id(idcGood), groupNames, ...
-                chInAll(idcGood), ch(idcGood), categorical(data.label(idcGood)), waveforms);
-            %%
-            clear s;
-            for jj = length(idcGood):-1:1
-                idx = idcGood(jj);
-                s(jj, 1) = spiky.core.Spikes(neurons(jj), sync(data.ts{idx}));
-            end
+                chInAll(idcGood), ch(idcGood), categorical(data.label(idcGood)), data.amplitude(idcGood));
+            ts = cellfun(sync, data.ts(idcGood), UniformOutput=false);
+            s = spiky.core.Spikes(neurons, ts);
         end
     end
 end

@@ -39,7 +39,7 @@ classdef Neuron < spiky.core.Array
         end
 
         function str = string(obj)
-            str = compose("%s_%s_%d", [obj.Data.Session.Name]', obj.Data.Region, obj.Data.Id);
+            str = compose("%s_%s_%d", obj.Data.Session.Name, obj.Data.Region, obj.Data.Id);
         end
 
         function out = eq(obj, other)

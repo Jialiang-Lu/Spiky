@@ -1,4 +1,5 @@
-classdef ObjArray < spiky.core.ArrayBase
+classdef ObjArray < spiky.core.ArrayBase & matlab.mixin.CustomDisplay & ...
+    matlab.mixin.CustomCompactDisplayProvider
     %OBJARRAY An homogeneous array of objects
     %   MATLAB doesn't internally support arrays of non-scalar objects. This class
     %   provides a workaround by storing the objects in cell array and accessing
@@ -46,6 +47,16 @@ classdef ObjArray < spiky.core.ArrayBase
             obj = obj.setData(array);
         end
 
+        function rep = compactRepresentationForSingleLine(obj, displayConfiguration, width)
+            rep = matlab.display.DimensionsAndClassNameRepresentation(obj, displayConfiguration, ...
+                UseSimpleName=true, ClassName=sprintf("%s (%s)", class(obj), obj.ElementClass));
+        end
+
+        function rep = compactRepresentationForColumn(obj, displayConfiguration, width)
+            rep = matlab.display.DimensionsAndClassNameRepresentation(obj, displayConfiguration, ...
+                UseSimpleName=true, ClassName=sprintf("%s (%s)", class(obj), obj.ElementClass));
+        end
+
         function cls = get.ElementClass(obj)
             %GET.ELEMENTCLASS Get the class name of the elements in the ObjArray
             %
@@ -63,40 +74,18 @@ classdef ObjArray < spiky.core.ArrayBase
     end
 
     methods (Access = protected)
-        function checkField(obj, name)
-            cls = obj.ElementClass;
-            assert(~isempty(cls), "The ObjArray is empty.");
-            % assert(ismember(name, properties(cls)), ...
-            %     "Field '%s' does not exist in class '%s'.", name, cls);
-        end
-
-        function varargout = dotReference(obj, indexOp)
-            obj.checkField(indexOp(1).Name);
-            data = cellfun(@(x) x.(indexOp(1).Name), obj.getData(), UniformOutput=false);
-            [varargout{1:nargout}] = data{:};
-            if isscalar(indexOp)
+        function s = processSubstruct(obj, s)
+            if ~strcmp(s(1).type, '.') || obj.isProperty(s(1).subs) || obj.isMethod(s(1).subs)
                 return
             end
-            [varargout{1:nargout}] = varargout{1}.(indexOp(2:end));
+            s1 = substruct('{}', {':'});
+            s = [s1 s];
         end
-
-        function obj = dotAssign(obj, indexOp, varargin)
-            obj.checkField(indexOp(1).Name);
-            data = obj.getData();
-            if isscalar(varargin) && ~isscalar(data)
-                varargin = repmat(varargin, size(data));
-            end
-            % data1 = cellfun(@(x) x.(indexOp(1).Name), data, UniformOutput=false);
-            for ii = 1:numel(data)
-                data{ii}.(indexOp) = varargin{1};
-            end
-            obj = obj.setData(data);
-            obj.verifyDimLabels();
-        end
-
-        function n = dotListLength(obj, indexOp, indexContext)
-            obj.checkField(indexOp(1).Name);
-            n = numel(obj.getData());
+        
+        function s = getHeader(obj)
+            s = getHeader@matlab.mixin.CustomDisplay(obj);
+            idx = strfind(s, '</a>');
+            s = sprintf('%s (%s)%s', s(1:idx-1), obj.ElementClass, s(idx:end));
         end
     end
 end

@@ -177,7 +177,7 @@ classdef RawData
                     idc1 = sort(idc1);
                     eventsAdc(idc1, :) = [];
                     eventsNet = spiky.ephys.RawData.loadEvents(fiNet.Path, [], tsRangesAdc(1));
-                    eventsSyncNet = eventsNet(contains([eventsNet.Message], ["Sync" "sync"]), :);
+                    eventsSyncNet = eventsNet(contains(eventsNet.Message, ["Sync" "sync"]), :);
                     if eventsSyncNet.Message(1)==eventsSyncNet.Message(2)
                         eventsSyncNet = eventsSyncNet(1:2:end, :);
                     end

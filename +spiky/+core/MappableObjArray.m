@@ -14,31 +14,9 @@ classdef MappableObjArray < spiky.core.ObjArray & spiky.core.MappableArray
     end
 
     methods (Access=protected)
-        function varargout = dotReference(obj, indexOp)
-            [~, use] = obj.useKey(indexOp(1));
-            if use
-                [varargout{1:nargout}] = dotReference@spiky.core.MappableArray(obj, indexOp);
-            else
-                [varargout{1:nargout}] = dotReference@spiky.core.ObjArray(obj, indexOp);
-            end
-        end
-
-        function obj = dotAssign(obj, indexOp, varargin)
-            [~, use] = obj.useKey(indexOp(1));
-            if use
-                obj = dotAssign@spiky.core.MappableArray(obj, indexOp, varargin{:});
-            else
-                obj = dotAssign@spiky.core.ObjArray(obj, indexOp, varargin{:});
-            end
-        end
-
-        function n = dotListLength(obj, indexOp, indexContext)
-            [~, use] = obj.useKey(indexOp(1));
-            if use
-                n = dotListLength@spiky.core.MappableArray(obj, indexOp, indexContext);
-            else
-                n = dotListLength@spiky.core.ObjArray(obj, indexOp, indexContext);
-            end
+        function s = processSubstruct(obj, s)
+            s = processSubstruct@spiky.core.MappableArray(obj, s);
+            s = processSubstruct@spiky.core.ObjArray(obj, s);
         end
     end
 end

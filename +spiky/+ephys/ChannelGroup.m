@@ -53,7 +53,7 @@ classdef ChannelGroup < spiky.core.MappableArray & spiky.core.Array
                 resample = true
             end
 
-            chs = [obj.NChannels]';
+            chs = obj.Data.NChannels;
             chsCum = [0; cumsum(chs)];
             intervals = spiky.core.Intervals([chsCum(1:end-1)+1, chsCum(2:end)]);
             [ch, ~, idcGroup] = intervals.haveEvents(idc, CellMode=false, Offset=0, RightClose=true, Sorted=false);
@@ -62,7 +62,7 @@ classdef ChannelGroup < spiky.core.MappableArray & spiky.core.Array
                 groups = unique(idcGroup);
                 for ii = 1:numel(groups)
                     idc1 = idcGroup==groups(ii);
-                    ch(idc1) = obj(groups(ii)).Probe.ChanMap(ch(idc1));
+                    ch(idc1) = obj.Data.Probe(groups(ii)).ChanMap(ch(idc1));
                 end
             end
         end
@@ -75,7 +75,7 @@ classdef ChannelGroup < spiky.core.MappableArray & spiky.core.Array
                 group double
             end
 
-            chs = [obj.NChannels]';
+            chs = obj.Data.NChannels;
             chsCum = [0; cumsum(chs)];
             idc = chsCum(group)+1:chsCum(group+1);
         end

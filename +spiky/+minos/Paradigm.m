@@ -7,7 +7,7 @@ classdef Paradigm < spiky.core.MappableArray
         Intervals spiky.core.ObjArray = spiky.core.ObjArray % ObjArray of spiky.core.Intervals
         Trials spiky.core.ObjArray = spiky.core.ObjArray % ObjArray of spiky.core.EventsTable
         TrialInfo spiky.core.ObjArray = spiky.core.ObjArray % ObjArray of spiky.core.EventsTable
-        Vars spiky.core.Parameter = spiky.core.Parameter
+        Vars spiky.core.ObjArray = spiky.core.ObjArray % ObjArray of spiky.core.Parameter
     end
 
     methods (Static)
@@ -94,7 +94,7 @@ classdef Paradigm < spiky.core.MappableArray
                     isEvent1 = trials.Data.Event==eventNames(ii);
                     t1 = t(isEvent1);
                     p1 = spiky.core.Intervals([t1 t1+0.15]);
-                    e1 = p1.haveEvents(photodiode, CellModetrue);
+                    e1 = p1.haveEvents(photodiode, CellMode=true);
                     l1 = cellfun(@length, e1)';
                     if sum(l1>0)/length(l1)>0.8
                         isValid = l1>0;
@@ -142,14 +142,14 @@ classdef Paradigm < spiky.core.MappableArray
                 intervals (:, 1) cell = {} % cell array of spiky.core.Intervals
                 trials (:, 1) cell = {} % cell array of spiky.core.EventsTable
                 trialInfo (:, 1) cell = {} % cell array of spiky.core.EventsTable
-                vars (:, 1) spiky.core.Parameter = spiky.core.Parameter
+                vars (:, 1) cell = {} % cell array of spiky.core.Parameter
                 latency (:, 1) double = double.empty
             end
             obj.Name = name;
             obj.Intervals = spiky.core.ObjArray(intervals);
             obj.Trials = spiky.core.ObjArray(trials);
             obj.TrialInfo = spiky.core.ObjArray(trialInfo);
-            obj.Vars = vars;
+            obj.Vars = spiky.core.ObjArray(vars);
             obj.Latency = latency;
         end
 
