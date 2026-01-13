@@ -9,7 +9,7 @@ classdef Paradigm < spiky.minos.Paradigm
         function obj = Paradigm(minos, name)
             %PARADIGM represents a paradigm data structure for analysis
             arguments
-                minos spiky.minos.MinosInfo = spiky.minos.MinosInfo.empty
+                minos spiky.minos.MinosInfo = spiky.minos.MinosInfo
                 name string = string.empty
             end
             if isempty(minos)
@@ -17,7 +17,7 @@ classdef Paradigm < spiky.minos.Paradigm
             end
             par = minos.Paradigms.(name);
             obj.Name = par.Name;
-            obj.Periods = par.Periods;
+            obj.Intervals = par.Intervals;
             obj.Trials = par.Trials;
             obj.TrialInfo = par.TrialInfo;
             obj.Vars = par.Vars;

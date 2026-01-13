@@ -1,4 +1,4 @@
-classdef SceneNode < spiky.core.PeriodsTable & matlab.mixin.CustomCompactDisplayProvider
+classdef SceneNode < spiky.core.IntervalsTable & matlab.mixin.CustomCompactDisplayProvider
     %SCENENODE represents a node in a scene graph structure
 
     methods (Static)
@@ -16,14 +16,14 @@ classdef SceneNode < spiky.core.PeriodsTable & matlab.mixin.CustomCompactDisplay
                 type string = ""
             end
             
-            periods = NaN(n, 2);
+            intervals = NaN(n, 2);
             name = repmat(categorical(name), n, 1);
             type = repmat(categorical(type), n, 1);
             id = zeros(n, 1, "int32");
             pos = NaN(n, 3, "single");
             rot = NaN(n, 3, "single");
             proj = NaN(n, 3, "single");
-            obj = spiky.scene.SceneNode(periods, name, type, id, pos, rot, proj);
+            obj = spiky.scene.SceneNode(intervals, name, type, id, pos, rot, proj);
         end
 
         function b = isScalarRow()
@@ -36,10 +36,10 @@ classdef SceneNode < spiky.core.PeriodsTable & matlab.mixin.CustomCompactDisplay
     end
 
     methods
-        function obj = SceneNode(periods, name, type, id, pos, rot, proj)
+        function obj = SceneNode(intervals, name, type, id, pos, rot, proj)
             %SCENENODE Constructor for the SceneNode class
             % 
-            %   periods: periods for the scene nodes
+            %   intervals: intervals for the scene nodes
             %   name: names of the scene nodes
             %   type: types of the scene nodes (e.g., "Human", "Object", "Verb")
             %   id: unique identifiers for the scene nodes
@@ -47,16 +47,16 @@ classdef SceneNode < spiky.core.PeriodsTable & matlab.mixin.CustomCompactDisplay
             %   rot: rotations of the scene nodes in 3D space
             %   proj: projection vectors for the scene nodes
             arguments
-                periods (:, 2) double = []
-                name categorical = categorical(NaN(height(periods), 1))
-                type categorical = categorical(NaN(height(periods), 1))
-                id int32 = zeros(height(periods), 1, "int32")
-                pos (:, 3) single = NaN(height(periods), 3, "single")
-                rot (:, 3) single = NaN(height(periods), 3, "single")
-                proj (:, 3) single = NaN(height(periods), 3, "single")
+                intervals (:, 2) double = []
+                name categorical = categorical(NaN(height(intervals), 1))
+                type categorical = categorical(NaN(height(intervals), 1))
+                id int32 = zeros(height(intervals), 1, "int32")
+                pos (:, 3) single = NaN(height(intervals), 3, "single")
+                rot (:, 3) single = NaN(height(intervals), 3, "single")
+                proj (:, 3) single = NaN(height(intervals), 3, "single")
             end
             
-            n = height(periods);
+            n = height(intervals);
             if n>1
                 if isscalar(name)
                     name = repmat(name, n, 1);
@@ -77,7 +77,7 @@ classdef SceneNode < spiky.core.PeriodsTable & matlab.mixin.CustomCompactDisplay
                     proj = repmat(proj, n, 1);
                 end
             end
-            obj@spiky.core.PeriodsTable(periods, table(name, type, id, pos, rot, proj, ...
+            obj@spiky.core.IntervalsTable(intervals, table(name, type, id, pos, rot, proj, ...
                 VariableNames=["Name", "Type", "Id", "Pos", "Rot", "Proj"]));
         end
 

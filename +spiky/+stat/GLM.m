@@ -1,4 +1,4 @@
-classdef GLM < spiky.core.ArrayTable
+classdef GLM < spiky.core.Array
     %GLM Generalized linear model fitted to binned spike counts
     %
     % First dimension is predictors, second dimension is neurons, third dimension is partitions 
@@ -19,11 +19,17 @@ classdef GLM < spiky.core.ArrayTable
     end
     
     methods (Static)
-        function dimNames = getDimNames()
-            %GETDIMNAMES Get the dimension names of the TimeTable
+        function dimLabelNames = getDimLabelNames()
+            %GETDIMLABELNAMES Get the names of the label arrays for each dimension.
+            %   Each label array has the same height as the corresponding dimension of Data.
+            %   Each cell in the output is a string array of property names.
+            %   This method should be overridden by subclasses if dimension label properties is added.
             %
-            %   dimNames: dimension names
-            dimNames = ["Name" "Neurons"];
+            %   dimLabelNames: dimension label names
+            arguments (Output)
+                dimLabelNames (:, 1) cell
+            end
+            dimLabelNames = {"Name"; "Neuron"};
         end
 
         function [extraDataName, scalarDimension] = getExtraDataName()
@@ -42,7 +48,7 @@ classdef GLM < spiky.core.ArrayTable
                 coeffs = []
                 intercepts (1, :, :) double = []
                 names (:, 1) string = string.empty(0, 1)
-                neuron (:, 1) = spiky.core.Neuron.empty(0, 1)
+                neuron (:, 1) = spiky.core.Neuron
                 lambda (1, 1) double = NaN
                 alpha (1, 1) double = NaN
                 deviance (1, :, :) double = []

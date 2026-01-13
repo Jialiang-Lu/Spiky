@@ -1,4 +1,4 @@
-classdef Swr < spiky.core.TimeTable
+classdef Swr < spiky.core.EventsTable
     %SWR Class representing Sharp Wave Ripple events
 
     properties
@@ -42,7 +42,7 @@ classdef Swr < spiky.core.TimeTable
                 troughs cell = {}
                 options struct = struct
             end
-            obj@spiky.core.TimeTable(time, table(onsets, offsets, cycles, freqs, amplitudes, ...
+            obj@spiky.core.EventsTable(time, table(onsets, offsets, cycles, freqs, amplitudes, ...
                 amplitudesNorm, troughs, VariableNames=["Onset" "Offset" "NCycles" "Freq" "Amplitude"...
                     "AmplitudeNorm" "Troughs"]));
             obj.Options = options;

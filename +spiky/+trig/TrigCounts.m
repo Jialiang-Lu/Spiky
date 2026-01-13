@@ -8,7 +8,7 @@ classdef TrigCounts < spiky.trig.TrigFr
     methods
         function obj = TrigCounts(spikes, events, window, options)
             arguments
-                spikes spiky.core.Spikes = spiky.core.Spikes.empty
+                spikes spiky.core.Spikes = spiky.core.Spikes
                 events = [] % (n, 1) double or spiky.core.Events
                 window double {mustBeVector} = [0, 1]
                 options.Bernoulli logical = false % If true, counts are binary (0 or 1)
@@ -27,11 +27,11 @@ classdef TrigCounts < spiky.trig.TrigFr
             nNeurons = numel(spikes);
             counts = zeros(nT, nEvents, nNeurons);
             prds = reshape(events'+t, [], 1);
-            prds = spiky.core.Periods([prds-res/2 prds+res/2]);
+            prds = spiky.core.Intervals([prds-res/2 prds+res/2]);
             [prds, idcSort] = prds.sort();
             idcSort2(idcSort) = 1:numel(idcSort);
             parfor ii = 1:nNeurons
-                [~, c] = spiky.mex.findInPeriods(spikes(ii).Time, prds.Time);
+                [~, c] = spiky.mex.findInIntervals(spikes(ii).Time, prds.Time);
                 counts(:, :, ii) = reshape(c, nT, nEvents);
             end
             if options.Bernoulli
@@ -44,7 +44,7 @@ classdef TrigCounts < spiky.trig.TrigFr
             obj.EventDim = 2;
             obj.Events_ = events;
             obj.Window = window;
-            obj.Neuron = vertcat(spikes.Neuron);
+            obj.Neuron = spikes.Neuron;
             obj.Options = options;
             obj.Bernoulli = options.Bernoulli;
         end
@@ -61,7 +61,7 @@ classdef TrigCounts < spiky.trig.TrigFr
             arguments
                 obj spiky.trig.TrigCounts
                 labels spiky.stat.Labels
-                options.Periods = [] % (n, 2) double or spiky.core.Periods
+                options.Intervals = [] % (n, 2) double or spiky.core.Intervals
             end
             names = compose("%s.%s.%d", labels.Name, labels.Class, labels.BaseIndex);
             if obj.Bernoulli
@@ -69,11 +69,11 @@ classdef TrigCounts < spiky.trig.TrigFr
             else
                 distr = "poisson";
             end
-            if ~isempty(options.Periods)
-                if isnumeric(options.Periods)
-                    options.Periods = spiky.core.Periods(options.Periods);
+            if ~isempty(options.Intervals)
+                if isnumeric(options.Intervals)
+                    options.Intervals = spiky.core.Intervals(options.Intervals);
                 end
-                [~, idc] = options.Periods.haveEvents(obj.Time);
+                [~, idc] = options.Intervals.haveEvents(obj.Time);
             else
                 idc = true(height(obj.Time), 1);
             end

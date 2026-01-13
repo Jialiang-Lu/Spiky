@@ -25,7 +25,7 @@ classdef RawData
             end
             channelNameSet = unique(channelNames);
             fi = spiky.core.FileInfo(fpth);
-            events = spiky.ephys.RecEvents.empty;
+            events = spiky.ephys.RecEvents;
             if exist(fpth, "dir")
                 if isequal([fi.Name], "TTL")
                     fpth = fullfile(fpth, "TTL");
@@ -147,9 +147,9 @@ classdef RawData
                     nSamples = (obj.DatFiles(1).Bytes-1024)/2070;
                     tsRange = [tsStart, tsStart+nSamples-1];
                     eventGroups(2, 1) = spiky.ephys.EventGroup("Net", ...
-                        spiky.ephys.ChannelType.Net, eventNet, tsRange);
+                        spiky.ephys.ChannelType.Net, {eventNet}, tsRange);
                     eventGroups(1, 1) = spiky.ephys.EventGroup("Adc", ...
-                        spiky.ephys.ChannelType.Adc, eventsAdc, tsRange);
+                        spiky.ephys.ChannelType.Adc, {eventsAdc}, tsRange);
                 case "Binary"
                     fi = spiky.core.FileInfo(fullfile(obj.Fdir, "experiment1", "recording1", "events/*"));
                     fiNet = fi(contains([fi.Name], "MessageCenter"));
@@ -177,7 +177,7 @@ classdef RawData
                     idc1 = sort(idc1);
                     eventsAdc(idc1, :) = [];
                     eventsNet = spiky.ephys.RawData.loadEvents(fiNet.Path, [], tsRangesAdc(1));
-                    eventsSyncNet = eventsNet(contains([eventsNet.Message], ["Sync" "sync"]), :);
+                    eventsSyncNet = eventsNet(contains(eventsNet.Message, ["Sync" "sync"]), :);
                     if eventsSyncNet.Message(1)==eventsSyncNet.Message(2)
                         eventsSyncNet = eventsSyncNet(1:2:end, :);
                     end
@@ -195,25 +195,25 @@ classdef RawData
                                 [sync, events2] = events{1}.syncWith(events{ii}, ...
                                     sprintf("probe1 to probe%d", ii), optionsCell{:});
                                 eventGroups(ii, 1) = spiky.ephys.EventGroup(sprintf("Probe%d", ii), ...
-                                    spiky.ephys.ChannelType.Neural, events2, tsRanges(ii, :), sync);
+                                    spiky.ephys.ChannelType.Neural, {events2}, tsRanges(ii, :), sync);
                             end
                         end
                         eventGroups(1, 1) = spiky.ephys.EventGroup("Probe1", ...
-                            spiky.ephys.ChannelType.Neural, events{1}, tsRanges(1, :));
+                            spiky.ephys.ChannelType.Neural, events(1), tsRanges(1, :));
                         sync = events{1}.syncWith(eventsAdc.Sync, "probe1 to adc", optionsCell{:});
                         eventsAdc.Time = sync.Inv(eventsAdc.Time);
                         eventGroups(end+1, 1) = spiky.ephys.EventGroup("Adc", ...
-                            spiky.ephys.ChannelType.Adc, eventsAdc, tsRangesAdc, sync);
+                            spiky.ephys.ChannelType.Adc, {eventsAdc}, tsRangesAdc', sync);
                     else
                         eventGroups(1, 1) = spiky.ephys.EventGroup("Adc", ...
-                            spiky.ephys.ChannelType.Adc, eventsAdc, tsRangesAdc);
+                            spiky.ephys.ChannelType.Adc, {eventsAdc}, tsRangesAdc);
                     end
                     events1 = eventGroups(1).Events.Sync;
                     events1 = events1(events1.Rising, :);
                     events1 = events1(idcNet+1, :);
                     sync = events1.syncWith(eventsSyncNet, "probe1 to net", 0.5, optionsCell{:});
                     eventGroups(end+1, 1) = spiky.ephys.EventGroup("Net", ...
-                        spiky.ephys.ChannelType.Net, eventsNet, tsRangesAdc, sync);
+                        spiky.ephys.ChannelType.Net, {eventsNet}, tsRangesAdc', sync);
             end
         end
 
@@ -297,7 +297,7 @@ classdef RawData
                     nProbes = numel(probes);
                     if ~isempty(channelNames)
                         channelGroups(nProbes+1, 1) = spiky.ephys.ChannelGroup.createExtGroup(...
-                        spiky.ephys.ChannelType.Adc, channelNames, ...
+                        spiky.ephys.ChannelType.Adc, {channelNames}, ...
                         oeStruct.RECORDING.STREAM.CHANNEL(end).bitVoltsAttribute, 1000);
                     end
                     for ii = nProbes:-1:1
@@ -305,7 +305,7 @@ classdef RawData
                         nChProbe = probe.NChannels;
                         probeChannel = oeStruct.RECORDING.STREAM.CHANNEL(nChsCum(ii)+1);
                         channelGroups(ii, 1) = spiky.ephys.ChannelGroup(brainRegions(ii), nChProbe, ...
-                            spiky.ephys.ChannelType.Neural, brainRegions(ii), probe, ...
+                            spiky.ephys.ChannelType.Neural, {brainRegions(ii)}, probe, ...
                             probeChannel.bitVoltsAttribute, 0.001);
                     end
                 case "Binary"
@@ -316,11 +316,11 @@ classdef RawData
                         for ii = nProbes:-1:1
                             channelGroups(ii, 1) = spiky.ephys.ChannelGroup(brainRegions(ii), ...
                                 oeStruct.continuous(ii*2-1).num_channels, ...
-                                spiky.ephys.ChannelType.Neural, brainRegions(ii), probes(ii), ...
+                                spiky.ephys.ChannelType.Neural, {brainRegions(ii)}, probes(ii), ...
                                 oeStruct.continuous(ii*2-1).channels(1).bit_volts, 0.001);
                         end
                         channelGroups(nProbes+1, 1) = spiky.ephys.ChannelGroup.createExtGroup(...
-                            spiky.ephys.ChannelType.Adc, channelNames, ...
+                            spiky.ephys.ChannelType.Adc, {channelNames}, ...
                             oeStruct.continuous(end).channels(1).bit_volts, 1000);
                     else
                         nCh = oeStruct.continuous.num_channels;
@@ -330,13 +330,13 @@ classdef RawData
                                 channelNames = strings(nChAdc, 1);
                             end
                             channelGroups(nProbes+1, 1) = spiky.ephys.ChannelGroup.createExtGroup(...
-                                spiky.ephys.ChannelType.Adc, channelNames, ...
+                                spiky.ephys.ChannelType.Adc, {channelNames}, ...
                                 oeStruct.continuous.channels(end).bit_volts, 1000);
                         end
                         for ii = nProbes:-1:1
                             channelGroups(ii, 1) = spiky.ephys.ChannelGroup(brainRegions(ii), ...
                                 probes(ii).NChannels, ...
-                                spiky.ephys.ChannelType.Neural, brainRegions(ii), probes(ii), ...
+                                spiky.ephys.ChannelType.Neural, {brainRegions(ii)}, probes(ii), ...
                                 oeStruct.continuous.channels(1).bit_volts, 0.001);
                         end
                     end
@@ -377,7 +377,7 @@ classdef RawData
                 fsLfp double = 1000
                 resampleDat logical = false
                 resampleLfp logical = true
-                syncs spiky.core.Sync = spiky.core.Sync.empty
+                syncs spiky.core.Sync = spiky.core.Sync
             end
 
             switch obj.Type

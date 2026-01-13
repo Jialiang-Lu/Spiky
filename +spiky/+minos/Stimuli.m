@@ -1,4 +1,4 @@
-classdef Stimuli < spiky.core.ArrayTable
+classdef Stimuli < spiky.core.Array
     %STIMULI Class representing stimuli used in Minos
 
     methods

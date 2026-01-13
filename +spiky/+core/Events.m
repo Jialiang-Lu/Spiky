@@ -1,5 +1,5 @@
-classdef Events
-    %EVENTS Class representing discrete events
+classdef Events < spiky.core.ArrayBase
+    %EVENTS Class representing discrete events in Time.
     
     properties (Hidden)
         T_ (:, 1) double % Time vector in seconds
@@ -16,6 +16,20 @@ classdef Events
         Step double % Step in seconds
         IsUniform logical % Whether the events are uniformly spaced
         Fs double % Sampling frequency if uniform
+    end
+
+    methods (Static)
+        function dataNames = getDataNames()
+            %GETDATANAMES Get the names of all data properties.
+            %   These properties must all have the same size. The first one is assumed to be the 
+            %   main Data property.
+            %
+            %   dataNames: data property names
+            arguments (Output)
+                dataNames (:, 1) string
+            end
+            dataNames = "Time";
+        end
     end
 
     methods
@@ -146,174 +160,124 @@ classdef Events
                 direction string {mustBeMember(direction, ["ascend" "descend"])} = "ascend"
             end
 
-            idc = (1:obj.Length)';
-            if obj.IsUniform
-                if xor(strcmp(direction, "ascend"), obj.Step_>0)
-                    obj.Start_ = obj.End;
-                    obj.Step_ = -obj.Step_;
-                    idc = flipud(idc);
+            isUniform = obj.IsUniform;
+            if isUniform
+                if xor(strcmp(direction, "ascend"), obj.Step_>0);
+                    newStart = obj.End;
+                    newStep = -obj.Step_;
+                    idc = (obj.Length:-1:1)';
+                else
+                    newStart = obj.Start_;
+                    newStep = obj.Step_;
+                    idc = (1:obj.Length)';
                 end
             else
                 [~, idc] = sort(obj.T_);
-                obj.T_ = obj.T_(idc);
+            end
+            obj = obj.subIndex({idc, ':', ':', ':', ':', ':'});
+            if isUniform
+                obj.T_ = [];
+                obj.Start_ = newStart;
+                obj.Step_ = newStep;
+                obj.N_ = length(idc);
             end
         end
 
-        function [events, idc, idcPeriods] = inPeriods(obj, periods, cellmode, offset, ...
-            rightClose, sorted, options)
-            %INPERIODS Find events within periods
+        function [events, idc, idcIntervals] = inIntervals(obj, intervals, options)
+            %ININTERVALS Find events within intervals
+            %   [events, idc, idcIntervals] = inIntervals(obj, intervals, ...)
             %
             %   obj: events
-            %   periods: periods object
-            %   [cellmode]: if true, events is an array with the same size as periods
-            %   [offset]: events is relative time to the beginning of the periods plus offset if 
-            %       non-empty and absolute time otherwise
-            %   [rightClose]: whether the right boundary is closed. By default false.
-            %   [sorted]: whether the events are sorted by time already. By default true.
+            %   intervals: intervals object
+            %   Name-value arguments:
+            %       CellMode: if true, events is an array with the same size as intervals
+            %       Offset: events is relative time to the beginning of the intervals plus offset if 
+            %           non-empty and absolute time otherwise
+            %       RightClose: whether the right boundary is closed. By default false.
+            %       Sorted: whether the events are sorted by time already. By default true.
+            %       KeepType: whether to keep the output events as Events type. By default false.
             %
-            %   events: events within periods, cell if cellmode is true
-            %   idc: indices of events within periods, events.Time = obj.Time(idc), or cell of it
-            %   idcPeriods: indices of periods for each event, or count of events within each 
-            %       period when cellmode is true (similar to histcounts, but much slower so 
+            %   events: events within intervals, cell if cellmode is true
+            %   idc: indices of events within intervals, events.Time = obj.Time(idc), or cell of it
+            %   idcIntervals: indices of intervals for each event, or count of events within each 
+            %       interval when cellmode is true (similar to histcounts, but much slower so 
             %       don't use for this purpose)
             arguments
                 obj spiky.core.Events
-                periods spiky.core.Periods
-                cellmode logical = false
-                offset double {mustBeScalarOrEmpty} = []
-                rightClose logical = false
-                sorted logical = true
+                intervals % spiky.core.Intervals or double Nx2
+                options.CellMode logical = false
+                options.Offset double = []
+                options.RightClose logical = false
+                options.Sorted logical = true
                 options.KeepType logical = false
             end
             ts = obj.Time;
-            periods = periods.Time;
-            if sorted
-                [indices, counts] = spiky.mex.findInPeriods(ts, periods, rightClose);
-                if ~cellmode
-                    idc = zeros(sum(counts), 1);
-                    idcPeriods = zeros(sum(counts), 1);
-                    acc = 0;
-                    for ii = 1:size(periods, 1)
-                        count = counts(ii);
-                        if count==0
-                            continue
-                        end
-                        idc(acc+1:acc+count) = indices(ii):indices(ii)+count-1;
-                        idcPeriods(acc+1:acc+count) = ii;
-                        acc = acc+count;
-                    end
-                    if ~options.KeepType
-                        events = ts(idc);
-                        if ~isempty(offset)
-                            events = events-periods(idcPeriods, 1)+offset;
-                        end
-                    else
-                        events = subsref(obj, substruct("()", {idc, ':'}));
-                        if ~isempty(offset)
-                            events.Time = events.Time-periods(idcPeriods, 1)+offset;
-                        end
-                    end
-                else
-                    idc = cell(size(periods, 1), 1);
-                    idcPeriods = zeros(size(periods, 1), 1);
-                    events = cell(size(periods, 1), 1);
-                    acc = 0;
-                    for ii = 1:size(periods, 1)
-                        count = counts(ii);
-                        if count==0
-                            continue
-                        end
-                        idc1 = indices(ii):indices(ii)+count-1;
-                        idc{ii} = idc1';
-                        if ~options.KeepType
-                            if ~isempty(offset)
-                                events{ii} = ts(idc1)-periods(ii, 1)+offset;
-                            else
-                                events{ii} = ts(idc1);
-                            end
-                        else
-                            events{ii} = subsref(obj, substruct("()", {idc1, ':'}));
-                            if ~isempty(offset)
-                                events{ii}.Time = events{ii}.Time-periods(ii, 1)+offset;
-                            end
-                        end
-                    end
-                end
-                return
+            if isa(intervals, "spiky.core.Intervals")
+                intervals = intervals.Time;
+            elseif ~isnumeric(intervals) || size(intervals, 2)~=2
+                error("Intervals must be spiky.core.Intervals or Nx2 numeric array.");
             end
-            if rightClose
-                tmp = ts'>=periods(:, 1)&ts'<=periods(:, 2);
+            if options.Sorted
+                % Use faster method for sorted events
+                [idcStart, counts] = spiky.mex.findInIntervals(ts, intervals, options.RightClose);
+                n = sum(counts);
+                idc = zeros(n, 1);
+                idcIntervals = zeros(n, 1);
+                acc = 0;
+                for ii = 1:size(intervals, 1)
+                    count = counts(ii);
+                    if count==0
+                        continue
+                    end
+                    idc(acc+1:acc+count) = idcStart(ii):idcStart(ii)+count-1;
+                    idcIntervals(acc+1:acc+count) = ii;
+                    acc = acc+count;
+                end
             else
-                tmp = ts'>=periods(:, 1)&ts'<periods(:, 2);
+                % Unsorted events, use slower method
+                if options.RightClose
+                    isIn = ts>=intervals(:, 1)'&ts<=intervals(:, 2)';
+                else
+                    isIn = ts>=intervals(:, 1)'&ts<intervals(:, 2)';
+                end
+                idcIn = find(isIn(:));
+                [idc, idcIntervals] = ind2sub(size(isIn), idcIn);
+                counts = sum(isIn, 1)';
             end
-            if ~cellmode
-                tmp = tmp';
-                idcIn = find(tmp(:));
-                [idc, idcPeriods] = ind2sub(size(tmp), idcIn);
-                if ~options.KeepType
-                    events = ts(idc);
-                    if ~isempty(offset)
-                        events = events-periods(idcPeriods, 1)+offset;
-                    end
-                else
-                    events = subsref(obj, substruct("()", {idc, ':'}));
-                    if ~isempty(offset)
-                        events.Time = events.Time-periods(idcPeriods, 1)+offset;
-                    end
+            if ~options.KeepType
+                events = ts(idc);
+                if ~isempty(options.Offset)
+                    events = events-intervals(idcIntervals, 1)+options.Offset;
                 end
-        else
-                idc = cell(size(tmp, 1), 1);
-                events = cell(size(tmp, 1), 1);
-                if ~isempty(offset)
-                    for ii = 1:size(tmp, 1)
-                        idc1 = find(tmp(ii, :));
-                        if isempty(idc1)
-                            continue
-                        end
-                        idc{ii} = idc1;
-                        if ~options.KeepType
-                            events{ii} = ts(idc1)-periods(ii, 1)+offset;
-                        else
-                            events{ii} = subsref(obj, substruct("()", {idc1, ':'}));
-                            events{ii}.Time = events{ii}.Time-periods(ii, 1)+offset;
-                        end
-                    end
-                else
-                    for ii = 1:size(tmp, 1)
-                        idc1 = find(tmp(ii, :));
-                        if isempty(idc1)
-                            continue
-                        end
-                        idc{ii} = idc1;
-                        if ~options.KeepType
-                            events{ii} = ts(idc1);
-                        else
-                            events{ii} = subsref(obj, substruct("()", {idc1, ':'}));
-                        end
-                    end
+            else
+                events = obj.subIndex({idc, ':', ':', ':', ':', ':'});
+                if ~isempty(options.Offset)
+                    events.Time = events.Time-intervals(idcIntervals, 1)+options.Offset;
                 end
-                if nargout>2
-                    idcPeriods = cellfun(@length, events);
-                end
+            end
+            if options.CellMode
+                events = mat2cell(events, counts);
+                idc = mat2cell(idc, counts);
+                idcIntervals = counts;
             end
         end
 
-        function [periods, idc] = findContinuous(obj, minGap, minPeriod)
-            %FINDCONTINUOUS Find continuous periods of events
+        function [intervals, idc] = findContinuous(obj, minGap, minInterval)
+            %FINDCONTINUOUS Find continuous intervals of events
             %
-            %   periods = findContinuous(obj, minGap, minPeriod)
+            %   intervals = findContinuous(obj, minGap, minInterval)
             %   
             %   obj: events
-            %   [minGap]: minimum gap between periods
-            %   [minPeriod]: minimum period duration
+            %   [minGap]: minimum gap between intervals
+            %   [minInterval]: minimum interval duration
             %
-            %   periods: Periods object
-            %   idc: indices of the periods
+            %   intervals: Intervals object
+            %   idc: indices of the intervals
 
             arguments
                 obj spiky.core.Events
                 minGap double = []
-                minPeriod double = 0
+                minInterval double = 0
             end
             dt = [diff(obj.Time); Inf];
             if isempty(minGap)
@@ -326,9 +290,9 @@ classdef Events
             if iscolumn(prd0)
                 prd0 = prd0';
             end
-            periods = spiky.core.Periods(prd0);
-            isValid = periods.ChunkDuration>=minPeriod;
-            periods.Time = periods.Time(isValid, :);
+            intervals = spiky.core.Intervals(prd0);
+            isValid = intervals.ChunkDuration>=minInterval;
+            intervals.Time = intervals.Time(isValid, :);
             prd1 = prd(isValid, 1);
             prd2 = prd(isValid, 2);
             idc = arrayfun(@(x, y) x:y, prd1, prd2, UniformOutput=false);
@@ -382,13 +346,30 @@ classdef Events
                     (y>f.a*f.c-f.b+f.d).*(y-f.d-f.b)./f.a, f.a, f.d-f.b, gof);
             end
             if options.Plot
-                spiky.plot.fig
+                figure
                 plot(t1, td-td(1), "ro", t1, f(t1)-t1-td(1), "b.-");
                 xlabel("t1");
                 ylabel('td-td(1)');
                 legend(["Data", "Fit"]);
                 title(name);
                 spiky.plot.fixfig
+            end
+        end
+
+        function h = plot(obj, plotOps, options)
+            %PLOT Plot events as vertical lines
+            arguments
+                obj spiky.core.Events
+                plotOps.?matlab.graphics.chart.decoration.ConstantLine
+                options.Parent matlab.graphics.axis.Axes = matlab.graphics.axis.Axes.empty
+            end
+            if isempty(options.Parent)
+                options.Parent = gca;
+            end
+            plotArgs = namedargs2cell(plotOps);
+            h1 = xline(options.Parent, obj.Time, plotArgs{:});
+            if nargout>0
+                h = h1;
             end
         end
     end

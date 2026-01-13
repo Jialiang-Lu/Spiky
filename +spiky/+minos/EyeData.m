@@ -1,11 +1,11 @@
-classdef EyeData < spiky.core.Metadata
+classdef EyeData
 
     properties
-        Data spiky.core.TimeTable
-        Fixations spiky.core.Periods
-        Saccades spiky.core.Periods
-        Blinks spiky.core.Periods
-        FixationTargets spiky.core.PeriodsTable
+        Data spiky.core.EventsTable
+        Fixations spiky.core.Intervals
+        Saccades spiky.core.Intervals
+        Blinks spiky.core.Intervals
+        FixationTargets spiky.core.IntervalsTable
     end
 
     properties (Dependent)
@@ -78,8 +78,8 @@ classdef EyeData < spiky.core.Metadata
             arguments
                 fdir (1, 1) string {mustBeFolder}
                 func = []
-                fiveDot spiky.minos.Paradigm = spiky.minos.Paradigm.empty
-                transform spiky.minos.Transform = spiky.minos.Transform.empty
+                fiveDot spiky.minos.Paradigm = spiky.minos.Paradigm
+                transform spiky.minos.Transform = spiky.minos.Transform
                 fov double = 60
             end
             %%
@@ -98,7 +98,7 @@ classdef EyeData < spiky.core.Metadata
             idcRightClosed = data0.Data.RightPupil==0;
             data.LeftGaze(idcLeftClosed, :) = NaN("single");
             data.RightGaze(idcRightClosed, :) = NaN("single");
-            data = spiky.core.TimeTable(t, data);
+            data = spiky.core.EventsTable(t, data);
             %%
             if ~isempty(fiveDot)
                 %% Calibrate with FiveDot
@@ -106,13 +106,13 @@ classdef EyeData < spiky.core.Metadata
                 [pos, ~, idcPos] = unique(fiveDot.Trials.Pos, "rows", "sorted");
                 pos = pos./pos(:, 3);
                 nPos = size(pos, 1);
-                prdTrials = spiky.core.Periods([fiveDot.Trials.Data.Start_Align fiveDot.Trials.Data.End]);
+                prdTrials = spiky.core.Intervals([fiveDot.Trials.Data.Start_Align fiveDot.Trials.Data.End]);
                 
                 dataRaw = spiky.minos.Data(fullfile(fdir, "EyeRaw.bin"));
                 proc = spiky.minos.Data(fullfile(fdir, "EyeProcessor.bin"));
                 tRaw = func(double(dataRaw.Data.Timestamp)/1e7);
-                dataRaw = spiky.core.TimeTable(tRaw, dataRaw.Data);
-                data1 = dataRaw.inPeriods(prdTrials, KeepType=true);
+                dataRaw = spiky.core.EventsTable(tRaw, dataRaw.Data);
+                data1 = dataRaw.inIntervals(prdTrials, KeepType=true);
                 angVel = [vecnorm(diff(data1.LeftGaze, 1, 1), 2, 2)./diff(data1.Time); 0];
                 isFix = angVel<5 & (data1.LeftPupil>0 | data1.RightPupil>0);
                 data1 = data1(isFix, :);
@@ -122,17 +122,17 @@ classdef EyeData < spiky.core.Metadata
                 rightGaze = NaN(nPos, 3, "single");
                 names = ["LeftGaze" "RightGaze"];
                 for ii = 1:nPos
-                    % Find fixated periods
+                    % Find fixated intervals
                     isPos1 = idcPos==ii;
                     pos1 = pos(ii, :);
                     prd1 = prdTrials.Time(isPos1, :);
-                    dataTrial = data.inPeriods(prd1, KeepType=true);
+                    dataTrial = data.inIntervals(prd1, KeepType=true);
                     for jj = 1:2
                         d1 = vecnorm(dataTrial.Data.(names(jj))-pos1, 2, 2);
                         tFix1 = dataTrial.Time(d1<0.2);
                         prdFix1 = spiky.core.Events(tFix1).findContinuous(0.1, 0.1);
-                        data2 = data1.inPeriods(prd1, KeepType=true);
-                        data2 = data2.inPeriods(prdFix1, KeepType=true);
+                        data2 = data1.inIntervals(prd1, KeepType=true);
+                        data2 = data2.inIntervals(prdFix1, KeepType=true);
                         tmp = data2.Data.(names(jj));
                         if jj==1
                             leftGaze(ii, 1:2) = median(tmp(:, 1:2), "omitnan");
@@ -201,14 +201,14 @@ classdef EyeData < spiky.core.Metadata
             events = spiky.minos.Data(fullfile(fdir, "EyeLinkEvent.bin"));
             if ~isempty(events.Data)
                 %%
-                fixations = spiky.core.Periods(func(...
-                    spiky.minos.EyeData.extractPeriods(events.Data, "Fixation")));
-                saccades = spiky.core.Periods(func(...
-                    spiky.minos.EyeData.extractPeriods(events.Data, "Saccade")));
-                leftBlinks = spiky.core.Periods(func(...
-                    spiky.minos.EyeData.extractPeriods(events.Data, "Blink", 0)));
-                rightBlinks = spiky.core.Periods(func(...
-                    spiky.minos.EyeData.extractPeriods(events.Data, "Blink", 1)));
+                fixations = spiky.core.Intervals(func(...
+                    spiky.minos.EyeData.extractIntervals(events.Data, "Fixation")));
+                saccades = spiky.core.Intervals(func(...
+                    spiky.minos.EyeData.extractIntervals(events.Data, "Saccade")));
+                leftBlinks = spiky.core.Intervals(func(...
+                    spiky.minos.EyeData.extractIntervals(events.Data, "Blink", 0)));
+                rightBlinks = spiky.core.Intervals(func(...
+                    spiky.minos.EyeData.extractIntervals(events.Data, "Blink", 1)));
                 blinks = leftBlinks|rightBlinks;
                 %% Find fixation targets
                 if ~isempty(transform)
@@ -254,7 +254,7 @@ classdef EyeData < spiky.core.Metadata
                     trProjSorted = trProj(idcSortTr, :, :);
                     trTrialSorted = trTrial(idcSortTr);
                     %%
-                    [~, idcFix, idcTrWithFix] = spiky.core.Periods(trTSorted).haveEvents(fixations.Start+0.01);
+                    [~, idcFix, idcTrWithFix] = spiky.core.Intervals(trTSorted).haveEvents(fixations.Start+0.01);
                     ang = squeeze(spiky.utils.angle(trVecSorted(idcTrWithFix, :, :), gaze(idcFix, :), 2));
                     %%
                     tbl = table();
@@ -306,9 +306,9 @@ classdef EyeData < spiky.core.Metadata
                         "Gaze" "Proj" "TargetPos" "TargetProj" "MinAngle"]);
                 end
             else
-                fixations = spiky.core.Periods.empty;
-                saccades = spiky.core.Periods.empty;
-                blinks = spiky.core.Periods.empty;
+                fixations = spiky.core.Intervals;
+                saccades = spiky.core.Intervals;
+                blinks = spiky.core.Intervals;
                 fixationTargets = table(Size=[0 9], VariableTypes=["int32" "int32" "categorical" ...
                     "spiky.minos.BodyPart" "single" "single" "single" "single" "single"], ...
                     VaraibleNames=["Trial" "Id" "Name" "Part" ...
@@ -321,13 +321,13 @@ classdef EyeData < spiky.core.Metadata
             obj.Saccades = saccades;
             obj.Blinks = blinks;
             if isempty(fixationTargets)
-                obj.FixationTargets = spiky.core.PeriodsTable(double.empty(0, 2), fixationTargets);
+                obj.FixationTargets = spiky.core.IntervalsTable(double.empty(0, 2), fixationTargets);
             else
-                obj.FixationTargets = spiky.core.PeriodsTable(fixations.Time, fixationTargets);
+                obj.FixationTargets = spiky.core.IntervalsTable(fixations.Time, fixationTargets);
             end
         end
 
-        function periods = extractPeriods(events, type, eye)
+        function intervals = extractIntervals(events, type, eye)
             arguments
                 events table
                 type string
@@ -344,26 +344,26 @@ classdef EyeData < spiky.core.Metadata
             if mod(height(events1), 2)~=0
                 error("Odd number of events")
             end
-            periods = double([events1.Timestamp(1:2:end), ...
+            intervals = double([events1.Timestamp(1:2:end), ...
                 events1.Timestamp(2:2:end)])./1e7;
         end
     end
 
     methods
-        function periods = getViewPeriods(obj, mingap, minperiod)
-            %GETVIEWPERIODS Get periods when the eye is visible
+        function intervals = getViewIntervals(obj, mingap, mininterval)
+            %GETVIEWINTERVALS Get intervals when the eye is visible
             %
-            %   mingap: minimum gap between periods in seconds
-            %   minperiod: minimum period length in seconds
+            %   mingap: minimum gap between intervals in seconds
+            %   mininterval: minimum interval length in seconds
             %
-            %   periods: periods when the eye is visible
+            %   intervals: intervals when the eye is visible
             arguments
                 obj spiky.minos.EyeData
                 mingap (1, 1) double = 1
-                minperiod (1, 1) double = 2
+                mininterval (1, 1) double = 2
             end
             if isempty(obj.Data.Time)
-                periods = spiky.core.Periods.empty;
+                intervals = spiky.core.Intervals;
                 return
             end
             isViewing = ~isnan(obj.Data.Convergence(:, 1)) & ...
@@ -371,8 +371,8 @@ classdef EyeData < spiky.core.Metadata
                 obj.Data.Proj(:, 1)<1 & ...
                 obj.Data.Proj(:, 2)>0 & ...
                 obj.Data.Proj(:, 2)<1;
-            tt = spiky.core.TimeTable(obj.Data.Time, isViewing);
-            periods = tt.findPeriods(0, mingap, minperiod);
+            tt = spiky.core.EventsTable(obj.Data.Time, isViewing);
+            intervals = tt.findIntervals(0, mingap, mininterval);
         end
 
         function time = get.Time(obj)

@@ -1,33 +1,33 @@
-function [indices, counts] = findInPeriods(array, periods, rightClose)
-%FINDINPERIODS Find indices of array elements within periods
-% [indices, counts] = findInPeriods(array, periods, rightClose)
+function [indices, counts] = findInIntervals(array, intervals, rightClose)
+%FINDININTERVALS Find indices of array elements within intervals
+% [indices, counts] = findInIntervals(array, intervals, rightClose)
 %
 %   array: 1D sorted array of doubles
-%   periods: periods as n x 2 double
+%   intervals: intervals as n x 2 double
 %   [rightClose]: whether the right boundary is closed
 %
-%   indices: indices of first elements within each period
-%   counts: counts of elements within each period
+%   indices: indices of first elements within each interval
+%   counts: counts of elements within each interval
 
 arguments
     array double {mustBeVector}
-    periods (:, 2) double
+    intervals (:, 2) double
     rightClose (1, 1) logical = false
 end
 if isempty(getCurrentWorker())
-    [indices, counts] = spiky.mex.findInPeriods_(array, periods, rightClose);
+    [indices, counts] = spiky.mex.findInIntervals_(array, intervals, rightClose);
     return
 end
-nPeriods = size(periods, 1);
+nIntervals = size(intervals, 1);
 nEvents = length(array);
-indices = zeros(nPeriods, 1);
-counts = zeros(nPeriods, 1);
+indices = zeros(nIntervals, 1);
+counts = zeros(nIntervals, 1);
 
 p = 1;
 
-for i = 1:nPeriods
-    tStart = periods(i, 1);
-    tEnd = periods(i, 2);
+for i = 1:nIntervals
+    tStart = intervals(i, 1);
+    tEnd = intervals(i, 2);
     while p<=nEvents && array(p)<tStart
         p = p+1;
     end

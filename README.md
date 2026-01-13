@@ -138,7 +138,7 @@ minos = session.getMinos();
     - `.Data`: the values of the variable, same as `.Values.Data`.
   - `.Paradigms`: `spiky.minos.Paradigm` objects for all paradigms.
     - `.Name`: name of the paradigm.
-    - `.Periods`: `spiky.core.Periods` object for the beginning and end of each play.
+    - `.Intervals`: `spiky.core.Intervals` object for the beginning and end of each play.
     - `.Trials`: `spiky.core.TimeTable` object for the trials.
       - `.Time`: time points of the trials.
       - `.Data`: a table containing the `TrialInfo` struct for each trial and all `TrialEvent` 
@@ -151,9 +151,9 @@ minos = session.getMinos();
   - `.Eye`: `spiky.minos.EyeData` object for the eye tracking data
     - `.Data`: `spiky.core.TimeTable` object containing the pupil size and gaze position of each 
     eye and the convergence.
-    - `.Fixations`: `spiky.core.Periods` object for the fixations.
-    - `.Saccades`: `spiky.core.Periods` object for the saccades.
-    - `.Blinks`: `spiky.core.Periods` object for the blinks.
+    - `.Fixations`: `spiky.core.Intervals` object for the fixations.
+    - `.Saccades`: `spiky.core.Intervals` object for the saccades.
+    - `.Blinks`: `spiky.core.Intervals` object for the blinks.
   - `.Player`: `spiky.core.TimeTable` object containing the player position and orientation.
   - `.Display`: `spiky.core.TimeTable` object containing the camera position and orientation.
   - `.Input`: `spiky.core.TimeTable` object containing the input from the controller.

@@ -1,35 +1,37 @@
-classdef Parameter < spiky.core.MappableArray
+classdef Parameter < spiky.core.MappableObjArray
     %PARAMETER A parameter that can be changed during an experiment
 
     properties
         Name string
-        Type string
-        Data spiky.core.TimeTable
+        Type string % Type in the stimulus presentation program
     end
 
-    properties (Dependent)
-        Time
+    methods (Static)
+        function dimLabelNames = getDimLabelNames()
+            %GETDIMLABELNAMES Get the names of the label arrays for each dimension.
+            %   Each label array has the same height as the corresponding dimension of Data.
+            %   Each cell in the output is a string array of property names.
+            %   This method should be overridden by subclasses if dimension label properties is added.
+            %
+            %   dimLabelNames: dimension label names
+            arguments (Output)
+                dimLabelNames (:, 1) cell
+            end
+            dimLabelNames = {["Name"; "Type"]};
+        end
     end
 
     methods
-        function obj = Parameter(name, type, time, values)
+        function obj = Parameter(name, type, array)
             arguments
-                name string = ""
-                type string = ""
-                time = []
-                values = []
+                name (:, 1) string = string.empty
+                type (:, 1) string = string.empty
+                array (:, 1) cell = {} % cell array of spiky.core.EventsTable
             end
+            obj@spiky.core.MappableObjArray(array, Class="spiky.core.EventsTable");
             obj.Name = name;
             obj.Type = type;
-            obj.Data = spiky.core.TimeTable(time, values);
-        end
-
-        function t = get.Time(obj)
-            t = obj.Data.Time;
-        end
-
-        function obj = set.Time(obj, time)
-            obj.Data.Time = time;
+            obj.verifyDimLabels();
         end
 
         function value = get(obj, time)
@@ -39,35 +41,37 @@ classdef Parameter < spiky.core.MappableArray
             %
             %   value: value(s) of the parameter
             arguments
-                obj spiky.core.Parameter
+                obj (1, 1) spiky.core.Parameter
                 time = 0 % double or spiky.core.Events
             end
+            obj = obj.Array{1};
             if isempty(obj.Time)
                 value = [];
             else
-                periods = spiky.core.Periods([[-Inf; obj.Time(2:end)], [obj.Time(2:end); Inf]]);
-                [~, ~, idc] = periods.haveEvents(time);
-                value = obj.Data.Data(idc);
-                if iscell(obj.Data.Data)
+                intervals = spiky.core.Intervals([[-Inf; obj.Time(2:end)], [obj.Time(2:end); Inf]]);
+                [~, ~, idc] = intervals.haveEvents(time);
+                value = obj.Data(idc);
+                if iscell(obj.Data)
                     value = value{:};
                 end
             end
         end
 
-        function periods = getPeriods(obj, value, partialMatch)
-            %GETPERIODS Get the periods when the parameter has a specific value
+        function intervals = getIntervals(obj, value, partialMatch)
+            %GETINTERVALS Get the intervals when the parameter has a specific value
             %
             %   value: value(s) or function handle
             %   partialMatch: whether to use partial match
             %
-            %   periods: periods when the parameter has the value
+            %   intervals: intervals when the parameter has the value
             arguments
-                obj spiky.core.Parameter
+                obj (1, 1) spiky.core.Parameter
                 value % value(s) or function handle
                 partialMatch logical = true
             end
+            obj = obj.Array{1};
             if isempty(obj.Time)
-                periods = spiky.core.Periods.empty;
+                intervals = spiky.core.Intervals;
                 return
             end
             if ~isa(value, "function_handle")
@@ -79,13 +83,13 @@ classdef Parameter < spiky.core.MappableArray
             else
                 h = value;
             end
-            if iscell(obj.Data.Data)
+            if iscell(obj.Data)
                 h = @(c) cellfun(h, c);
             end
             n = length(obj.Time);
-            idc = find(h(obj.Data.Data));
+            idc = find(h(obj.Data));
             if isempty(idc)
-                periods = spiky.core.Periods.empty;
+                intervals = spiky.core.Intervals;
                 return
             end
             idc1 = idc;
@@ -98,26 +102,8 @@ classdef Parameter < spiky.core.MappableArray
             if idc(end)==n
                 t(end) = Inf;
             end
-            periods = spiky.core.Periods(t);
+            intervals = spiky.core.Intervals(t);
         end
-
-        function obj = syncTime(obj, func)
-            %SYNCTIME Synchronize events to a synchronization object
-            %
-            %   obj: parameter(s)
-            %   func: function to transform the time
-            %
-            %   obj: updated parameter(s)
-
-            arguments
-                obj spiky.core.Parameter
-                func
-            end
-
-            for ii = 1:length(obj)
-                obj(ii).Time = func(obj(ii).Time);
-            end
-        end    
     end
 
     methods (Access = protected)

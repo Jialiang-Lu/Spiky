@@ -1,18 +1,40 @@
-classdef Spikes < spiky.core.Events
+classdef Spikes < spiky.core.Array
     %SPIKES Spikes of a neuron
+    %
+    %   Fields:
+    %       Neuron: spiky.core.Neuron object representing the neuron
+    %       Data: cell array of spike times in seconds
 
     properties
-        Neuron spiky.core.Neuron
+        Neuron (:, 1) spiky.core.Neuron
+    end
+
+    methods (Static)
+        function dimLabelNames = getDimLabelNames()
+            %GETDIMLABELNAMES Get the names of the label arrays for each dimension.
+            %   Each label array has the same height as the corresponding dimension of Data.
+            %   Each cell in the output is a string array of property names.
+            %   This method should be overridden by subclasses if dimension label properties is added.
+            %
+            %   dimLabelNames: dimension label names
+            arguments (Output)
+                dimLabelNames (:, 1) cell
+            end
+            dimLabelNames = {"Neuron"};
+        end
     end
 
     methods
-        function obj = Spikes(neuron, time)
+        function obj = Spikes(neuron, data)
             arguments
-                neuron spiky.core.Neuron = spiky.core.Neuron.empty
-                time = []
+                neuron spiky.core.Neuron = spiky.core.Neuron
+                data cell = {}
             end
+            assert(all(cellfun(@(x) isnumeric(x) && iscolumn(x), data)), ...
+                "Data must be a cell array of numeric vectors representing spike times");
             obj.Neuron = neuron;
-            obj.Time = time(:);
+            obj.Data = data;
+            obj.verifyDimLabels();
         end
 
         function [spikes, idc] = filter(obj, propArgs)
@@ -27,24 +49,22 @@ classdef Spikes < spiky.core.Events
                 propArgs.Ch
                 propArgs.ChInGroup
                 propArgs.Label
-                propArgs.Waveform
                 propArgs.Amplitude
             end
             isValid = true(numel(obj), 1);
             names = string(fieldnames(propArgs));
-            neurons = vertcat(obj.Neuron);
             for ii = 1:numel(names)
                 if isempty(propArgs.(names(ii)))
                     continue;
                 end
                 if isstring(propArgs.(names(ii)))
-                    isValid = isValid & ismember(neurons.(names(ii)), ...
+                    isValid = isValid & ismember(obj.Neuron.(names(ii)), ...
                         propArgs.(names(ii)));
                 elseif isnumeric(propArgs.(names(ii)))
-                    isValid = isValid & ismember(neurons.(names(ii)), ...
+                    isValid = isValid & ismember(obj.Neuron.(names(ii)), ...
                         propArgs.(names(ii)));
                 elseif isa(propArgs.(names(ii)), "function_handle")
-                    isValid = isValid & propArgs.(names(ii))(neurons.(names(ii)));
+                    isValid = isValid & propArgs.(names(ii))(obj.Neuron.(names(ii)));
                 end
             end
             spikes = obj(isValid);
@@ -121,7 +141,7 @@ classdef Spikes < spiky.core.Events
             %   obj: TrigFr object
 
             arguments
-                obj spiky.core.Spikes = spiky.core.Spikes.empty
+                obj spiky.core.Spikes = spiky.core.Spikes
                 events = [] % (n, 1) double or spiky.core.Events
                 window double {mustBeVector} = [0, 1]
                 options.HalfWidth double {mustBePositive} = 0.1
@@ -130,7 +150,7 @@ classdef Spikes < spiky.core.Events
                 options.Unit string {mustBeMember(options.Unit, ["Hz", "count"])} = "Hz"
             end
             if nargin==0 || isempty(obj)
-                fr = spiky.trig.TrigFr.empty;
+                fr = spiky.trig.TrigFr;
                 return
             end
             if isa(events, "spiky.core.Events")
@@ -145,16 +165,16 @@ classdef Spikes < spiky.core.Events
             else
                 res = t(2)-t(1);
             end
-            nNeurons = numel(obj);
+            nNeurons = height(obj);
             switch options.Kernel
                 case "box"
                     fr = zeros(nT, nEvents, nNeurons);
                     prds = reshape(events'+t, [], 1);
-                    prds = spiky.core.Periods([prds-options.HalfWidth prds+options.HalfWidth]);
+                    prds = spiky.core.Intervals([prds-options.HalfWidth prds+options.HalfWidth]);
                     [prds, idcSort] = prds.sort();
                     idcSort2(idcSort) = 1:numel(idcSort);
                     parfor ii = 1:nNeurons
-                        [~, c] = spiky.mex.findInPeriods(obj(ii).Time, prds.Time);
+                        [~, c] = spiky.mex.findInIntervals(obj{ii}, prds.Time);
                         c = c(idcSort2)./options.HalfWidth/2;
                         if options.Normalize
                             c = (c-mean(c))./sqrt(mean(c)./options.HalfWidth/2);
@@ -186,7 +206,7 @@ classdef Spikes < spiky.core.Events
             if options.Unit=="Count"
                 fr = fr*res;
             end
-            fr = spiky.trig.TrigFr(t(1), res, fr, events, window, vertcat(obj.Neuron));
+            fr = spiky.trig.TrigFr(t(1), res, fr, events, window, obj.Neuron);
             fr.Options = options;
         end
 
@@ -206,16 +226,6 @@ classdef Spikes < spiky.core.Events
             end
             zeta = spiky.stat.Zeta(obj, events, window, ...
                 NumResample=options.NumResample);
-        end
-    end
-
-    methods (Access = protected)
-        function key = getKey(obj)
-            if ~isempty(obj.Neuron)
-                key = obj.Neuron.Str;
-            else
-                key = "";
-            end
         end
     end
 end

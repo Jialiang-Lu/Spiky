@@ -1,4 +1,4 @@
-classdef Lfp < spiky.core.TimeTable
+classdef Lfp < spiky.core.EventsTable
     %LFP Class representing a Local Field Potential signal in microvolts
 
     properties (Dependent)
@@ -21,7 +21,7 @@ classdef Lfp < spiky.core.TimeTable
             elseif nargin>3
                 error("Invalid number of arguments")
             end
-            obj@spiky.core.TimeTable(varargin{:});
+            obj@spiky.core.EventsTable(varargin{:});
             assert(isa(obj.Data, "double"), "Data must be a double array")
         end
 
@@ -136,7 +136,7 @@ classdef Lfp < spiky.core.TimeTable
             %   options.MinCycles: minimum number of cycles for a ripple
             %   options.FilterClass: class of IIR filter, for now either cheby2 or butter
             %   options.FilterOrder: filter order
-            %   options.Periods: periods to analyze
+            %   options.Intervals: intervals to analyze
 
             arguments
                 obj spiky.lfp.Lfp
@@ -146,7 +146,7 @@ classdef Lfp < spiky.core.TimeTable
                 options.MinCycles (1, 1) double = 3
                 options.FilterClass (1, 1) string {mustBeMember(options.FilterClass, ["butter" "cheby2"])} = "butter"
                 options.FilterOrder (1, 1) double = 3
-                options.Periods = [] % (:, 2) double or spiky.core.Period
+                options.Intervals = [] % (:, 2) double or spiky.core.Interval
             end
 
             if ~obj.IsUniform
@@ -155,8 +155,8 @@ classdef Lfp < spiky.core.TimeTable
             if ~isvector(obj.Data)
                 obj.Data = obj.Data(:, 1);
             end
-            if isa(options.Periods, "spiky.core.Period")
-                options.Periods = options.Periods.Time;
+            if isa(options.Intervals, "spiky.core.Interval")
+                options.Intervals = options.Intervals.Time;
             end
             filt = obj.filter(options.FreqBand, options.FilterClass, options.FilterOrder);
             swrEnv = abs(hilbert(filt.Data));
@@ -167,8 +167,8 @@ classdef Lfp < spiky.core.TimeTable
             swrEnv = conv(swrEnv, gaussFilter, "same");
             meanVol = mean(obj.Data);
             stdVol = std(obj.Data);
-            if ~isempty(options.Periods)
-                [~, idc] = obj.inPeriods(options.Periods);
+            if ~isempty(options.Intervals)
+                [~, idc] = obj.inIntervals(options.Intervals);
             else
                 idc = 1:obj.Length;
             end
@@ -180,8 +180,8 @@ classdef Lfp < spiky.core.TimeTable
             %%
             [amp, t] = findpeaks(swrEnv, obj.Fs, MinPeakDistance=0.05, MinPeakHeight=thr, ...
                 MinPeakProminence=thr-meanPower);
-            if ~isempty(options.Periods)
-                [~, idc] = spiky.core.Events(t).inPeriods(options.Periods);
+            if ~isempty(options.Intervals)
+                [~, idc] = spiky.core.Events(t).inIntervals(options.Intervals);
                 amp = amp(idc);
                 t = t(idc);
             end
@@ -210,7 +210,7 @@ classdef Lfp < spiky.core.TimeTable
                 offset(ii) = t(ii)+(idx2-251)/obj.Fs;
                 [~, ts] = findpeaks(-lfp.Data(:, 1, ii), obj.Fs, ...
                     MinPeakDistance=1/options.FreqBand(2), MinPeakHeight=0);
-                ts = spiky.core.Events(t(ii)-0.25+ts).inPeriods([onset(ii) offset(ii)]);
+                ts = spiky.core.Events(t(ii)-0.25+ts).inIntervals([onset(ii) offset(ii)]);
                 % [~, idx] = min(lfp.Data(round(ts*obj.Fs), 1, ii)); % Find the deepest trough
                 [~, idx] = min(abs(ts-t(ii))); % Find the closest trough
                 if isempty(idx) || isscalar(ts) || abs(obj.get(ts(idx))-meanVol)/stdVol>10

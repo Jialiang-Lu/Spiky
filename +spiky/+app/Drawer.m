@@ -23,7 +23,7 @@ classdef (Abstract) Drawer < handle & matlab.mixin.Heterogeneous
         function obj = Drawer(app, hCheckbox, toggleType)
             % Drawer Constructor for the Drawer class
             %
-            %   obj = Drawer(app, period)
+            %   obj = Drawer(app, interval)
             %
             %   app: SessionViewer app instance
             %   hCheckbox: handle to the checkbox for visibility control

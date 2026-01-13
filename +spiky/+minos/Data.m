@@ -1,4 +1,4 @@
-classdef Data < spiky.core.ArrayTable
+classdef Data < spiky.core.Array
 
     properties (Constant, Hidden)
         LogPattern = "\[(?<timestamp>\d+)\] (?<name>[\w\.]+) \(?(?<type>.*?)\)? ?= (?<value>[^\r\n]*)";
@@ -230,19 +230,23 @@ classdef Data < spiky.core.ArrayTable
 
             values = obj.Data(obj.Data.Name~="", :);
             ts = double(values.Timestamp)/1e7;
+            if ~isempty(func)
+                ts = func(ts);
+            end
             [names, ~, idcName] = unique(values.Name, "stable");
-            for ii = length(names):-1:1
+            n = length(names);
+            types = strings(n, 1);
+            out = cell(n, 1);
+            for ii = 1:n
                 idc = idcName==ii;
                 time = ts(idc);
-                type = values.Type(find(idc, 1));
+                types(ii) = values.Type(find(idc, 1));
                 value = values.Value(idc);
-                convert = spiky.minos.Data.getConvertFunc(type);
+                convert = spiky.minos.Data.getConvertFunc(types(ii));
                 value = convert(value);
-                out(ii, 1) = spiky.core.Parameter(names(ii), type, time, value);
+                out{ii} = spiky.core.EventsTable(time, value);
             end
-            if ~isempty(func)
-                out = out.syncTime(func);
-            end
+            out = spiky.core.Parameter(names, types, out);
         end
 
         % function varargout = subsref(obj, s)
@@ -257,7 +261,7 @@ classdef Data < spiky.core.ArrayTable
 
         % function obj = subsasgn(obj, s, varargin)
         %     if isequal(obj, [])
-        %         obj = spiky.core.TimeTable.empty;
+        %         obj = spiky.core.EventsTable;
         %     end
         %     switch s(1).type
         %         case '.'

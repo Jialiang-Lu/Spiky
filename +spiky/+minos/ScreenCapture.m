@@ -1,10 +1,10 @@
-classdef ScreenCapture < spiky.core.Metadata & handle
+classdef ScreenCapture < handle
     %SCREENCAPTURE Class representing a screen capture video
 
     properties
         Session spiky.ephys.Session
         Path string = ""
-        Sync spiky.ephys.EventGroup = spiky.ephys.EventGroup.empty
+        Sync spiky.ephys.EventGroup = spiky.ephys.EventGroup
     end
 
     properties (Transient)

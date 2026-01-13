@@ -13,33 +13,33 @@ public:
         checkArguments(inputs);
 
         const TypedArray<double> array = inputs[0];
-        const TypedArray<double> periods = inputs[1];
+        const TypedArray<double> intervals = inputs[1];
         const int n = array.getNumberOfElements();
-        const size_t nPeriods = periods.getNumberOfElements() / 2;
+        const size_t nIntervals = intervals.getNumberOfElements() / 2;
         vector<double> array1 = vector<double>(n);
-        vector<double> periods1 = vector<double>(nPeriods * 2);
+        vector<double> intervals1 = vector<double>(nIntervals * 2);
         int i = 0;
         for (auto a : array)
         {
             array1[i++] = a;
         }
         i = 0;
-        for (auto p : periods)
+        for (auto p : intervals)
         {
-            periods1[i++] = p;
+            intervals1[i++] = p;
         }
 
         const bool rightClose = inputs.size() == 3 ? static_cast<bool>(inputs[2][0]) : false;
-        //TypedArray<double> indices = factory.createArray<double>({nPeriods, 1});
-        //TypedArray<double> counts = factory.createArray<double>({nPeriods, 1});
-        vector<double> indices = vector<double>(nPeriods);
-        vector<double> counts = vector<double>(nPeriods);
+        //TypedArray<double> indices = factory.createArray<double>({nIntervals, 1});
+        //TypedArray<double> counts = factory.createArray<double>({nIntervals, 1});
+        vector<double> indices = vector<double>(nIntervals);
+        vector<double> counts = vector<double>(nIntervals);
         int index = 0;
         int next;
-        for (int i = 0; i < nPeriods; i++)
+        for (int i = 0; i < nIntervals; i++)
         {
-            double t0 = periods1[i];
-            double t1 = periods1[nPeriods + i];
+            double t0 = intervals1[i];
+            double t1 = intervals1[nIntervals + i];
             for (; index < n && array1[index] < t0; index++);
             indices[i] = static_cast<double>(index + 1);
             next = index;
@@ -49,8 +49,8 @@ public:
                 for (; next < n && array1[next] < t1; next++);
             counts[i] = static_cast<double>(next - index);
         }
-        outputs[0] = factory.createArray({ nPeriods, 1 }, indices.begin(), indices.end());
-        outputs[1] = factory.createArray({ nPeriods, 1 }, counts.begin(), counts.end());
+        outputs[0] = factory.createArray({ nIntervals, 1 }, indices.begin(), indices.end());
+        outputs[1] = factory.createArray({ nIntervals, 1 }, counts.begin(), counts.end());
     }
 
 private:
@@ -71,7 +71,7 @@ private:
         if (inputs[1].getDimensions()[1] != 2)
         {
             getEngine()->feval(u"error",
-                0, std::vector<Array>({ factory.createScalar("Periods must be a 2-column array.") }));
+                0, std::vector<Array>({ factory.createScalar("Intervals must be a 2-column array.") }));
         }
         if (inputs.size() == 3 && inputs[2].getType() != ArrayType::LOGICAL)
         {

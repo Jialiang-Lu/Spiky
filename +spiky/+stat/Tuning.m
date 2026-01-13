@@ -1,4 +1,4 @@
-classdef Tuning < spiky.core.ArrayTable
+classdef Tuning < spiky.core.Array
     %TUNING 1D continuous tuning curve
 
     properties

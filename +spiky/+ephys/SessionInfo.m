@@ -1,4 +1,5 @@
-classdef SessionInfo < spiky.core.Metadata
+classdef SessionInfo
+    %SESSIONINFO Class containing information about an ephys session
     
     properties
         Session spiky.ephys.Session
@@ -30,7 +31,7 @@ classdef SessionInfo < spiky.core.Metadata
             %SESSIONINFO Create a new instance of SessionInfo
             
             arguments
-                session spiky.ephys.Session = spiky.ephys.Session.empty
+                session spiky.ephys.Session = spiky.ephys.Session
                 nChannels double = 0
                 fs double = []
                 fsLfp double = []
@@ -40,8 +41,8 @@ classdef SessionInfo < spiky.core.Metadata
                 precision string = ""
                 fpthDat (:, 1) string = ""
                 fpthLfp (:, 1) string = ""
-                channelGroups (:, 1) spiky.ephys.ChannelGroup = spiky.ephys.ChannelGroup.empty
-                eventGroups (:, 1) spiky.ephys.EventGroup = spiky.ephys.EventGroup.empty
+                channelGroups (:, 1) spiky.ephys.ChannelGroup = spiky.ephys.ChannelGroup
+                eventGroups (:, 1) spiky.ephys.EventGroup = spiky.ephys.EventGroup
                 options struct = struct
             end
 
@@ -86,13 +87,13 @@ classdef SessionInfo < spiky.core.Metadata
             end
         end
 
-        function data = loadBinary(obj, ch, period, options)
+        function data = loadBinary(obj, ch, interval, options)
             %LOADBINARY Load binary data
             %
-            % data = LOADBINARY(obj, type, ch, period, options)
+            % data = LOADBINARY(obj, type, ch, interval, options)
             %
             %   ch: channel numbers
-            %   period: time period
+            %   interval: time interval
             %   options:
             %       type: "dat" or "lfp"
             %       precision: e.g. "int16" or "double"
@@ -100,10 +101,10 @@ classdef SessionInfo < spiky.core.Metadata
             arguments
                 obj
                 ch double = []
-                period double = []
+                interval double = []
                 options.Type string {mustBeMember(options.Type, ["dat", "lfp"])} = "lfp"
                 options.Precision string = "double"
-                options.PeriodType string {mustBeMember(options.PeriodType, ["time", "index"])} = "time"
+                options.IntervalType string {mustBeMember(options.IntervalType, ["time", "index"])} = "time"
             end
 
             if isempty(ch)
@@ -117,17 +118,17 @@ classdef SessionInfo < spiky.core.Metadata
                 nSample = obj.NSamplesLfp;
                 fs = obj.FsLfp;
             end
-            if options.PeriodType=="time"
-                if isempty(period)
-                    period = [0 nSample/fs-1];
-                elseif isscalar(period)
-                    period = [0 min(nSample/fs-1, period)];
+            if options.IntervalType=="time"
+                if isempty(interval)
+                    interval = [0 nSample/fs-1];
+                elseif isscalar(interval)
+                    interval = [0 min(nSample/fs-1, interval)];
                 else
-                    period = [max(period(1), 0) min(period(2), nSample/fs-1)];
+                    interval = [max(interval(1), 0) min(interval(2), nSample/fs-1)];
                 end
-                idc = round(period(1)*fs)+1:round(period(2)*fs)+1;
+                idc = round(interval(1)*fs)+1:round(interval(2)*fs)+1;
             else
-                idc = period;
+                idc = interval;
             end
             if options.Type=="dat" && ~obj.Options.ResampleDat
                 [ch, chGroup] = obj.ChannelGroups.getChannel(ch, false);
@@ -143,7 +144,7 @@ classdef SessionInfo < spiky.core.Metadata
                     fpth = obj.FpthDat(group);
                     m = memmapfile(fpth, Format={"int16", ...
                         [obj.ChannelGroups(group).NChannels, nSample1], "m"});
-                    if options.PeriodType=="time"
+                    if options.IntervalType=="time"
                         if group==1
                             idc1 = idc;
                         else
@@ -256,8 +257,9 @@ classdef SessionInfo < spiky.core.Metadata
             arguments
                 obj
                 options.MinPhotodiodeGap double = 0.05
+                options.Plot logical = true
             end
-            options.Plot = ~exist(obj.Session.getFpth("spiky.minos.MinosInfo.mat"), "file");
+            % options.Plot = ~exist(obj.Session.getFpth("spiky.minos.MinosInfo.mat"), "file");
             optionsCell = namedargs2cell(options);
             minos = spiky.minos.MinosInfo.load(obj, optionsCell{:});
             fprintf("Saving ...\n");
@@ -436,11 +438,11 @@ classdef SessionInfo < spiky.core.Metadata
                 pb.step
             end
             %%
-            period = obj.EventGroups(idxGroup).NSamples;
-            period = period-400*obj.Fs:period;
+            interval = obj.EventGroups(idxGroup).NSamples;
+            interval = interval-400*obj.Fs:interval;
             pb = spiky.plot.ProgressBar(1, "Loading binary for waveforms");
-            raw = obj.loadBinary(obj.ChannelGroups.getGroupIndices(idxGroup), period, type="dat", ...
-                periodType="index");
+            raw = obj.loadBinary(obj.ChannelGroups.getGroupIndices(idxGroup), interval, type="dat", ...
+                intervalType="index");
             pb.step
             %%
             if isempty(idxGroup)
@@ -450,13 +452,13 @@ classdef SessionInfo < spiky.core.Metadata
             end
             for ii = 1:n
                 idc = round(data.ts{ii}*obj.Fs)+1;
-                idc = idc(idc>=period(1)-idcT(1) & idc<=period(end)-idcT(end));
+                idc = idc(idc>=interval(1)-idcT(1) & idc<=interval(end)-idcT(end));
                 if isempty(idc)
                     data.waveform(ii, :) = 0;
                     data.amplitude(ii) = 0;
                     continue
                 end
-                idc = idc'-period(1)+1+idcT;
+                idc = idc'-interval(1)+1+idcT;
                 idc = idc(:);
                 wav = raw{idc, ch(ii)};
                 wav = mean(reshape(wav, nT, []), 2);
@@ -472,29 +474,26 @@ classdef SessionInfo < spiky.core.Metadata
             %%
             if isempty(idxGroup)
                 chs = [obj.ChannelGroups([obj.ChannelGroups.ChannelType]'=="Neural").NChannels]';
-                chsRanges = spiky.core.Periods([cumsum([1; chs(1:end-1)]), cumsum(chs)]);
-                [ch, ~, idcGroup] = chsRanges.haveEvents(chInAll, false, 1, true, false);
+                chsRanges = spiky.core.Intervals([cumsum([1; chs(1:end-1)]), cumsum(chs)]);
+                [ch, ~, idcGroup] = chsRanges.haveEvents(chInAll, Offset=1, ...
+                    RightClose=true, Sorted=false);
             else
                 idcGroup = idxGroup*ones(size(chInAll));
             end
             %%
             if isempty(idcGood)
-                s = spiky.core.Spikes.empty;
+                s = spiky.core.Spikes;
             end
             nNeurons = length(idcGood);
             idcGroup = idcGroup(idcGood);
             sessions = repmat(obj.Session, nNeurons, 1);
             groupNames = categorical([obj.ChannelGroups(idcGroup).Name]');
-            waveforms = arrayfun(@(x) spiky.lfp.Lfp(tStart, obj.Fs, data.waveform(x, :)), ...
-                idcGood, UniformOutput=false);
+            % waveforms = arrayfun(@(x) spiky.lfp.Lfp(tStart, obj.Fs, data.waveform(x, :)), ...
+            %     idcGood, UniformOutput=false);
             neurons = spiky.core.Neuron(sessions, idcGroup, data.id(idcGood), groupNames, ...
-                chInAll(idcGood), ch(idcGood), categorical(data.label(idcGood)), waveforms);
-            %%
-            clear s;
-            for jj = length(idcGood):-1:1
-                idx = idcGood(jj);
-                s(jj, 1) = spiky.core.Spikes(neurons(jj), sync(data.ts{idx}));
-            end
+                chInAll(idcGood), ch(idcGood), categorical(data.label(idcGood)), data.amplitude(idcGood));
+            ts = cellfun(sync, data.ts(idcGood), UniformOutput=false);
+            s = spiky.core.Spikes(neurons, ts);
         end
     end
 end

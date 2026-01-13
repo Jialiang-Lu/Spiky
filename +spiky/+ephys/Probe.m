@@ -1,7 +1,7 @@
-classdef Probe < spiky.core.Metadata
+classdef Probe
     %PROBE Class representing probe
 
-    properties (SetAccess = {?spiky.core.Metadata, ?spiky.ephys.Probe})
+    properties
         Name (1, 1) string = "Probe"
         ChanMap (:, 1) double
         YCoords (:, 1) double

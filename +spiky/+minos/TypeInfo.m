@@ -251,7 +251,7 @@ classdef TypeInfo
                 obj.Type = obj.Children(1).Type;
                 obj.Bytes = obj.Children(1).Bytes;
                 obj.Length = n;
-                obj.Children = spiky.minos.TypeInfo.empty;
+                obj.Children = spiky.minos.TypeInfo;
                 objs = obj;
                 return
             end

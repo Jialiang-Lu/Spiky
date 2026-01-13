@@ -4,7 +4,7 @@ classdef EventDetector < spiky.stat.Classifier
         Bases spiky.stat.TimeCoords % Kernel bases
         Subspaces spiky.stat.Subspaces % Subspaces used for classification
         Partition % Cross-validation partition
-        PartitionPeriods spiky.core.Periods % Periods for each partition
+        PartitionIntervals spiky.core.Intervals % Intervals for each partition
         Options struct % Options used for training the event detector
     end
 

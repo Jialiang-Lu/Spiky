@@ -1,5 +1,5 @@
-classdef (HandleCompatible) Metadata
-    % Metadata
+classdef Metadata
+    %METADATA Utility class for object serialization and deserialization
 
     methods (Static)
         function s = objToStruct(obj)
@@ -17,7 +17,7 @@ classdef (HandleCompatible) Metadata
             props = props(~[mc.PropertyList.Dependent] & ...
                 ~[mc.PropertyList.Abstract] & ...
                 ~[mc.PropertyList.Transient]);
-            if ~isa(obj, "spiky.core.ArrayTable") && ~isscalar(obj)
+            if ~isa(obj, "spiky.core.ArrayBase") && ~isscalar(obj)
                 c = cell(size(obj));
                 for ii = 1:numel(obj)
                     s1 = spiky.core.Metadata.objToStruct(obj(ii));

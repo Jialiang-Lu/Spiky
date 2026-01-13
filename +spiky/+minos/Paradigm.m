@@ -1,17 +1,42 @@
-classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
+classdef Paradigm < spiky.core.MappableArray
     %PARADIGM represents paradigm data
 
     properties
         Name string
-        Periods spiky.core.Periods
-        Trials spiky.core.TimeTable
-        TrialInfo spiky.core.TimeTable
-        Vars spiky.core.Parameter
         Latency double
+        Intervals spiky.core.ObjArray % ObjArray of spiky.core.Intervals
+        Trials spiky.core.ObjArray % ObjArray of spiky.core.EventsTable
+        TrialInfo spiky.core.ObjArray % ObjArray of spiky.core.EventsTable
+        Vars spiky.core.ObjArray % ObjArray of spiky.core.Parameter
     end
 
     methods (Static)
-        function obj = load(fdir, periods, func, photodiode)
+        function dataNames = getDataNames()
+            %GETDATANAMES Get the names of all data properties.
+            %   These properties must all have the same size. The first one is assumed to be the 
+            %   main Data property.
+            %
+            %   dataNames: data property names
+            arguments (Output)
+                dataNames (:, 1) string
+            end
+            dataNames = ["Trials"; "TrialInfo"; "Vars"];
+        end
+
+        function dimLabelNames = getDimLabelNames()
+            %GETDIMLABELNAMES Get the names of the label arrays for each dimension.
+            %   Each label array has the same height as the corresponding dimension of Data.
+            %   Each cell in the output is a string array of property names.
+            %   This method should be overridden by subclasses if dimension label properties is added.
+            %
+            %   dimLabelNames: dimension label names
+            arguments (Output)
+                dimLabelNames (:, 1) cell
+            end
+            dimLabelNames = {["Name"; "Latency"; "Intervals"]};
+        end
+
+        function obj = load(fdir, intervals, func, photodiode)
             %LOAD Load a paradigm from a directory
             %
             %   fdir: directory containing the paradigm data
@@ -20,7 +45,7 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
             %   obj: paradigm object
             arguments
                 fdir (1, 1) string {mustBeFolder}
-                periods spiky.core.Periods
+                intervals spiky.core.Intervals
                 func = @(x) x
                 photodiode double = []
             end
@@ -59,7 +84,7 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
                 data = [trialInfo.Data(idcInfo, ["Timestamp" "Number"]) array2table(NaN(n, ...
                     length(varNames)), "VariableNames", varNames)];
             end
-            info = spiky.core.TimeTable(func(double(trialInfo.Timestamp)/1e7), trialInfo.Data);
+            info = spiky.core.EventsTable(func(double(trialInfo.Timestamp)/1e7), trialInfo.Data);
             t = func(double(trials.Data.Timestamp)/1e7);
             nEvents = length(eventNames);
             if ~isempty(photodiode)
@@ -68,8 +93,8 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
                 for ii = 1:nEvents
                     isEvent1 = trials.Data.Event==eventNames(ii);
                     t1 = t(isEvent1);
-                    p1 = spiky.core.Periods([t1 t1+0.15]);
-                    e1 = p1.haveEvents(photodiode, true);
+                    p1 = spiky.core.Intervals([t1 t1+0.15]);
+                    e1 = p1.haveEvents(photodiode, CellMode=true);
                     l1 = cellfun(@length, e1)';
                     if sum(l1>0)/length(l1)>0.8
                         isValid = l1>0;
@@ -104,26 +129,27 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
                         double(trials.Data.Type(idx));
                 end
             end
-            obj = spiky.minos.Paradigm(name, periods, spiky.core.TimeTable(...
-                func(double(data.Timestamp)/1e7), data), info, log.getParameters(func), latency);
+            obj = spiky.minos.Paradigm(name, {intervals}, ...
+                {spiky.core.EventsTable(func(double(data.Timestamp)/1e7), data)}, ...
+                {info}, {log.getParameters(func)}, latency);
         end
     end
 
     methods
-        function obj = Paradigm(name, periods, trials, trialInfo, vars, latency)
+        function obj = Paradigm(name, intervals, trials, trialInfo, vars, latency)
             arguments
-                name string = ""
-                periods spiky.core.Periods = spiky.core.Periods.empty
-                trials spiky.core.TimeTable = spiky.core.TimeTable.empty
-                trialInfo spiky.core.TimeTable = spiky.core.TimeTable.empty
-                vars spiky.core.Parameter = spiky.core.Parameter.empty
-                latency double = NaN
+                name (:, 1) string = string.empty
+                intervals (:, 1) cell = {} % cell array of spiky.core.Intervals
+                trials (:, 1) cell = {} % cell array of spiky.core.EventsTable
+                trialInfo (:, 1) cell = {} % cell array of spiky.core.EventsTable
+                vars (:, 1) cell = {} % cell array of spiky.core.Parameter
+                latency (:, 1) double = double.empty
             end
             obj.Name = name;
-            obj.Periods = periods;
-            obj.Trials = trials;
-            obj.TrialInfo = trialInfo;
-            obj.Vars = vars;
+            obj.Intervals = spiky.core.ObjArray(intervals);
+            obj.Trials = spiky.core.ObjArray(trials);
+            obj.TrialInfo = spiky.core.ObjArray(trialInfo);
+            obj.Vars = spiky.core.ObjArray(vars);
             obj.Latency = latency;
         end
 
@@ -137,7 +163,7 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
             %
             %   trials: trials
             arguments
-                obj spiky.minos.Paradigm
+                obj (1, 1) spiky.minos.Paradigm
             end
             arguments (Repeating)
                 var string
@@ -145,20 +171,20 @@ classdef Paradigm < spiky.core.MappableArray & spiky.core.Metadata
             end
             n = height(obj.Trials);
             if n==0 || isempty(var)
-                trials = spiky.core.TimeTable.empty;
+                trials = spiky.core.EventsTable;
                 return
             end
             prds = cell(length(var), 1);
             for ii = length(var):-1:1
-                prds{ii} = obj.Vars(var{ii}).getPeriods(value{ii});
+                prds{ii} = obj.Vars.(var{ii}).getIntervals(value{ii});
             end
-            periods = spiky.core.Periods.intersect(prds{:});
-            [~, idc1] = periods.haveEvents(obj.Trials.Time);
+            intervals = spiky.core.Intervals.intersect(prds{:});
+            [~, idc1] = intervals.haveEvents(obj.Trials.Time);
             trials = obj.Trials(idc1, :);
         end
     end
 
-    methods (Access = protected)
+    methods (Access=protected)
         function key = getKey(obj)
             key = obj.Name;
         end

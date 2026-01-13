@@ -1,4 +1,4 @@
-classdef Fixation < spiky.core.TimeTable
+classdef Fixation < spiky.core.EventsTable
 
     properties (Dependent)
         Duration (:, 1) double
@@ -14,18 +14,18 @@ classdef Fixation < spiky.core.TimeTable
         function obj = Fixation(time, data)
             arguments
                 time = []
-                data spiky.core.TimeTable = spiky.core.TimeTable
+                data spiky.core.EventsTable = spiky.core.EventsTable
             end
             if ~isempty(data) && ~isequal(data.Data.Properties.VariableNames, ...
                     ["Duration" "Gaze" "Viewport" "Trial" "Object" "Part" "Dist"])
                 error("Invalid data properties.")
             end
             if isempty(data)
-                data = spiky.core.TimeTable([], table(Size=[0 7], ...
+                data = spiky.core.EventsTable([], table(Size=[0 7], ...
                     VariableTypes=["double" "double" "double" "double" "categorical" "categorical" "double"], ...
                     VariableNames=["Duration" "Gaze" "Viewport" "Trial" "Object" "Part" "Dist"]));
             end
-            obj@spiky.core.TimeTable(time, data);
+            obj@spiky.core.EventsTable(time, data);
         end
 
         function duration = get.Duration(obj)

@@ -1,2 +1,0 @@
-classdef Flags
-end

@@ -2,7 +2,7 @@ classdef TrialEventDrawer < spiky.app.EventDrawer
     %TRIALEVENTDRAWER Class for drawing trial events in the SessionViewer app
 
     properties
-        TrialStates spiky.core.TimeTable = spiky.core.TimeTable.empty
+        TrialStates spiky.core.EventsTable = spiky.core.EventsTable.empty
     end
 
     methods (Static)
@@ -37,7 +37,7 @@ classdef TrialEventDrawer < spiky.app.EventDrawer
                 idc = ~isnan(t);
                 t = t(idc);
                 v = v(idc);
-                t = spiky.core.TimeTable(t(:), v(:));
+                t = spiky.core.EventsTable(t(:), v(:));
                 trials{ii} = t;
             end
             ts = vertcat(trials{:});
@@ -64,7 +64,7 @@ classdef TrialEventDrawer < spiky.app.EventDrawer
             %   events: array of trial states at the specified time, either Nx1 or Nx2
             %   names: string array of trial state names, same size as events
 
-            events = obj.TrialStates.inPeriods([time-1, time+2], false, -1, KeepType=true);
+            events = obj.TrialStates.inIntervals([time-1, time+2], Offset=-1, KeepType=true);
             names = events.Data;
             events = events.Time;
         end
