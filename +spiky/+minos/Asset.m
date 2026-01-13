@@ -21,7 +21,7 @@ classdef Asset < spiky.core.MappableArray & spiky.core.Array
 
     methods (Access = protected)
         function key = getKey(obj)
-            key = obj.Guid;
+            key = obj.Data.Guid;
         end
     end
 end

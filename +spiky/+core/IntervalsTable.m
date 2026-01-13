@@ -1,4 +1,4 @@
-classdef IntervalsTable < spiky.core.Intervals
+classdef IntervalsTable < spiky.core.Intervals & spiky.core.Array
     %INTERVALSTABLE Represents data indexed by time intervals in seconds
 
     methods (Static)

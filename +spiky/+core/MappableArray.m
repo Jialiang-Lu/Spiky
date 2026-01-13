@@ -25,13 +25,11 @@ classdef (Abstract) MappableArray < spiky.core.ArrayBase
                     idc = ismember(obj.Key_, subs1{1});
                     s(1).subs{1} = idc;
                 case '.'
-                    if isprop(obj, subs1) || ismethod(obj, subs1) || ...
-                        (obj.IsTable && ismember(subs1, obj.Data.Properties.VariableNames))
-                        return
-                    end
                     idc = obj.Key_==subs1;
-                    s(1).type = '()';
-                    s(1).subs = {idc, ':', ':', ':', ':', ':'};
+                    if any(idc)
+                        s(1).type = '()';
+                        s(1).subs = {idc, ':', ':', ':', ':', ':'};
+                    end
             end
         end
     end

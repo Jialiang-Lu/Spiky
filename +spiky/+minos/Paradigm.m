@@ -4,10 +4,10 @@ classdef Paradigm < spiky.core.MappableArray
     properties
         Name string
         Latency double
-        Intervals spiky.core.ObjArray = spiky.core.ObjArray % ObjArray of spiky.core.Intervals
-        Trials spiky.core.ObjArray = spiky.core.ObjArray % ObjArray of spiky.core.EventsTable
-        TrialInfo spiky.core.ObjArray = spiky.core.ObjArray % ObjArray of spiky.core.EventsTable
-        Vars spiky.core.ObjArray = spiky.core.ObjArray % ObjArray of spiky.core.Parameter
+        Intervals spiky.core.ObjArray % ObjArray of spiky.core.Intervals
+        Trials spiky.core.ObjArray % ObjArray of spiky.core.EventsTable
+        TrialInfo spiky.core.ObjArray % ObjArray of spiky.core.EventsTable
+        Vars spiky.core.ObjArray % ObjArray of spiky.core.Parameter
     end
 
     methods (Static)
@@ -131,7 +131,7 @@ classdef Paradigm < spiky.core.MappableArray
             end
             obj = spiky.minos.Paradigm(name, {intervals}, ...
                 {spiky.core.EventsTable(func(double(data.Timestamp)/1e7), data)}, ...
-                {info}, log.getParameters(func), latency);
+                {info}, {log.getParameters(func)}, latency);
         end
     end
 

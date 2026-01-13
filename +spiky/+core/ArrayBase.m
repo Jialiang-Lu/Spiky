@@ -267,28 +267,16 @@ classdef (Abstract) ArrayBase
             obj = obj.setData(obj.getData() | obj2);
         end
 
-        function verifyDimLabels(obj)
-            %VERIFYDIMLABELS Verify that dimension label properties are consistent with Data.
-            labelNames = feval(class(obj)+".getDimLabelNames");
-            for ii = 1:numel(labelNames)
-                names = labelNames{ii};
-                for jj = 1:numel(names)
-                    name = names(jj);
-                    assert(height(obj.(name))==size(obj, ii), ...
-                        "Property '%s' height does not match dimension %d of Data.", ...
-                        name, ii);
-                end
-            end
-        end
-
         function varargout = size(obj, varargin)
             if isempty(obj)
                 [varargout{1:nargout}] = size(double.empty(0, 1), varargin{:});
                 return
             end
-            if istable(obj.getData(1))
+            dataNames = obj.getDataNames();
+            name = dataNames(1);
+            if istable(obj.(name))
                 % Treat table as a column vector for size purposes
-                sz = size(obj.getData(), varargin{:});
+                sz = size(obj.(name), varargin{:});
                 if isempty(varargin)
                     idx = 2;
                 elseif isscalar(varargin)
@@ -304,7 +292,7 @@ classdef (Abstract) ArrayBase
                     varargout(1:nargout) = num2cell(sz(1:nargout));
                 end
             else
-                [varargout{1:nargout}] = size(obj.getData(), varargin{:});
+                [varargout{1:nargout}] = size(obj.(name), varargin{:});
             end
         end
 
@@ -543,6 +531,22 @@ classdef (Abstract) ArrayBase
             tf = ismember(name, {meta.MethodList.Name});
         end
 
+        function verifyDimLabels(obj)
+            %VERIFYDIMLABELS Verify that dimension label properties are consistent with Data.
+            dataNames = obj.getDataNames();
+            labelNames = obj.getDimLabelNames();
+            data = obj.(dataNames(1));
+            for ii = 1:numel(labelNames)
+                names = labelNames{ii};
+                for jj = 1:numel(names)
+                    name = names(jj);
+                    assert(height(obj.(name))==size(data, ii), ...
+                        "Property '%s' height does not match dimension %d of Data.", ...
+                        name, ii);
+                end
+            end
+        end
+
         function s = processSubstruct(obj, s)
             %PROCESSSUBSTRUCT Process subscript structure before subsref/subsasgn.
             %
@@ -610,19 +614,21 @@ classdef (Abstract) ArrayBase
                 idcDims{2} = ':';
                 idcDims = idcDims(1:2);
             end
-            sz = size(obj.getData());
             dataNames = obj.getDataNames();
             n = numel(dataNames);
-            datas = cell(n, 1);
-            [datas{:}] = obj.getData();
             if isempty(varargin)
-                datas = cellfun(@(x) subsref(x, substruct('()', idcDims)), datas, UniformOutput=false);
-                obj = obj.setData(datas{:});
+                for ii = 1:n
+                    name = dataNames(ii);
+                    p = obj.(name);
+                    sz = size(p);
+                    obj.(name) = subsref(p, substruct('()', idcDims));
+                end
             else
                 objNew = varargin{1};
                 for ii = 1:n
                     name = dataNames(ii);
                     p = obj.(name);
+                    sz = size(p);
                     if isequal(objNew, [])
                         p = subsasgn(p, substruct('()', idcDims), []);
                     else
@@ -663,13 +669,11 @@ classdef (Abstract) ArrayBase
                         clear p
                     end
                     if isempty(varargin)
-                        obj.(name) = p(idx, :, :, :, :);
+                        obj.(name) = subsref(p, substruct('()', {idx, ':', ':', ':', ':'}));
                     elseif isequal(objNew, [])
-                        p(idx, :, :, :, :) = [];
-                        obj.(name) = p;
+                        obj.(name) = subsasgn(p, substruct('()', {idx, ':', ':', ':', ':'}), []);
                     else
-                        p(idx, :, :, :, :) = objNew.(name);
-                        obj.(name) = p;
+                        obj.(name) = subsasgn(p, substruct('()', {idx, ':', ':', ':', ':'}), objNew.(name));
                     end
                 end
             end

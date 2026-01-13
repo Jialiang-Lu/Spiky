@@ -75,13 +75,13 @@ classdef MinosInfo
             input = spiky.minos.Data(fullfile(fdir, "Input.bin"));
             experimenterInput = spiky.minos.Data(fullfile(fdir, "ExperimenterInput.bin"));
             reward = spiky.minos.Data(fullfile(fdir, "Reward.bin"));
-
+            %%
             obj = spiky.minos.MinosInfo();
             obj.Session = info.Session;
             obj.Vars = log.getParameters(sync.Inv);
             obj.Paradigms = pars;
             obj.Sync = spiky.ephys.EventGroup("Stim", ...
-                spiky.ephys.ChannelType.Stim, eventsSync, ...
+                spiky.ephys.ChannelType.Stim, {eventsSync}, ...
                 double(log.Data{[1 end], 1})', sync);
             obj.getScreenCapture(photodiode(idc, :));
             tr = obj.getTransform();
@@ -152,7 +152,7 @@ classdef MinosInfo
             nObjs = height(objs);
             pb = spiky.plot.ProgressBar(nObjs, "Calculating transforms", Parallel=true);
             names = strings(nObjs, 1);
-            ids = int32.zeros(nObjs, 1);
+            ids = zeros(nObjs, 1, "int32");
             tbls = cell(nObjs, 1);
             parfor ii = 1:nObjs
                 idc = idcObj==ii;
@@ -256,7 +256,7 @@ classdef MinosInfo
                     end
                     sc.Path = fpthVideo;
                     sc.Sync = spiky.ephys.EventGroup("Screen", ...
-                        spiky.ephys.ChannelType.Stim, eventsSync, ...
+                        spiky.ephys.ChannelType.Stim, {eventsSync}, ...
                         tFlip([1 end]).*1e7, sync);
                     obj.Session.saveMetaData(sc);
                 catch me

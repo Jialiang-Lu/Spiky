@@ -190,7 +190,7 @@ classdef Intervals < spiky.core.ArrayBase
                 obj spiky.core.Intervals
                 intervals spiky.core.Intervals
             end
-            intervals = spiky.utils.bsxfun(@spiky.core.Intervals.intersect, obj, intervals);
+            intervals = spiky.core.Intervals.intersect(obj, intervals);
         end
 
         function intervals = intersectWith(obj, intervals)
@@ -210,7 +210,7 @@ classdef Intervals < spiky.core.ArrayBase
                 obj spiky.core.Intervals
                 intervals spiky.core.Intervals
             end
-            intervals = spiky.utils.bsxfun(@spiky.core.Intervals.union, obj, intervals);
+            intervals = spiky.core.Intervals.union(obj, intervals);
         end
 
         function intervals = subtract(obj, intervals)

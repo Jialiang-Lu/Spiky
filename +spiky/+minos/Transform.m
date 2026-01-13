@@ -42,9 +42,9 @@ classdef Transform < spiky.core.MappableObjArray
             arguments
                 name (:, 1) string = string.empty
                 id (:, 1) int32 = int32.empty
-                data (:, 1) cell = {} % cell array of spiky.core.IntervalsTable
+                data (:, 1) cell = {} % cell array of spiky.core.EventsTable
             end
-            obj@spiky.core.MappableObjArray(data, Class="spiky.core.IntervalsTable");
+            obj@spiky.core.MappableObjArray(data, Class="spiky.core.EventsTable");
             obj.Name = name;
             obj.Id = id;
         end
@@ -67,6 +67,7 @@ classdef Transform < spiky.core.MappableObjArray
             if isempty(obj)
                 return
             end
+            obj = obj.Array{1};
             prds = spiky.core.Intervals.concat(obj.Interval);
             [~, idcTr] = prds.haveEvents(time, CellMode=true);
             idcTr = ~cellfun(@isempty, idcTr);
@@ -82,6 +83,7 @@ classdef Transform < spiky.core.MappableObjArray
         end
 
         function isHuman = get.IsHuman(obj)
+            obj = obj.Array{1};
             isHuman = size(obj.Pos, 3)==12;
         end
 
@@ -113,6 +115,7 @@ classdef Transform < spiky.core.MappableObjArray
         end
 
         function interval = get.Interval(obj)
+            obj = obj.Array{1};
             interval = spiky.core.Intervals([obj.Time(1) obj.Time(end)]);
         end
 
@@ -129,6 +132,7 @@ classdef Transform < spiky.core.MappableObjArray
                 height (1, 1) double
                 width (1, 1) double = NaN
             end
+            obj = obj.Array{1};
             gaze = spiky.minos.EyeData.getGaze(obj.Proj, height, width);
         end
 
@@ -139,6 +143,7 @@ classdef Transform < spiky.core.MappableObjArray
                 bodyPart = "Root"
                 time double = []
             end
+            obj = obj.Array{1};
             if isempty(bodyPart)
                 bodyPart = (1:12)';
             end
@@ -163,6 +168,7 @@ classdef Transform < spiky.core.MappableObjArray
                 bodyPart = "Root"
                 fov double = 60
             end
+            obj = obj.Array{1};
             if isstring(bodyPart)
                 bodyPart = bodyPart(ismember(bodyPart, enumeration("spiky.minos.BodyPart")));
                 bodyPart = double(spiky.minos.BodyPart(bodyPart))+1;
