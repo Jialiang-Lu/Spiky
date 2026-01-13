@@ -83,7 +83,7 @@ classdef ChannelGroup < spiky.core.MappableArray & spiky.core.Array
 
     methods (Access = protected)
         function key = getKey(obj)
-            key = obj.Name;
+            key = obj.Data.Name;
         end
     end
 end

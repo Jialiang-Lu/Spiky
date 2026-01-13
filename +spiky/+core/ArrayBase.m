@@ -557,7 +557,7 @@ classdef (Abstract) ArrayBase
         function obj = initTable(obj, varargin)
             assert(mod(numel(varargin), 2)==0, ...
                 "Table initialization requires name-value pairs.");
-            names = cell2mat(varargin(1:2:end));
+            names = horzcat(varargin{1:2:end});
             values = varargin(2:2:end);
             n = max(cellfun(@(x) size(x, 1), values));
             if n==0
@@ -636,7 +636,8 @@ classdef (Abstract) ArrayBase
                             continue
                         end
                         pNew = objNew.(name);
-                        if ~any(size(p)) && isa(pNew, "spiky.core.ArrayBase")
+                        if ~any(size(p)) && ...
+                                (isa(pNew, "spiky.core.ArrayBase") || istable(pNew))
                             p = feval(class(pNew));
                         end
                         p = subsasgn(p, substruct('()', idcDims), pNew);

@@ -274,7 +274,7 @@ classdef SessionInfo
             
             defaultColors = ["#ffeb3b", "#aeea00", "#00e5ff", "#d1c4e9"];
             defaultAdcColor = "#ff0000";
-            nGroups = length(obj.ChannelGroups);
+            nGroups = height(obj.ChannelGroups);
             colors = strings(nGroups, 1);
             for ii = 1:nGroups
                 chType = obj.ChannelGroups(ii).ChannelType;
