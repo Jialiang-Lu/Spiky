@@ -12,7 +12,7 @@ classdef PassiveFixation < spiky.par.Paradigm
                 minos spiky.minos.MinosInfo
             end
             obj@spiky.par.Paradigm(minos, "PassiveFixation");
-            stimulusSets = cell2mat(obj.Vars.StimulusSets.get(0));
+            stimulusSets = obj.Vars.StimulusSets.get(0);
             stimulusSets = unique(extractBefore(stimulusSets, " ("|textBoundary("end")));
             obj.Stimuli = struct();
             for ii = 1:length(stimulusSets)

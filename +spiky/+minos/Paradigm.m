@@ -180,7 +180,7 @@ classdef Paradigm < spiky.core.MappableArray
             end
             intervals = spiky.core.Intervals.intersect(prds{:});
             [~, idc1] = intervals.haveEvents(obj.Trials.Time);
-            trials = obj.Trials(idc1, :);
+            trials = obj.Trials{1}(idc1, :);
         end
     end
 

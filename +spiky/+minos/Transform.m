@@ -83,8 +83,7 @@ classdef Transform < spiky.core.MappableObjArray
         end
 
         function isHuman = get.IsHuman(obj)
-            obj = obj.Array{1};
-            isHuman = size(obj.Pos, 3)==12;
+            isHuman = cellfun(@(x) size(x.Pos, 3)==12, obj.Array);
         end
 
         function pos = getPos(obj, bodyPart, time)

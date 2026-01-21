@@ -23,58 +23,18 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
     end
 
     methods
-        function obj = TrigSpikes(spikes, events, window)
+        function obj = TrigSpikes(events, data, window, neuron)
             %TRIGSPIKES Create a new instance of TrigSpikes
-            %
-            %   TrigSpikes(spikes, events, window) creates a new instance of TrigSpikes
-            %   spikes: spiky.core.Spikes object
-            %   events: event times
-            %   window: window around events, e.g. [-before after], if scalar, it is interpreted as
-            %       [0 window]
 
             arguments
-                spikes spiky.core.Spikes = spiky.core.Spikes
-                events = [] % (n, 1) double or spiky.core.Events
-                window double = [0, 1]
+                events (:, 1) double
+                data cell = cell(height(events), 0)
+                window (:, 2) double = double.empty(0, 2)
+                neuron spiky.core.Neuron = spiky.core.Neuron.empty
             end
-            if nargin==0 || isempty(spikes)
-                return
-            end
-            if isscalar(window)
-                window = [0 window];
-            end
-            if isa(events, "spiky.core.Events")
-                events = events.Time;
-                prds = [events+window(1), events+window(end)];
-            elseif isa(events, "spiky.core.Intervals")
-                prds = events.Time;
-                events = events.Start;
-                window = prds;
-            elseif isnumeric(events)
-                if width(events)==2
-                    prds = events;
-                    events = events(:, 1);
-                    window = prds;
-                elseif isvector(events)
-                    events = events(:);
-                    prds = [events+window(1), events+window(end)];
-                else
-                    error("Events must be a vector or a 2-column matrix");
-                end
-            end
-            nNeurons = numel(spikes);
-            if nNeurons==1
-                s = spikes.inIntervals(prds, CellMode=true, Offset=window(1));
-            else
-                s = cell(length(events), nNeurons);
-                for ii = 1:nNeurons
-                    s(:, ii) = spikes(ii).inIntervals(prds, CellMode=true, Offset=window(1));
-                end
-            end
-            obj.T_ = events;
+            obj@spiky.trig.Trig(events, data, EventDim=1);
             obj.Window = window;
-            obj.Data = s;
-            obj.Neuron = spikes.Neuron;
+            obj.Neuron = neuron;
         end
 
         function fr = get.Fr(obj)

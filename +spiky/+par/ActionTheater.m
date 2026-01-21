@@ -16,9 +16,9 @@ classdef ActionTheater < spiky.par.Paradigm
             
             obj@spiky.par.Paradigm(minos, "ActionTheater");
             %% Clean up the data and convert indices to names
-            tr = tr([tr.IsHuman]');
-            ti = obj.TrialInfo;
-            trials = obj.Trials;
+            tr = tr(tr.IsHuman);
+            ti = obj.TrialInfo{1};
+            trials = obj.Trials{1};
             ti = ti(ismember(ti.Number, trials.Number), :);
             t1 = ti.Time(1);
             actors = categorical(extractBefore(obj.Vars.Actors.get(t1)', " "));
@@ -26,32 +26,39 @@ classdef ActionTheater < spiky.par.Paradigm
             actions1 = extractBefore(obj.Vars.SingleActions.get(t1)', " ");
             actions2 = extractBefore(obj.Vars.Actions.get(t1)', " ");
             adjs = extractBefore(obj.Vars.Adjs.get(t1)', " ");
-            isHuman = (ti.Type~="HumanObject" | ti.Role~="Target") & ...
-                ismember(ti.Role, ["Source" "Target" "Spawn" "Kill"]);
-            isHumanRole = (ti.Type~="HumanObject" | ti.Role~="Target") & ...
-                ismember(ti.Role, ["Source" "Target"]);
-            isSpawn = ti.Role=="Spawn";
-            isKill = ti.Role=="Kill";
-            isObject = ti.Type=="HumanObject" & ti.Role=="Target";
-            isAction = ti.Role=="Action";
-            isDoubleAction = ismember(ti.Type, ["HumanHuman" "HumanHumanObject"]);
-            tiActor = strings(height(ti), 1);
-            tiActor(isHuman) = actors(ti.Actor(isHuman)+1);
-            tiActor(isObject) = targets(ti.Actor(isObject)+1);
-            tiAction = strings(height(ti), 1);
-            tiAction(ti.Type=="HumanHuman") = actions2(ti.Action(ti.Type=="HumanHuman")+1);
-            tiAction(ti.Type=="HumanObject") = actions1(ti.Action(ti.Type=="HumanObject")+1);
-            tiAdj = strings(height(ti), 1);
-            tiAdj(~isAction) = adjs(ti.Adj(~isAction)+1);
-            try
-                actions3 = extractBefore(obj.Vars.IndirectActions.get(t1)', " ");
-                tiAction(ti.Type=="HumanHumanObject") = actions3(ti.Action(ti.Type=="HumanHumanObject")+1);
-            catch
+            %%
+            isOldVersion = ismember("Type", ti.VarNames);
+            if isOldVersion
+                %% Old version
+                isHuman = (ti.Type~="HumanObject" | ti.Role~="Target") & ...
+                    ismember(ti.Role, ["Source" "Target" "Spawn" "Kill"]);
+                isHumanRole = (ti.Type~="HumanObject" | ti.Role~="Target") & ...
+                    ismember(ti.Role, ["Source" "Target"]);
+                isSpawn = ti.Role=="Spawn";
+                isKill = ti.Role=="Kill";
+                isObject = ti.Type=="HumanObject" & ti.Role=="Target";
+                isAction = ti.Role=="Action";
+                isDoubleAction = ismember(ti.Type, ["HumanHuman" "HumanHumanObject"]);
+                tiActor = strings(height(ti), 1);
+                tiActor(isHuman) = actors(ti.Actor(isHuman)+1);
+                tiActor(isObject) = targets(ti.Actor(isObject)+1);
+                tiAction = strings(height(ti), 1);
+                tiAction(ti.Type=="HumanHuman") = actions2(ti.Action(ti.Type=="HumanHuman")+1);
+                tiAction(ti.Type=="HumanObject") = actions1(ti.Action(ti.Type=="HumanObject")+1);
+                tiAdj = strings(height(ti), 1);
+                tiAdj(~isAction) = adjs(ti.Adj(~isAction)+1);
+                try
+                    actions3 = extractBefore(obj.Vars.IndirectActions.get(t1)', " ");
+                    tiAction(ti.Type=="HumanHumanObject") = actions3(ti.Action(ti.Type=="HumanHumanObject")+1);
+                catch
+                end
+                ti.Actor = categorical(tiActor);
+                ti.Action = categorical(tiAction);
+                ti.Adj = categorical(tiAdj);
+                ti.Data.Proj = spiky.minos.EyeData.getViewport(ti.Pos, 60);
+            else
+                %% New version
             end
-            ti.Actor = categorical(tiActor);
-            ti.Action = categorical(tiAction);
-            ti.Adj = categorical(tiAdj);
-            ti.Data.Proj = spiky.minos.EyeData.getViewport(ti.Pos, 60);
             %% Visibility of each entity
             vis = {tr.Visible}';
             idcVis = find(cellfun(@any, vis));

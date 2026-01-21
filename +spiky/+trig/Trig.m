@@ -33,19 +33,20 @@ classdef Trig < spiky.core.EventsTable
     end
 
     methods
-        function obj = Trig(time, data, events, groups)
+        function obj = Trig(time, data, events, groups, options)
             arguments
                 time double = []
                 data = []
                 events (:, 1) = NaN(width(data), 1)
                 groups (:, 1) = NaN(size(data, 3), 1)
+                options.EventDim (1, 1) double = 2
             end
             if isempty(time) && isempty(data)
                 return
             end
             obj.Time = time;
             obj.Data = data;
-            obj.EventDim = 2;
+            obj.EventDim = options.EventDim;
             obj.Events_ = events;
             obj.Groups = groups;
         end

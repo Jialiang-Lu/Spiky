@@ -192,10 +192,10 @@ classdef EyeData
                 dataRaw.LeftGaze(idcLeftClosed, :) = NaN("single");
                 dataRaw.RightGaze(idcRightClosed, :) = NaN("single");
                 dataRaw.Convergence(idcLeftClosed&idcRightClosed, :) = NaN("single");
-                dataRaw.Data.Proj = spiky.minos.EyeData.getViewport(dataRaw.Convergence, fov);
                 data = dataRaw;
                 t = data.Time;
             end
+            data.Data.Proj = spiky.minos.EyeData.getViewport(data.Convergence, fov);
             %% Get eye events
             fprintf("Loading eye events\n");
             events = spiky.minos.Data(fullfile(fdir, "EyeLinkEvent.bin"));
@@ -213,7 +213,7 @@ classdef EyeData
                 %% Find fixation targets
                 if ~isempty(transform)
                     fprintf("Finding fixation targets\n");
-                    transform = transform([transform.IsHuman]);
+                    transform = transform(transform.IsHuman);
                     nFixations = height(fixations.Time);
                     nTr = numel(transform);
                     gaze = data.Convergence;

@@ -72,7 +72,7 @@ classdef Session < spiky.core.ArrayBase
             end
         end
 
-        function [spikes, units] = getSpikes(obj, options)
+        function spikes = getSpikes(obj, options)
             %GETSPIKES Get the spikes of the session.
             %   [spikes, units] = getSpikes(obj, ...)
             %
@@ -86,13 +86,9 @@ classdef Session < spiky.core.ArrayBase
             end
             spikes = obj.loadData("spiky.ephys.SpikeInfo.mat");
             spikes = spikes.Spikes;
-            units = spikes.Neuron;
-            for ii = 1:height(spikes)
-                spikes(ii).Neuron.Waveform{1} = []; % clear waveform to save memory
-            end
             if options.ConvertRegionNames
                 map = spiky.config.loadConfig("brainRegionMap");
-                [regions, ~, idcRegions] = unique(units.Region);
+                [regions, ~, idcRegions] = unique(spikes.Neuron.Region);
                 regions = string(regions);
                 regions = replace(regions, lineBoundary("start")+"l"|"r", "");
                 names = string(fieldnames(map));
@@ -100,15 +96,11 @@ classdef Session < spiky.core.ArrayBase
                     regions = replace(regions, names(ii), map.(names(ii)));
                 end
                 regions = categorical(regions);
-                units.Region = regions(idcRegions);
-                for ii = 1:height(spikes)
-                    spikes(ii).Neuron.Region = units.Region(ii);
-                end
+                spikes.Neuron.Region = regions(idcRegions);
             end
             if ~isempty(options.RegionSubset)
-                idcKeep = ismember(units.Region, options.RegionSubset);
+                idcKeep = ismember(spikes.Neuron.Region, options.RegionSubset);
                 spikes = spikes(idcKeep, :);
-                units = units(idcKeep, :);
             end
         end
 
@@ -137,6 +129,13 @@ classdef Session < spiky.core.ArrayBase
             end
             
             %% Load configuration
+            fpthInfo = obj.getFpth("info.yaml");
+            if exist(fpthInfo, "file")
+                infoYaml = fileread(fpthInfo);
+                infoStruct = spiky.utils.yaml.load(infoYaml);
+                options.BrainRegions = string(infoStruct.BrainRegions)';
+                options.Probe = infoStruct.Probe;
+            end
             if ~isa(options.ChannelConfig, "spiky.ephys.ChannelConfig")
                 configs = spiky.config.loadConfig("channelConfig");
                 if isempty(options.ChannelConfig)

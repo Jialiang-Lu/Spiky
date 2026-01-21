@@ -5,6 +5,7 @@ classdef (Abstract) ArrayBase
         IsTable logical % Whether the Data property is a table
         IsCell logical % Whether the Data property is a cell array
         IsStruct logical % Whether the Data property is a struct array
+        VarNames string % Variable names of the Data table, if applicable
     end
 
     methods (Static, Abstract)
@@ -296,6 +297,11 @@ classdef (Abstract) ArrayBase
             end
         end
 
+        function l = length(obj)
+            sz = size(obj);
+            l = max(sz);
+        end
+
         function obj = horzcat(varargin)
             obj = cat(2, varargin{:});
         end
@@ -365,8 +371,12 @@ classdef (Abstract) ArrayBase
             end
         end
 
+        function names = get.VarNames(obj)
+            names = obj.getVarNames();
+        end
+
         function varargout = subsref(obj, s)
-            if isempty(obj)
+            if isequal(obj, [])
                 [varargout{1:nargout}] = builtin("subsref", obj, s);
                 return
             end
@@ -384,8 +394,13 @@ classdef (Abstract) ArrayBase
                         [varargout{1:nargout}] = obj.subIndexData(s(1).subs);
                         return
                     end
-                    data = obj.subIndexData(s(1).subs);
-                    [varargout{1:nargout}] = subsref(data, s(2:end));
+                    [varargout{1:nargout}] = obj.subIndexData(s(1).subs);
+                    if nargout==1
+                        varargout{1} = subsref(varargout{1}, s(2:end));
+                    else
+                        varargout = cellfun(@(x) subsref(x, s(2:end)), varargout, ...
+                            UniformOutput=false);
+                    end
                 case '.'
                     if obj.isProperty(s(1).subs)
                         if isscalar(s)
@@ -428,13 +443,11 @@ classdef (Abstract) ArrayBase
                 case '()'
                     if isscalar(s)
                         obj = obj.subIndex(s(1).subs, varargin{:});
-                        obj.verifyDimLabels();
                         return
                     end
                     objNew = obj.subIndex(s(1).subs);
                     objNew = subsasgn(objNew, s(2:end), varargin{:});
                     obj = obj.subIndex(s(1).subs, objNew);
-                    obj.verifyDimLabels();
                 case '{}'
                     if isscalar(s)
                         obj = obj.subIndexData(s(1).subs, varargin{:});
@@ -443,11 +456,15 @@ classdef (Abstract) ArrayBase
                     data = obj.subIndexData(s(1).subs);
                     data = subsasgn(data, s(2:end), varargin{:});
                     obj = obj.subIndexData(s(1).subs, data);
-                    obj.verifyDimLabels();
                 case '.'
                     if obj.isProperty(s(1).subs)
-                        obj = builtin("subsasgn", obj, s, varargin{:});
-                        obj.verifyDimLabels();
+                        if isscalar(s)
+                            obj = builtin("subsasgn", obj, s, varargin{:});
+                            return
+                        end
+                        obj1 = builtin("subsref", obj, s(1));
+                        obj1 = subsasgn(obj1, s(2:end), varargin{:});
+                        obj = subsasgn(obj, s(1), obj1);
                         return
                     end
                     data = obj.getData().(s(1).subs);
@@ -459,7 +476,6 @@ classdef (Abstract) ArrayBase
                     data1 = obj.getData();
                     data1.(s(1).subs) = data;
                     obj = obj.setData(data1);
-                    obj.verifyDimLabels();
                 otherwise
                     error("Unsupported subscript type '%s'.", s(1).type);
             end
@@ -478,15 +494,22 @@ classdef (Abstract) ArrayBase
                     obj = subsref(obj, s(1));
                     n = numArgumentsFromSubscript(obj, s(2:end), indexingContext);
                 case '{}'
-                    if obj.IsCell || obj.IsTable
-                        n = numArgumentsFromSubscript(obj.getData(), s, indexingContext);
-                    elseif ~isscalar(s)
-                        data = obj.getData();
-                        data = data(s(1).subs{:});
-                        n = numArgumentsFromSubscript(data, s(2:end), indexingContext);
-                    else
-                        n = 1;
+                    data = obj.getData();
+                    if ~iscell(data) && ~istable(data)
+                        s(1).type = '()';
                     end
+                    n = numArgumentsFromSubscript(data, s(1), indexingContext);
+                    if isscalar(s)
+                        return
+                    end
+                    if iscell(data) && n>1 && numel(s)==2 && strcmp(s(2).type, '.')
+                        return
+                    end
+                    assert(n==1, "Intermediate brace '{}' indexing produced a comma-separated " + ...
+                        "list with %d values, but it must produce a single value when followed by " + ...
+                        "subsequent indexing operations.", n)
+                    data = subsref(data, s(1));
+                    n = numArgumentsFromSubscript(data, s(2:end), indexingContext);
                 case '.'
                     if isscalar(s)
                         if ~strcmp(s.subs, "getData")
@@ -522,13 +545,33 @@ classdef (Abstract) ArrayBase
 
     methods (Access=protected)
         function tf = isProperty(obj, name)
-            meta = metaclass(obj);
-            tf = ismember(name, {meta.PropertyList.Name});
+            persistent propertyDict
+            if isempty(propertyDict)
+                propertyDict = configureDictionary("string", "cell");
+            end
+            if ~propertyDict.isKey(class(obj))
+                meta = metaclass(obj);
+                p = string({meta.PropertyList.Name});
+                propertyDict{class(obj)} = p;
+            else
+                p = propertyDict{class(obj)};
+            end
+            tf = ismember(name, p);
         end
 
         function tf = isMethod(obj, name)
-            meta = metaclass(obj);
-            tf = ismember(name, {meta.MethodList.Name});
+            persistent methodDict
+            if isempty(methodDict)
+                methodDict = configureDictionary("string", "cell");
+            end
+            if ~methodDict.isKey(class(obj))
+                meta = metaclass(obj);
+                m = string({meta.MethodList.Name});
+                methodDict{class(obj)} = m;
+            else
+                m = methodDict{class(obj)};
+            end
+            tf = ismember(name, m);
         end
 
         function verifyDimLabels(obj)
@@ -540,9 +583,11 @@ classdef (Abstract) ArrayBase
                 names = labelNames{ii};
                 for jj = 1:numel(names)
                     name = names(jj);
-                    assert(height(obj.(name))==size(data, ii), ...
-                        "Property '%s' height does not match dimension %d of Data.", ...
-                        name, ii);
+                    if height(obj.(name))>1 && size(data, ii)>1
+                        assert(height(obj.(name))==size(data, ii), ...
+                            "Property '%s' height does not match dimension %d of Data.", ...
+                            name, ii);
+                    end
                 end
             end
         end
@@ -600,6 +645,16 @@ classdef (Abstract) ArrayBase
                 obj.(dataNames(ii)) = varargin{ii};
             end
         end
+        
+        function names = getVarNames(obj)
+            %GETVARNAMES Get variable names of the Data table, if applicable.
+            if obj.IsTable
+                data = obj.getData();
+                names = string(data.Properties.VariableNames);
+            else
+                names = string.empty;
+            end
+        end
 
         function obj = subIndex(obj, idcDims, varargin)
             %SUBINDEX performs indexing on the Data field and the dimension label properties.
@@ -648,7 +703,7 @@ classdef (Abstract) ArrayBase
             labelNames = obj.getDimLabelNames();
             nDims = numel(sz);
             nLabels = numel(labelNames);
-            if isscalar(idcDims) && nDims>1
+            if isscalar(idcDims) && sum(sz>1)>1
                 % Linear indexing into multi-dimensional array
                 idx = idcDims{1};
                 [idcDims{1:nDims}] = ind2sub(sz, idx);

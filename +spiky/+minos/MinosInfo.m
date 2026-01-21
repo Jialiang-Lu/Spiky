@@ -85,7 +85,7 @@ classdef MinosInfo
                 double(log.Data{[1 end], 1})', sync);
             obj.getScreenCapture(photodiode(idc, :));
             tr = obj.getTransform();
-            if isfield(obj.Paradigms, "FiveDot")
+            if ismember("FiveDot", obj.Paradigms.Name)
                 fiveDot = obj.Paradigms.FiveDot;
             else
                 fiveDot = [];

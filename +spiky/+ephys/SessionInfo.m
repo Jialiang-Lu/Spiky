@@ -441,8 +441,8 @@ classdef SessionInfo
             interval = obj.EventGroups(idxGroup).NSamples;
             interval = interval-400*obj.Fs:interval;
             pb = spiky.plot.ProgressBar(1, "Loading binary for waveforms");
-            raw = obj.loadBinary(obj.ChannelGroups.getGroupIndices(idxGroup), interval, type="dat", ...
-                intervalType="index");
+            raw = obj.loadBinary(obj.ChannelGroups.getGroupIndices(idxGroup), interval, Type="dat", ...
+                IntervalType="index");
             pb.step
             %%
             if isempty(idxGroup)
@@ -456,14 +456,14 @@ classdef SessionInfo
                 if isempty(idc)
                     data.waveform(ii, :) = 0;
                     data.amplitude(ii) = 0;
-                    continue
+                else
+                    idc = idc'-interval(1)+1+idcT;
+                    idc = idc(:);
+                    wav = raw{idc, ch(ii)};
+                    wav = mean(reshape(wav, nT, []), 2);
+                    data.waveform(ii, :) = wav';
+                    data.amplitude(ii) = max(wav)-min(wav);
                 end
-                idc = idc'-interval(1)+1+idcT;
-                idc = idc(:);
-                wav = raw{idc, ch(ii)};
-                wav = mean(reshape(wav, nT, []), 2);
-                data.waveform(ii, :) = wav';
-                data.amplitude(ii) = max(wav)-min(wav);
                 pb.step
             end
     

@@ -67,7 +67,7 @@ classdef Spikes < spiky.core.Array
                     isValid = isValid & propArgs.(names(ii))(obj.Neuron.(names(ii)));
                 end
             end
-            spikes = obj(isValid);
+            spikes = subsref(obj, substruct('()', {isValid}));
             if nargout>1
                 idc = find(isValid);
             end
@@ -85,7 +85,35 @@ classdef Spikes < spiky.core.Array
                 events % (n, 1) double or spiky.core.Events
                 window double = [0 1]
             end
-            trigSpikes = spiky.trig.TrigSpikes(obj, events, window);
+            if isscalar(window)
+                window = [0 window];
+            end
+            if isa(events, "spiky.core.Events")
+                events = events.Time;
+                prds = [events+window(1), events+window(end)];
+            elseif isa(events, "spiky.core.Intervals")
+                prds = events.Time;
+                events = events.Start;
+                window = prds;
+            elseif isnumeric(events)
+                if width(events)==2
+                    prds = events;
+                    events = events(:, 1);
+                    window = prds;
+                elseif isvector(events)
+                    events = events(:);
+                    prds = [events+window(1), events+window(end)];
+                else
+                    error("Events must be a vector or a 2-column matrix");
+                end
+            end
+            prds = spiky.core.Intervals(prds);
+            nNeurons = numel(obj.Data);
+            s = cell(height(events), nNeurons);
+            parfor ii = 1:nNeurons
+                s(:, ii) = prds.haveEvents(obj.Data{ii}, CellMode=true, Offset=window(1));
+            end
+            trigSpikes = spiky.trig.TrigSpikes(events, s, window, obj.Neuron);
         end
 
         function fr = fr(obj, events, window, options)

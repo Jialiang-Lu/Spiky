@@ -26,7 +26,6 @@ classdef Array < spiky.core.ArrayBase
                 data = []
             end
             obj = obj.setData(data);
-            obj.verifyDimLabels();
         end
     end
 end

@@ -87,5 +87,21 @@ classdef ObjArray < spiky.core.ArrayBase & matlab.mixin.CustomDisplay & ...
             idx = strfind(s, '</a>');
             s = sprintf('%s (%s)%s', s(1:idx-1), obj.ElementClass, s(idx:end));
         end
+
+        function names = getVarNames(obj)
+            %GETVARNAMES Get variable names of the Data table, if applicable.
+            if isempty(obj.Array) || isempty(obj.Array{1})
+                names = string.empty;
+                return
+            end
+            data = obj.Array{1};
+            if istable(data)
+                names = string(data.Properties.VariableNames);
+            elseif isa(data, "spiky.core.ArrayBase")
+                names = data.getVarNames();
+            else
+                names = string.empty;
+            end
+        end
     end
 end
