@@ -3,7 +3,7 @@ classdef MinosInfo
     properties
         Session spiky.ephys.Session
         Vars spiky.core.Parameter
-        Paradigms spiky.minos.Paradigm
+        Paradigms struct % struct of spiky.minos.Paradigm
         Sync spiky.ephys.EventGroup
         Eye spiky.minos.EyeData
         Player spiky.core.EventsTable
@@ -66,9 +66,10 @@ classdef MinosInfo
             for ii = length(parNames):-1:1
                 intervals = spiky.core.Intervals(parIntervals(...
                     parIntervalsNames==parNames(ii), :));
-                pars(ii, 1) = spiky.minos.Paradigm.load(...
+                par = spiky.minos.Paradigm.load(...
                     fdir+filesep+parNamesSpace(ii), ...
                     intervals, sync.Inv, tPhotodiode);
+                pars.(par.Name) = par;
             end
             player = spiky.minos.Data(fullfile(fdir, "Player.bin"));
             display = spiky.minos.Data(fullfile(fdir, "Display.bin"));
@@ -85,7 +86,7 @@ classdef MinosInfo
                 double(log.Data{[1 end], 1})', sync);
             obj.getScreenCapture(photodiode(idc, :));
             tr = obj.getTransform();
-            if ismember("FiveDot", obj.Paradigms.Name)
+            if isfield(obj.Paradigms, "FiveDot")
                 fiveDot = obj.Paradigms.FiveDot;
             else
                 fiveDot = [];

@@ -268,6 +268,45 @@ classdef (Abstract) ArrayBase
             obj = obj.setData(obj.getData() | obj2);
         end
 
+        function [obj, idc] = sort(obj, varargin)
+            %SORT Sort the data
+            %
+            %   [obj, idc] = sort(obj, varargin)
+            %   varargin: additional arguments passed to sort
+
+            data = obj.getData();
+            [~, idc] = sortrows(data, varargin{:});
+            if ~isempty(varargin) && isnumeric(varargin{1})
+                dim = varargin{1};
+            else
+                dim = 1;
+            end
+            if dim==1
+                obj = subsref(obj, substruct('()', {idc, ':'}));
+            elseif dim==2
+                obj = subsref(obj, substruct('()', {':', idc}));
+            elseif dim==3
+                obj = subsref(obj, substruct('()', {':', ':', idc}));
+            elseif dim==4
+                obj = subsref(obj, substruct('()', {':', ':', ':', idc}));
+            elseif dim==5
+                obj = subsref(obj, substruct('()', {':', ':', ':', ':', idc}));
+            else
+                error("Sorting along dimension %d is not supported.", dim);
+            end
+        end
+
+        function [obj, idc] = sortrows(obj, varargin)
+            %SORTRows Sort the data along the first dimension
+            %
+            %   [obj, idc] = sortrows(obj, varargin)
+            %   varargin: additional arguments passed to sortrows
+
+            data = obj.getData();
+            [~, idc] = sortrows(data, varargin{:});
+            obj = subsref(obj, substruct('()', {idc, ':'}));
+        end
+
         function varargout = size(obj, varargin)
             if isempty(obj)
                 [varargout{1:nargout}] = size(double.empty(0, 1), varargin{:});

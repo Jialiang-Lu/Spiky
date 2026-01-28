@@ -202,7 +202,7 @@ classdef Spikes < spiky.core.Array
                     [prds, idcSort] = prds.sort();
                     idcSort2(idcSort) = 1:numel(idcSort);
                     parfor ii = 1:nNeurons
-                        [~, c] = spiky.mex.findInIntervals(obj{ii}, prds.Time);
+                        [~, c] = spiky.mex.findInIntervals(obj.Data{ii}, prds.Time);
                         c = c(idcSort2)./options.HalfWidth/2;
                         if options.Normalize
                             c = (c-mean(c))./sqrt(mean(c)./options.HalfWidth/2);

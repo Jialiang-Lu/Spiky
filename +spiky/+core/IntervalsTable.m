@@ -40,9 +40,6 @@ classdef IntervalsTable < spiky.core.Intervals & spiky.core.Array
                 intervals (:, 2) double = double.empty(0, 2)
                 data = []
             end
-            if isempty(intervals) && isempty(data)
-                return
-            end
             assert(height(intervals)==height(data), ...
                 "The number of intervals and the number of rows in data must be the same")
             obj.Time = intervals;

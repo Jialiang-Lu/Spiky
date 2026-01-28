@@ -168,7 +168,7 @@ classdef EyeData
                 rightGazeFitted = rightGaze;
                 rightGazeFitted(:, 1) = rightFitX(rightGaze(:, 1:2));
                 rightGazeFitted(:, 2) = rightFitY(rightGaze(:, 1:2));
-                spiky.plot.fig
+                figure
                 scatter(pos(:, 1), pos(:, 2), 60, "g", "*")
                 hold on
                 scatter(leftGazeFitted(:, 1), leftGazeFitted(:, 2), 60, "r", "o")

@@ -340,24 +340,5 @@ classdef Intervals < spiky.core.ArrayBase
                 h = h1;
             end
         end
-
-        function obj = updateFields(obj, s)
-            %Update fields of the object from a struct of older version
-            if isfield(s, "Data")
-                obj.Time = s.Data;
-            end
-        end
-    end
-
-    methods (Access=protected)
-        function data = getData(obj)
-            %GETDATA Get the Data property.
-            data = obj.Time;
-        end
-
-        function obj = setData(obj, data)
-            %SETDATA Set the Data property.
-            obj.Time = data;
-        end
     end
 end

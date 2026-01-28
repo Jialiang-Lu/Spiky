@@ -87,6 +87,8 @@ classdef Transform < spiky.core.MappableObjArray
         end
 
         function pos = getPos(obj, bodyPart, time)
+            %%GETPOS Get the position vector for the specified body part and time
+            %   pos = getPos(obj, bodyPart, time)
             arguments
                 obj spiky.minos.Transform
                 bodyPart = "Root"
@@ -96,6 +98,8 @@ classdef Transform < spiky.core.MappableObjArray
         end
 
         function rot = getRot(obj, bodyPart, time)
+            %%GETROT Get the rotation vector for the specified body part and time
+            %   rot = getRot(obj, bodyPart, time)
             arguments
                 obj spiky.minos.Transform
                 bodyPart = "Root"
@@ -105,6 +109,8 @@ classdef Transform < spiky.core.MappableObjArray
         end
 
         function proj = getProj(obj, bodyPart, time)
+            %%GETPROJ Get the projection vector for the specified body part and time
+            %   proj = getProj(obj, bodyPart, time)
             arguments
                 obj spiky.minos.Transform
                 bodyPart = "Root"
@@ -114,8 +120,9 @@ classdef Transform < spiky.core.MappableObjArray
         end
 
         function interval = get.Interval(obj)
-            obj = obj.Array{1};
-            interval = spiky.core.Intervals([obj.Time(1) obj.Time(end)]);
+            intervals = cellfun(@(x) spiky.core.Intervals([x.Time(1) x.Time(end)]), ...
+                obj.Array, UniformOutput=false);
+            interval = cell2mat(intervals);
         end
 
         function gaze = getViewGaze(obj, height, width)
@@ -127,7 +134,7 @@ classdef Transform < spiky.core.MappableObjArray
             %
             %   gaze: gaze direction vector (Nx3 matrix)
             arguments
-                obj spiky.minos.Transform
+                obj (1, 1) spiky.minos.Transform
                 height (1, 1) double
                 width (1, 1) double = NaN
             end
@@ -142,22 +149,21 @@ classdef Transform < spiky.core.MappableObjArray
                 bodyPart = "Root"
                 time double = []
             end
-            obj = obj.Array{1};
-            if isempty(bodyPart)
-                bodyPart = (1:12)';
-            end
-            bodyPart = bodyPart(:);
-            vec = obj.(vecName);
-            if isstring(bodyPart)
-                bodyPart = bodyPart(ismember(bodyPart, enumeration("spiky.minos.BodyPart")));
-                bodyPart = double(spiky.minos.BodyPart(bodyPart))+1;
-            end
-            if isempty(time)
-                vec = vec(:, :, bodyPart);
+            array = obj.Array;
+            if ~isscalar(array)
+                vecs = cell(numel(array), 1);
+                if ~isscalar(time)
+                    assert(numel(array)==numel(time), ...
+                        "If time is not a scalar, the number of elements in time must match the number of Transforms.");
+                else
+                    time = ones(numel(array), 1)*time;
+                end
+                parfor ii = 1:numel(array)
+                    vecs{ii} = spiky.minos.Transform.getVecHelper(array{ii}, vecName, bodyPart, time(ii));
+                end
+                vec = cell2mat(vecs);
             else
-                idc = interp1(obj.Time, 1:numel(obj.Time), time, "previous", "extrap");
-                idc(idc<1) = 1;
-                vec = vec(idc, :, bodyPart);
+                vec = spiky.minos.Transform.getVecHelper(array{1}, vecName, bodyPart, time);
             end
         end
 
@@ -203,6 +209,33 @@ classdef Transform < spiky.core.MappableObjArray
                 spiky.minos.EyeData.getGaze(proj(idcSort, :), fov), ...
                 VariableNames=["Index" "TimeIndex" "Trial" "Pos" "Rot" "Proj" "Ray"]);
             pt = spiky.core.IntervalsTable(t(idcSort, :), data);
+        end
+    end
+
+    methods (Static, Hidden)
+        function vec = getVecHelper(tbl, vecName, bodyPart, time)
+            arguments
+                tbl spiky.core.EventsTable
+                vecName string {mustBeMember(vecName, ["Pos" "Rot" "Proj"])}
+                bodyPart = "Root"
+                time double = []
+            end
+            if isempty(bodyPart)
+                bodyPart = (1:12)';
+            end
+            bodyPart = bodyPart(:);
+            vec = tbl.(vecName);
+            if isstring(bodyPart)
+                bodyPart = bodyPart(ismember(bodyPart, enumeration("spiky.minos.BodyPart")));
+                bodyPart = double(spiky.minos.BodyPart(bodyPart))+1;
+            end
+            if isempty(time)
+                vec = vec(:, :, bodyPart);
+            else
+                idc = interp1(tbl.Time, 1:numel(tbl.Time), time, "previous", "extrap");
+                vec = vec(idc, :, bodyPart);
+                vec(time<tbl.Time(1) | time>tbl.Time(end), :, :) = NaN("single");
+            end
         end
     end
 

@@ -48,7 +48,7 @@ classdef Zeta < spiky.stat.GroupedStat
             peakFr = cell(1, n);
             pb = spiky.plot.ProgressBar(n, "Performing Zeta test", Parallel=true);
             parfor ii = 1:n
-                [p1, s1, s2, s3] = spiky.utils.zetatest.zetatest(spikes(ii).Time, events, window, ...
+                [p1, s1, s2, s3] = spiky.utils.zetatest.zetatest(spikes{ii}, events, window, ...
                     nResample);
                 if ~isempty(s2)
                     p{ii} = p1;

@@ -11,27 +11,17 @@ classdef SceneNode < spiky.core.IntervalsTable & matlab.mixin.CustomCompactDispl
             %
             %   obj: SceneNode object with uniform data
             arguments
-                n (1, 1) double {mustBePositive}
-                name string = ""
-                type string = ""
+                n (1, 1) double = 0
+                name categorical = categorical(strings(n, 1))
+                type categorical = categorical(strings(n, 1))
             end
             
             intervals = NaN(n, 2);
-            name = repmat(categorical(name), n, 1);
-            type = repmat(categorical(type), n, 1);
             id = zeros(n, 1, "int32");
             pos = NaN(n, 3, "single");
             rot = NaN(n, 3, "single");
             proj = NaN(n, 3, "single");
             obj = spiky.scene.SceneNode(intervals, name, type, id, pos, rot, proj);
-        end
-
-        function b = isScalarRow()
-            %ISSCALARROW if each row contains heterogeneous data and should be treated as a scalar
-            %   This is useful if the Data is a table or a cell array and the number of columns is fixed.
-            %
-            %   b: true if each row is a scalar, false otherwise
-            b = true;
         end
     end
 
@@ -57,7 +47,7 @@ classdef SceneNode < spiky.core.IntervalsTable & matlab.mixin.CustomCompactDispl
             end
             
             n = height(intervals);
-            if n>1
+            if n~=1
                 if isscalar(name)
                     name = repmat(name, n, 1);
                 end

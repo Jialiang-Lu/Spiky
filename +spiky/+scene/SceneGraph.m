@@ -58,18 +58,17 @@ classdef SceneGraph < spiky.core.IntervalsTable
             obj.Time = intervals;
             obj.Data = table(subject, predicate, object, directObject, ...
                 VariableNames=["Subject", "Predicate", "Object", "DirectObject"]);
-            obj.Entities = unique([subject{~ismissing(subject), ["Name" "Type"]};
-                object{~ismissing(predicate)&~ismissing(object), ["Name" "Type"]};
-                directObject{~ismissing(directObject), ["Name" "Type"]}], "rows");
-            obj.Attributes = unique(object{ismissing(predicate) & ~ismissing(object), ...
-                ["Name" "Type"]}, "rows");
-            obj.Predicates = unique(predicate{~ismissing(predicate), ["Name" "Type"]}, "rows");
+            obj.Entities = unique([subject.Data(~ismissing(subject), ["Name" "Type"]);
+                object.Data(~ismissing(predicate)&~ismissing(object), ["Name" "Type"]);
+                directObject.Data(~ismissing(directObject), ["Name" "Type"])], "rows");
+            obj.Attributes = unique(object.Data(ismissing(predicate) & ~ismissing(object), ...
+                ["Name" "Type"]), "rows");
+            obj.Predicates = unique(predicate.Data(~ismissing(predicate), ["Name" "Type"]), "rows");
         end
 
         function b = get.IsVisibility(obj)
             b = ~ismissing(obj.Data.Subject) & ...
-                ismissing(obj.Data.Predicate) & ...
-                ismissing(obj.Data.Object);
+                ismissing(obj.Data.Predicate);
         end
 
         function b = get.IsAttribute(obj)
@@ -82,23 +81,18 @@ classdef SceneGraph < spiky.core.IntervalsTable
         function b = get.IsVerb(obj)
             %ISVERB if the rows represent verbs in the scene graph
             b = ~ismissing(obj.Data.Subject) & ...
-                ~ismissing(obj.Data.Predicate);
+                ~ismissing(obj.Data.Predicate) & ...
+                obj.Data.Predicate.Type=="Verb";
         end
 
         function b = get.IsDirectVerb(obj)
             %ISDIRECTVERB if the rows represent direct verbs in the scene graph
-            b = ~ismissing(obj.Data.Subject) & ...
-                ~ismissing(obj.Data.Predicate) & ...
-                ~ismissing(obj.Data.Object) & ...
-                ismissing(obj.Data.DirectObject);
+            b = obj.IsVerb & ismissing(obj.Data.DirectObject);
         end
 
         function b = get.IsIndirectVerb(obj)
             %ISINDIRECTVERB if the rows represent indirect verbs in the scene graph
-            b = ~ismissing(obj.Data.Subject) & ...
-                ~ismissing(obj.Data.Predicate) & ...
-                ~ismissing(obj.Data.Object) & ...
-                ~ismissing(obj.Data.DirectObject);
+            b = obj.IsVerb & ~ismissing(obj.Data.DirectObject);
         end
 
         function tt = getCounts(obj, t)
@@ -132,8 +126,9 @@ classdef SceneGraph < spiky.core.IntervalsTable
         function tt = getTransitions(obj)
             %GETTRANSITIONS Get the transitions of humans in the scene graph
             %   tt = getTransitions(obj)
-            data = obj.Data(obj.IsVisibility, :);
-            per = obj.Time(obj.IsVisibility, :);
+            idc = obj.IsVisibility & obj.Data.Subject.Type=="Humanoid";
+            data = obj.Data(idc, :);
+            per = obj.Time(idc, :);
             [names, ~, idcName] = unique(data.Subject.Name);
             nHumans = numel(names);
             n = height(per);
@@ -146,7 +141,7 @@ classdef SceneGraph < spiky.core.IntervalsTable
             [t, idcT] = sort(t);
             changes = changes(idcT, :);
             newFlags = cumsum(changes, 1);
-            oldFlags = newFlags - changes;
+            oldFlags = newFlags-changes;
             isAdd = sum(changes, 2)>0;
             oldCounts = sum(oldFlags, 2);
             newCounts = sum(newFlags, 2);
@@ -171,7 +166,7 @@ classdef SceneGraph < spiky.core.IntervalsTable
         function obj = getActions(obj)
             %GETACTIONS Get the actions (direct and indirect verbs) in the scene graph
             %   obj = getActions(obj)
-            idc = obj.IsDirectVerb | obj.IsIndirectVerb;
+            idc = obj.IsVerb & ~ismember(obj.Data.Predicate.Name, ["Idle" "Walk"]);
             obj.Data = obj.Data(idc, :);
             obj.Time = obj.Time(idc, :);
             obj.Data.SubjectLeft = obj.Data.Subject.Pos(:, 1)<obj.Data.Object.Pos(:, 1);
