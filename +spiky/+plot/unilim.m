@@ -15,7 +15,7 @@ if isempty(targets)
     targets = findall(gcf, "Type", "Axes");
 end
 if ax=="all"
-    ax = "xyz";
+    ax = "xyzc";
 end
 if contains(ax, "x", IgnoreCase=true)
     updatelim(targets, "XLim");
@@ -25,6 +25,9 @@ if contains(ax, "y", IgnoreCase=true)
 end
 if contains(ax, "z", IgnoreCase=true)
     updatelim(targets, "ZLim");
+end
+if contains(ax, "c", IgnoreCase=true)
+    updatelim(targets, "CLim");
 end
 end
 

@@ -50,7 +50,7 @@ classdef (Abstract) ArrayBase
             %   varargin: additional arguments passed to sum
 
             data = sum(obj.getData(), varargin{:});
-            obj = spiky.core.Array.resize(obj, size(data));
+            obj = obj.resize(size(data));
             obj = obj.setData(data);
         end
 
@@ -64,7 +64,7 @@ classdef (Abstract) ArrayBase
                 varargin = {"all"};
             end
             data = max(obj.getData(), [], varargin{:});
-            obj = spiky.core.Array.resize(obj, size(data));
+            obj = obj.resize(size(data));
             obj = obj.setData(data);
         end
 
@@ -78,7 +78,7 @@ classdef (Abstract) ArrayBase
                 varargin = {"all"};
             end
             data = min(obj.getData(), [], varargin{:});
-            obj = spiky.core.Array.resize(obj, size(data));
+            obj = obj.resize(size(data));
             obj = obj.setData(data);
         end
 
@@ -89,7 +89,7 @@ classdef (Abstract) ArrayBase
             %   varargin: additional arguments passed to mean
 
             data = mean(obj.getData(), varargin{:});
-            obj = spiky.core.Array.resize(obj, size(data));
+            obj = obj.resize(size(data));
             obj = obj.setData(data);
         end
 
@@ -100,7 +100,7 @@ classdef (Abstract) ArrayBase
             %   varargin: additional arguments passed to median
 
             data = median(obj.getData(), varargin{:});
-            obj = spiky.core.Array.resize(obj, size(data));
+            obj = obj.resize(size(data));
             obj = obj.setData(data);
         end
 
@@ -386,7 +386,7 @@ classdef (Abstract) ArrayBase
                 n = 1; % For internal use, report numel as 1 to display as a single object
                 return
             end
-            n = numel(obj.getData());
+            n = prod(size(obj));
         end
 
         function tf = get.IsTable(obj)
@@ -429,11 +429,10 @@ classdef (Abstract) ArrayBase
                     end
                     [varargout{1:nargout}] = subsref(obj, s(2:end));
                 case '{}'
+                    [varargout{1:nargout}] = obj.subIndexData(s(1).subs);
                     if isscalar(s)
-                        [varargout{1:nargout}] = obj.subIndexData(s(1).subs);
                         return
                     end
-                    [varargout{1:nargout}] = obj.subIndexData(s(1).subs);
                     if nargout==1
                         varargout{1} = subsref(varargout{1}, s(2:end));
                     else
@@ -441,33 +440,24 @@ classdef (Abstract) ArrayBase
                             UniformOutput=false);
                     end
                 case '.'
-                    if obj.isProperty(s(1).subs)
+                    if ~strcmp(s(1).subs, "VarNames") && ismember(s(1).subs, obj.VarNames)
+                        [varargout{1:nargout}] = obj.subIndexStruct(s(1).subs);
                         if isscalar(s)
-                            [varargout{1:nargout}] = builtin("subsref", obj, s);
                             return
                         end
-                        obj = builtin("subsref", obj, s(1));
-                        [varargout{1:nargout}] = subsref(obj, s(2:end));
+                        varargout{1} = subsref(varargout{1}, s(2:end));
                         return
                     end
-                    if obj.isMethod(s(1).subs)
-                        idx = 1;
-                        if numel(s)>1 && strcmp(s(2).type, '()')
-                            idx = 2;
-                        end
-                        if numel(s)==idx
-                            [varargout{1:nargout}] = builtin("subsref", obj, s);
-                            return
-                        end
-                        obj = builtin("subsref", obj, s(1:idx));
-                        [varargout{1:nargout}] = subsref(obj, s(idx+1:end));
+                    idx = 1;
+                    if numel(s)>1 && strcmp(s(2).type, '()') && isstrprop(s(1).subs(1), "lower")
+                        idx = 2;
                     end
-                    data = obj.getData().(s(1).subs);
-                    if isscalar(s)
-                        varargout{1} = data;
+                    if numel(s)==idx
+                        [varargout{1:nargout}] = builtin("subsref", obj, s);
                         return
                     end
-                    [varargout{1:nargout}] = subsref(data, s(2:end));
+                    obj = builtin("subsref", obj, s(1:idx));
+                    [varargout{1:nargout}] = subsref(obj, s(idx+1:end));
                 otherwise
                     error("Unsupported subscript type '%s'.", s(1).type);
             end
@@ -496,25 +486,23 @@ classdef (Abstract) ArrayBase
                     data = subsasgn(data, s(2:end), varargin{:});
                     obj = obj.subIndexData(s(1).subs, data);
                 case '.'
-                    if obj.isProperty(s(1).subs)
+                    if ~strcmp(s(1).subs, "VarNames") && ismember(s(1).subs, obj.VarNames)
                         if isscalar(s)
-                            obj = builtin("subsasgn", obj, s, varargin{:});
+                            obj = obj.subIndexStruct(s(1).subs, varargin{:});
                             return
                         end
-                        obj1 = builtin("subsref", obj, s(1));
-                        obj1 = subsasgn(obj1, s(2:end), varargin{:});
-                        obj = subsasgn(obj, s(1), obj1);
+                        data = obj.subIndexStruct(s(1).subs);
+                        data = subsasgn(data, s(2:end), varargin{:});
+                        obj = obj.subIndexStruct(s(1).subs, data);
                         return
                     end
-                    data = obj.getData().(s(1).subs);
                     if isscalar(s)
-                        [data] = varargin{:};
-                    else
-                        data = subsasgn(data, s(2:end), varargin{:});
+                        obj = builtin("subsasgn", obj, s, varargin{:});
+                        return
                     end
-                    data1 = obj.getData();
-                    data1.(s(1).subs) = data;
-                    obj = obj.setData(data1);
+                    obj1 = builtin("subsref", obj, s(1));
+                    obj1 = subsasgn(obj1, s(2:end), varargin{:});
+                    obj = subsasgn(obj, s(1), obj1);
                 otherwise
                     error("Unsupported subscript type '%s'.", s(1).type);
             end
@@ -558,8 +546,16 @@ classdef (Abstract) ArrayBase
                         end
                         return
                     end
-                    obj = subsref(obj, s(1));
-                    n = numArgumentsFromSubscript(obj, s(2:end), indexingContext);
+                    idx = 1;
+                    if numel(s)>1 && strcmp(s(2).type, '()') && isstrprop(s(1).subs(1), "lower")
+                        idx = 2;
+                    end
+                    if numel(s)==idx
+                        n = builtin("numArgumentsFromSubscript", obj, s, indexingContext);
+                        return
+                    end
+                    obj = subsref(obj, s(1:idx));
+                    n = numArgumentsFromSubscript(obj, s(idx+1:end), indexingContext);
                 otherwise
                     error("Unsupported subscript type '%s'.", s(1).type);
             end
@@ -583,36 +579,6 @@ classdef (Abstract) ArrayBase
     end
 
     methods (Access=protected)
-        function tf = isProperty(obj, name)
-            persistent propertyDict
-            if isempty(propertyDict)
-                propertyDict = configureDictionary("string", "cell");
-            end
-            if ~propertyDict.isKey(class(obj))
-                meta = metaclass(obj);
-                p = string({meta.PropertyList.Name});
-                propertyDict{class(obj)} = p;
-            else
-                p = propertyDict{class(obj)};
-            end
-            tf = ismember(name, p);
-        end
-
-        function tf = isMethod(obj, name)
-            persistent methodDict
-            if isempty(methodDict)
-                methodDict = configureDictionary("string", "cell");
-            end
-            if ~methodDict.isKey(class(obj))
-                meta = metaclass(obj);
-                m = string({meta.MethodList.Name});
-                methodDict{class(obj)} = m;
-            else
-                m = methodDict{class(obj)};
-            end
-            tf = ismember(name, m);
-        end
-
         function verifyDimLabels(obj)
             %VERIFYDIMLABELS Verify that dimension label properties are consistent with Data.
             dataNames = obj.getDataNames();
@@ -690,6 +656,9 @@ classdef (Abstract) ArrayBase
             if obj.IsTable
                 data = obj.getData();
                 names = string(data.Properties.VariableNames);
+            elseif obj.IsStruct
+                data = obj.getData();
+                names = string(fieldnames(data));
             else
                 names = string.empty;
             end
@@ -750,7 +719,7 @@ classdef (Abstract) ArrayBase
             for ii = 1:nLabels
                 names = labelNames{ii};
                 if numel(idcDims)<ii
-                    idx = ':';
+                    idx = 1;
                 else
                     idx = idcDims{ii};
                 end
@@ -787,6 +756,38 @@ classdef (Abstract) ArrayBase
                     data{idcDims{:}} = varargin{:};
                 else
                     data(idcDims{:}) = varargin{:};
+                end
+                obj = obj.setData(data);
+                varargout{1} = obj;
+            end
+        end
+
+        function varargout = subIndexStruct(obj, name, varargin)
+            data = obj.getData();
+            assert(isstruct(data) || istable(data), ...
+                "Unrecognized method, property, or field '%s' for class %s.", name, class(obj));
+            if isempty(varargin)
+                % if isstruct(data)
+                %     assert(isfield(data, name), ...
+                %         "Field '%s' does not exist in the Data struct array.", name);
+                % elseif istable(data)
+                %     assert(ismember(name, data.Properties.VariableNames), ...
+                %         "Variable '%s' does not exist in the Data table.", name);
+                % end
+                if isscalar(data) || istable(data)
+                    varargout{1} = data.(name);
+                else
+                    varargout{1} = arrayfun(@(x) x.(name), data);
+                end
+            else
+                if isscalar(data) || istable(data)
+                    data.(name) = varargin{1};
+                else
+                    assert(isequal(size(varargin{1}), size(data)), ...
+                        "Size of assigned value does not match size of Data struct array.");
+                    for ii = 1:numel(data)
+                        data(ii).(name) = varargin{1}(ii);
+                    end
                 end
                 obj = obj.setData(data);
                 varargout{1} = obj;

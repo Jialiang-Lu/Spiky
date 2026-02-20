@@ -32,6 +32,14 @@ classdef (Abstract) MappableArray < spiky.core.ArrayBase
                     end
             end
         end
+
+        function names = getVarNames(obj)
+            %GETVARNAMES Get variable names of the Data table, if applicable.
+            names = getVarNames@spiky.core.ArrayBase(obj);
+            if ~isempty(obj) && ~isempty(obj.getData)
+                names = [names(:); string(unique(obj.Key_(:)))]';
+            end
+        end
     end
 
     methods (Abstract, Access=protected)

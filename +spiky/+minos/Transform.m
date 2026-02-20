@@ -173,13 +173,12 @@ classdef Transform < spiky.core.MappableObjArray
                 bodyPart = "Root"
                 fov double = 60
             end
-            obj = obj.Array{1};
             if isstring(bodyPart)
                 bodyPart = bodyPart(ismember(bodyPart, enumeration("spiky.minos.BodyPart")));
                 bodyPart = double(spiky.minos.BodyPart(bodyPart))+1;
             end
-            n = numel(obj);
-            nVis = arrayfun(@(x) sum(x.Visible)-1, obj);
+            n = height(obj);
+            nVis = cellfun(@(x) sum(x.Visible)-1, obj.Array);
             nAll = sum(nVis);
             t = zeros(nAll, 2);
             idc = zeros(nAll, 1);
@@ -190,7 +189,7 @@ classdef Transform < spiky.core.MappableObjArray
             proj = zeros(nAll, 3, "single");
             idx = 1;
             for ii = 1:n
-                obj1 = obj(ii);
+                obj1 = obj.Array{ii};
                 idc1 = find(obj1.Visible);
                 idc1 = idc1(1:end-1);
                 idc2 = idx:idx+numel(idc1)-1;
@@ -233,6 +232,7 @@ classdef Transform < spiky.core.MappableObjArray
                 vec = vec(:, :, bodyPart);
             else
                 idc = interp1(tbl.Time, 1:numel(tbl.Time), time, "previous", "extrap");
+                idc(isnan(idc)) = 1;
                 vec = vec(idc, :, bodyPart);
                 vec(time<tbl.Time(1) | time>tbl.Time(end), :, :) = NaN("single");
             end

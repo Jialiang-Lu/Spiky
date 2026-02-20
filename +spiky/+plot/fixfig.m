@@ -4,7 +4,7 @@ function fixfig(h, options)
 %   h: figure handle
 arguments
     h = []
-    options.Theme string {mustBeMember(options.Theme, ["auto" "both" "dark" "light"])} = "both"
+    options.Theme string {mustBeMember(options.Theme, ["auto" "both" "dark" "light"])} = "auto"
     options.Save string = string.empty
     options.ContentType string = "image"
     options.Resolution double = 200
@@ -74,7 +74,7 @@ if ~isempty(options.Theme) && options.Theme~="both"
 end
 if ~isempty(options.Save)
     if options.Theme=="both"
-        options.Theme = ["light" "dark"];
+        options.Theme = ["dark" "light"];
     end
     [fdir, fn, fext] = fileparts(options.Save);
     for ii = 1:length(options.Theme)

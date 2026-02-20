@@ -1,14 +1,9 @@
 classdef Subspaces < spiky.stat.GroupedStat
     %SUBSPACES Class representing a set of subspaces
 
-    properties
-        Partition % Partition of the data used to compute the subspaces
-    end
-
     methods
         function obj = Subspaces(time, data, groups, groupIndices)
             %SUBSPACES Create a new instance of Subspaces
-            %
             %   Subspaces(time, data, groups, groupIndices)
             %
             %   time: time points
@@ -91,20 +86,23 @@ classdef Subspaces < spiky.stat.GroupedStat
             obj.Data = data1;
         end
 
-        function data = project(obj, data, idcDim)
+        function data = project(obj, data, idcDim, options)
             %PROJECT Project the data onto the coordinates
             %
-            %   data = PROJECT(obj, data)
+            %   data = PROJECT(obj, data, idcDim)
             %
             %   obj: Subspaces
             %   data: data to project, nT x nEvents x nNeurons
             %   idcDim: indices of the dimensions to project
+            %   Name-value arguments:
+            %       Individual: whether to project each basis vector individually
             %
             %   data: projected data, nT x nEvents x (nBases x nGroups) x nSamples
             arguments
                 obj spiky.stat.Subspaces
                 data
                 idcDim double = 1:obj.Data{1}.NBases
+                options.Individual logical = false
             end
             if isa(data, "spiky.core.EventsTable")
                 V = data.Data;
@@ -135,7 +133,7 @@ classdef Subspaces < spiky.stat.GroupedStat
                 for jj = 1:nGroups
                     for kk = 1:nSamples
                         V1 = permute(V(ii, :, obj.GroupIndices{jj}), [3 2 1]);
-                        C1 = obj.Data{idxT, jj, kk}.project(V1, idcDim);
+                        C1 = obj.Data{idxT, jj, kk}.project(V1, idcDim, Individual=options.Individual);
                         C1 = permute(C1, [3 2 1]);
                         C(ii, :, (1:nBases)+(jj-1)*nBases, kk) = C1;
                     end
@@ -144,18 +142,64 @@ classdef Subspaces < spiky.stat.GroupedStat
             if isa(data, "spiky.core.EventsTable")
                 data.Data = C;
                 if isa(data, "spiky.core.Spikes")
-                    ses = data.Neuron.Session(1);
-                    data.Neuron = spiky.core.Neuron.zeros(nBases*nGroups);
-                    data.Neuron.Session = repmat(ses, height(data.Neuron), 1);
-                    data.Neuron.Region = categorical(repelem(string(obj.Groups), nBases, 1));
-                    data.Neuron.Group = repelem((1:nGroups)', nBases, 1);
-                    data.Neuron.Id = repmat((1:nBases)', nGroups, 1);
+                    data.Neuron = spiky.core.Neuron.create(...
+                        data.Neuron.Session(1), obj.Groups, nBases);
+                    % ses = data.Neuron.Session(1);
+                    % data.Neuron = spiky.core.Neuron.zeros(nBases*nGroups);
+                    % data.Neuron.Session = repmat(ses, height(data.Neuron), 1);
+                    % data.Neuron.Region = categorical(repelem(string(obj.Groups), nBases, 1));
+                    % data.Neuron.Group = repelem((1:nGroups)', nBases, 1);
+                    % data.Neuron.Id = repmat((1:nBases)', nGroups, 1);
                 end
                 if isa(data, "spiky.trig.TrigFr")
                     data.Samples = (1:nSamples)';
                 end
             else
                 data = C;
+            end
+        end
+
+        function projs = projectByPair(obj, data, cats1, cats2, options)
+            %PROJECTBYPPAIR Project the data onto the pairwise combinations of bases
+            %   projs = PROJECTBYPPAIR(obj, data, cats1, cats2, ...)
+            %
+            %   obj: Subspaces
+            %   data: data to project, nT x nEvents x nNeurons
+            %   cats1, cats2: categories of the bases to combine, nEvents x 1 categorical
+            %   Name-value arguments:
+            %       IdcEvents: indices of the events to use for projection
+            %
+            %   projs: cell array of projected data for each pair of bases, nT x nEvents x 2 x nSamples
+            arguments
+                obj spiky.stat.Subspaces
+                data
+                cats1 (:, 1) categorical
+                cats2 (:, 1) categorical
+                options.IdcEvents = []
+            end
+            if ~isempty(options.IdcEvents)
+                data = data(:, options.IdcEvents, :);
+                cats1 = cats1(options.IdcEvents);
+                cats2 = cats2(options.IdcEvents);
+            end
+            basisNames = obj.Data{1}.BasisNames;
+            assert(all(ismember(cats1, basisNames)) && all(ismember(cats2, basisNames)), ...
+                "All categories must be present in the basis names of the Subspaces");
+            nBases = numel(basisNames);
+            idcUpper = find(triu(true(nBases), 1));
+            nUpper = numel(idcUpper);
+            [idc1, idc2] = ind2sub([nBases nBases], idcUpper);
+            projs = cell(nUpper, 1);
+            for ii = 1:nUpper
+                idx1 = idc1(ii);
+                idx2 = idc2(ii);
+                idcI = (cats1==basisNames(idx1) & cats2==basisNames(idx2)) | ...
+                    (cats1==basisNames(idx2) & cats2==basisNames(idx1));
+                events1 = zeros(sum(idcI), 1);
+                events1(cats1(idcI)==basisNames(idx1)) = 1;
+                events1(cats1(idcI)==basisNames(idx2)) = 2;
+                projs{ii} = obj.project(data(:, idcI, :), [idx1 idx2]);
+                projs{ii}.Events = events1;
             end
         end
 

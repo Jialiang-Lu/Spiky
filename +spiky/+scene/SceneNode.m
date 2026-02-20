@@ -87,6 +87,14 @@ classdef SceneNode < spiky.core.IntervalsTable & matlab.mixin.CustomCompactDispl
             str = compose("%s", string(cellstr(string(obj.Data.Name))));
         end
 
+        function c = categorical(obj)
+            %CATEGORICAL Convert the SceneNode to a categorical representation
+            %   c = categorical(obj)
+            %
+            %   c: categorical representation of the SceneNode
+            c = categorical(string(obj));
+        end
+
         function rep = compactRepresentationForSingleLine(obj, displayConfiguration, width)
             % rep = widthConstrainedDataRepresentation(obj, displayConfiguration, width, ...
             %     Annotation=compose("%s: %s", string(cellstr(string(obj.Data.Type))), ...

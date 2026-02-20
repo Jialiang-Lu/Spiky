@@ -496,19 +496,17 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 c = "w"
                 mkr string = "o"
                 options.PlotMean logical = true
+                options.MeanOnly logical = false
                 options.IdcNeurons (1, 2) double = [1 2]
                 options.IdcEvents = []
                 options.SubSet = []
                 options.Subsample double = []
-                options.Parent matlab.graphics.axis.Axes = matlab.graphics.axis.Axes.empty
+                options.Parent matlab.graphics.axis.Axes = gca
                 plotOps.?matlab.graphics.chart.primitive.Scatter
             end
 
-            if isempty(options.Parent)
-                options.Parent = gca;
-            end
             if isempty(c)
-                c = "w";
+                c = lines(1);
             end
             if ~isnumeric(c)
                 c = validatecolor(c, "multiple");
@@ -554,27 +552,28 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 [idcGroups, groups] = findgroups(cats);
             end
             if nCats>1
-                c1 = spiky.plot.colormap("tab10", nCats, true);
+                c1 = lines(nCats);
                 c2 = c1;
             else
                 c1 = c(1, :);
                 c2 = c(2, :);
             end
             h1 = gobjects(nCats, 1);
-            np = get(options.Parent, "NextPlot");
             hold(options.Parent, "on");
-            for ii = 1:nCats
-                data1 = data(idcGroups==ii, :);
-                if ~isempty(options.Subsample)
-                    nSub = options.Subsample(2);
-                    nEvents = options.Subsample(1);
-                    data1 = reshape(datasample(data1, nEvents*nSub, 1), nEvents, nSub, 2);
-                    data1 = permute(mean(data1, 1), [2 3 1]);
+            if ~options.MeanOnly
+                for ii = 1:nCats
+                    data1 = data(idcGroups==ii, :);
+                    if ~isempty(options.Subsample)
+                        nSub = options.Subsample(2);
+                        nEvents = options.Subsample(1);
+                        data1 = reshape(datasample(data1, nEvents*nSub, 1), nEvents, nSub, 2);
+                        data1 = permute(mean(data1, 1), [2 3 1]);
+                    end
+                    h1(ii) = scatter(options.Parent, data1(:, 1), data1(:, 2), sz(1), c1(ii, :), ...
+                        mkr(1), plotArgs{:});
                 end
-                h1(ii) = scatter(options.Parent, data1(:, 1), data1(:, 2), sz(1), c1(ii, :), ...
-                    mkr(1), plotArgs{:});
             end
-            if options.PlotMean
+            if options.PlotMean || options.MeanOnly
                 m = groupsummary(data, cats, @mean);
                 hMean1 = gobjects(nCats, 1);
                 for ii = 1:nCats
@@ -584,9 +583,15 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 end
             end
             if nCats>1
-                legend(h1, groups);
+                if ~options.MeanOnly
+                    legend(h1, groups);
+                else
+                    legend(hMean1, groups);
+                end
             end
-            set(options.Parent, "NextPlot", np);
+            xticks([]);
+            yticks([]);
+            hold(options.Parent, "off");
             if nargout>0
                 h = h1;
                 if nargout>1
@@ -671,6 +676,153 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             end
         end
 
+        function eta = varExplained(obj, cats, options)
+            %VAREXPLAINED Calculate variance explained by the categories
+            %   eta = varExplained(obj, cats, ...)
+            %
+            %   obj: triggered firing rate object
+            %   cats: categories of events
+            %   Name-value arguments:
+            %       Type: type of variance explained to calculate, can be "trace", "max", "pillai", or "wilks"
+            %       Ridge: ridge regularization parameter for "max", "pillai", and "wilks" types, 
+            %           if empty, it will be set to RidgeFraction*(totalSSE/nNeurons)
+            %       RidgeFraction: fraction of total variance to use as ridge regularization if Ridge is empty
+            %       IdcEvents: indices of events to include in the calculation
+            %       SubSet: subset of categories to include in the calculation
+            arguments
+                obj spiky.trig.TrigFr
+                cats (:, 1) categorical
+                options.Type string {mustBeMember(options.Type, ["trace", "max", "pillai" "wilks"])} = "trace"
+                options.Ridge double = []
+                options.RidgeFraction double = 0
+                options.IdcEvents = []
+                options.SubSet = []
+                options.Balance string {mustBeMember(options.Balance, ["none", "min", "max"])} = "none"
+            end
+            %% Preprocess data
+            tStart = obj.Time(1);
+            tStep = obj.Time(2)-obj.Time(1);
+            idcEvents = options.IdcEvents;
+            if islogical(idcEvents)
+                idcEvents = find(idcEvents);
+            end
+            if isempty(idcEvents)
+                idcEvents = 1:width(obj);
+            end
+            obj = subsref(obj, substruct("()", {':', idcEvents, ':'}));
+            if numel(cats)>=width(obj)
+                cats = cats(idcEvents);
+            end
+            if ~isempty(options.SubSet)
+                idcEvents = ismember(cats, options.SubSet);
+                obj = subsref(obj, substruct("()", {':', idcEvents, ':'}));
+                cats = removecats(cats(idcEvents));
+            end
+            if options.Balance~="none"
+                [cats, idcBalance] = spiky.utils.balance(cats, Count=options.Balance);
+                obj = subsref(obj, substruct("()", {':', idcBalance, ':'}));
+            end
+            nT = height(obj);
+            nTrials = width(obj);
+            groupedFr = obj.group(GroupTime=true, Permute=[2 3 1]);
+            data = groupedFr.Data; % nT x nGroups cell of nTrials x nNeurons data
+            neuronGroups = spiky.core.Neuron.create(obj.Neuron.Session(1), ...
+                groupedFr.Groups, 1);
+            nNeuronGroups = height(neuronGroups);
+            grpId = findgroups(cats);
+            K = max(grpId);
+            if K<=1
+                eta = zeros(nT, 1, nNeuronGroups);
+                eta = spiky.trig.TrigFr(tStart, tStep, eta, 0, obj.Window, neuronGroups);
+                return
+            end
+            %% Calculate
+            % Trial -> class indicator (sparse). Row t has one "1" at its class.
+            G = sparse((1:nTrials)', grpId, 1, nTrials, K);
+            counts = full(sum(G, 1))'; % K x 1
+            sqrtCounts = sqrt(counts); % K x 1
+            eta = zeros(nT, nNeuronGroups);
+            % pb = spiky.plot.ProgressBar(numel(eta), "Calculating variance explained", Parallel=false);
+            for ii = 1:numel(eta)
+                Rt = data{ii}; % nTrials x nNeurons
+                nNeurons = size(Rt, 2);
+                mu = mean(Rt, 1); % 1 x nNeurons overall mean
+                Rc = Rt-mu; % nTrials x nNeurons centered data
+                totalSSE = sum(Rc.^2, "all"); % scalar total sum of squares
+                if totalSSE<=0
+                    eta(ii) = 0;
+                    % pb.step
+                    continue
+                end
+                classSums = G'*Rt; % K x nNeurons sum of responses in each class
+                classMeans = classSums./counts; % K x nNeurons mean response in each class
+                muDiff = classMeans-mu; % K x nNeurons difference of class means from overall mean
+                betweenSSE = sum((muDiff.^2).*counts, "all"); % scalar between-class sum of squares
+                if options.Type=="trace"
+                    eta(ii) = betweenSSE/totalSSE;
+                    % pb.step
+                    continue
+                end
+                % Build B so that SB = B * B'
+                B = (muDiff.').*reshape(sqrtCounts, [1, K]); % nNeurons x K
+                d = K-1; % degrees of freedom between classes
+                if ~isempty(options.Ridge)
+                    epsVal = options.Ridge;
+                else
+                    epsVal = options.RidgeFraction*(totalSSE/nNeurons);
+                end
+                % Compute eigenvalues lambda of (SB, ST + epsVal*I), without forming ST.
+                if epsVal>0
+                    % Woodbury: (epsI + X X')^{-1} B = (1/eps)B - (1/eps^2) X (I + (1/eps) X'X)^{-1} X'B
+                    G1 = Rc*Rc.'; % nTrials x nTrials
+                    A = eye(nTrials)+(1/epsVal)*G1; % nTrials x nTrials
+                    XtB = Rc*B; % nTrials x K
+                    U = A\XtB; % nTrials x K, solve A*U = XtB
+                    Y = (1/epsVal)*B-(1/(epsVal^2))*(Rc.'*U); % nNeurons x K
+                    M = B.'*Y; % K x K
+                else
+                    % use pseudoinverse path via SVD of Rc (trial-space SVD).
+                    [~, S, V] = svd(Rc, "econ");
+                    s = diag(S);
+                    tol = max(size(Rc))*eps(max(s));
+                    keep = s>tol;
+                    if ~any(keep)
+                        eta(ii) = 0;
+                        % pb.step
+                        continue
+                    end
+                    V = V(:, keep); % nNeurons x r
+                    s = s(keep); % r x 1
+                    VtB = V'*B; % r x K
+                    C = VtB./s; % r x K
+                    M = C'*C; % K x K
+                end
+                M = (M+M')/2; % ensure symmetry
+                lambda = eig(M); % K x 1 eigenvalues
+                lambda = real(lambda); % discard imaginary part due to numerical error
+                lambda = min(max(lambda, 0), 1); % clip to [0, 1] to avoid numerical issues
+                lambda = sort(lambda, "descend");
+                dEff = min(d, numel(lambda)); % effective dimensionality of the between-class variance
+                lambda = lambda(1:dEff);
+                switch options.Type
+                    case "max"
+                        eta(ii) = lambda(1);
+                    case "pillai"
+                        % Normalized Pillai trace: (1/dEff) * sum(lambda_i)
+                        eta(ii) = sum(lambda)/dEff;
+                    case "wilks"
+                        % Wilks' lambda: Lambda = prod_i (1 - lambda_i)
+                        % Return 1 - Lambda, computed stably in log-domain.
+                        oneMinus = max(1-lambda, realmin("double"));
+                        logLambda = sum(log(oneMinus));
+                        eta(ii) = real(1-exp(logLambda));
+                end
+                % pb.step
+            end
+            eta = permute(eta, [1 3 2]);
+            eta = spiky.trig.TrigFr(tStart, tStep, eta, 0, obj.Window, neuronGroups);
+        end
+
         function tuning = tuning(obj, pos, binEdges)
             arguments
                 obj spiky.trig.TrigFr
@@ -745,6 +897,56 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             obj.Events = events;
         end
 
+        function [sim, nPairs] = similarityMatrix(obj, cats, options)
+            arguments
+                obj spiky.trig.TrigFr
+                cats (:, 1) categorical
+                options.CorrType (1, 1) string {mustBeMember(options.CorrType, ["Pearson", "Spearman"])} = "Pearson"
+                options.FisherZ logical = false
+            end
+            assert(width(obj.Data)==numel(cats), "The number of events must match the size of categories");
+            cats = removecats(cats);
+            classLabels = categories(cats, OutputType="categorical");
+            nClasses = numel(classLabels);
+            trialIdxByClass = cell(nClasses, 1);
+            nTrialsByClass = zeros(nClasses, 1);
+            for ii = 1:nClasses
+                trialIdxByClass{ii} = find(cats==classLabels(ii));
+                nTrialsByClass(ii) = numel(trialIdxByClass{ii});
+            end
+            groupedFr = obj.group();
+            frs = groupedFr.Data;
+            data = cell(1, groupedFr.NGroups);
+            idcLower = find(tril(ones(nClasses), -1));
+            for gg = 1:groupedFr.NGroups
+                fr = permute(frs{gg}(1, :, :), [3 2 1]);
+                sim1 = nan(nClasses, nClasses);
+                for ii = 1:nClasses
+                    if nTrialsByClass(ii)==0
+                        continue
+                    end
+                    idxA  = trialIdxByClass{ii};
+                    for jj = ii:nClasses
+                        if nTrialsByClass(jj)==0
+                            continue
+                        end
+                        idxB = trialIdxByClass{jj};
+                        corrBlock = corr(fr(:, idxA), fr(:, idxB), Type=options.CorrType);
+                        sim1(ii, jj) = mean(corrBlock, "all", "omitnan");
+                    end
+                end
+                if options.FisherZ
+                    sim1 = max(min(sim1, 1-eps), -1+eps); % avoid Inf values
+                    sim1 = atanh(sim1);
+                end
+                sim2 = sim1';
+                sim1(idcLower) = sim2(idcLower);
+                data{gg} = sim1;
+            end
+            sim = spiky.stat.GroupedStat(obj.Time(1), data, groupedFr.Groups, groupedFr.GroupIndices);
+            nPairs = nTrialsByClass*nTrialsByClass';
+        end
+
         function p = ttest(obj, baseline, window)
             %TTEST Perform t-test on the firing rate in a window
             %
@@ -786,15 +988,15 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             p = spiky.core.EventsTable(obj.Time(is), p);
         end
 
-        function [ss, proj] = getSubspaces(obj, cats, idcEvents, options)
+        function [ss, proj] = getSubspaces(obj, cats, options)
             %GETBASES Get subspaces for the firing rate
             %
-            %   ss = getSubspaces(obj, groupIndices, groups, cats, idcEvents, options)
+            %   ss = getSubspaces(obj, cats, ...)
             %
             %   obj: triggered firing rate object
             %   cats: categories of events, axes of the subspaces are the means of each category
-            %   idcEvents: indices of events to use
             %   Name-value arguments:
+            %       idcEvents: indices of events to use
             %       SubSet: subset of categories to use for the bases, origin is calculated over all
             %           events regardless of the subset
             %       KFold: number of folds for cross-validation
@@ -806,19 +1008,22 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             arguments
                 obj spiky.trig.TrigFr
                 cats = []
-                idcEvents = []
+                options.IdcEvents = []
                 options.Subset = []
                 options.KFold double = []
                 options.PCA double = 0 % number of PCA dimensions to keep, 0 means no PCA
                 options.Normalize logical = false % normalize the basis vectors to unit length
             end
-            if isempty(idcEvents)
-                idcEvents = true(obj.NEvents, 1);
+            idcEvents = options.IdcEvents;
+            if isempty(options.IdcEvents)
+                options.IdcEvents = true(obj.NEvents, 1);
             end
-            cats = cats(idcEvents);
-            labelNames = unique(cats, "sorted");
             nSubspaces = numel(unique(cats));
-            obj.Data = obj.Data(:, idcEvents, :);
+            obj.Data = obj.Data(:, options.IdcEvents, :);
+            if numel(cats)>width(obj.Data)
+                cats = cats(options.IdcEvents);
+            end
+            labelNames = unique(cats, "sorted");
             obj.Events = cats;
             if isempty(options.KFold)
                 nFolds = 1;
@@ -978,7 +1183,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             mdl = fscnca(data, labels, varargin{:});
         end
 
-        function mdls = fitcecoc(obj, labels, window, idcEvents, options)
+        function mdls = fitcecoc(obj, labels, options)
             %FITCECOC Fit a multiclass error-correcting output codes model
             %
             %   mdl = fitcecoc(obj, window, labels)
@@ -988,6 +1193,8 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             %   window: window for the analysis
             %   idcEvents: indices of subset of events to use
             %   Name-value arguments:
+            %       Window: time window for the analysis
+            %       IdcEvents: indices of subset of events to use
             %       Learners: type of learners to use, e.g. "svm", "tree", "knn"
             %       Coding: coding scheme, "onevsall" or "onevsone"
             %       KFold: number of folds for cross-validation
@@ -1005,8 +1212,8 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             arguments
                 obj spiky.trig.TrigFr
                 labels
-                window double = []
-                idcEvents = []
+                options.Window double = []
+                options.IdcEvents = []
                 options.Learners = "svm"
                 options.Coding string {mustBeMember(options.Coding, ["onevsall", "onevsone"])} = "onevsall"
                 options.KFold double = []
@@ -1017,6 +1224,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 options.GroupNames string = string.empty
                 options.Conditions categorical = categorical(zeros(size(labels)))
                 options.TimeDependent logical = true
+                options.Verbose = 1
             end
 
             if size(obj.Data, 4)>1 % Data is already partitioned
@@ -1032,12 +1240,13 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                     options1 = options;
                     options1.Partition = cvpartition(CustomPartition=options.Partition.test(ii));
                     optionsCell = namedargs2cell(options1);
-                    mdls{ii} = objs{ii}.fitcecoc(labels, window, idcEvents, ...
-                        optionsCell{:});
+                    mdls{ii} = objs{ii}.fitcecoc(labels, optionsCell{:});
                 end
                 mdls = cat(3, mdls{:});
                 return
             end
+            window = options.Window;
+            idcEvents = options.IdcEvents;
             if isempty(window)
                 window = obj.Time([1 end]);
             end
@@ -1129,13 +1338,13 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 if isempty(cv)
                     mdls{ii} = fitcecoc(X1, y1, ...
                         Coding=options.Coding, ObservationsIn="columns", Learners=options.Learners, ...
-                        ClassNames=options.ClassNames, Options=optionsFit, Verbose=1, ...
+                        ClassNames=options.ClassNames, Options=optionsFit, Verbose=options.Verbose, ...
                         FitPosterior=options.FitPosterior, Prior="uniform");
                 elseif options.TimeDependent
                     mdls{ii} = fitcecoc(X1, y1, ...
                         Coding=options.Coding, ObservationsIn="columns", Learners=options.Learners, ...
                         ClassNames=options.ClassNames, CVPartition=cv, Options=optionsFit, ...
-                        Verbose=1, FitPosterior=options.FitPosterior, Prior="uniform");
+                        Verbose=options.Verbose, FitPosterior=options.FitPosterior, Prior="uniform");
                 end
                 pb.step
             end
@@ -1720,11 +1929,234 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 spiky.utils.cellfun(@(x) x.Deviance, fi), options);
         end
 
-        function varargout = subsref(obj, s)
-            if strcmp(s(1).type, '()') && isscalar(s(1).subs)
-                s(1).subs = [{':', ':'}, s(1).subs];
+        function dpca = dpca(obj, vars, options)
+            %DPCA Perform demixed principal component analysis (dPCA)
+            %   dpca = dpca(obj, vars, Name=Value, ...)
+            %
+            %   obj: triggered firing rate object
+            %   Name-value arguments:
+            %       NComponents: number of dPCA components to compute (default: 10
+            %       CombinedParams: cell array defining combined marginalizations
+            %           (default: each label with its interaction with time, plus time-only)
+            %       Lambda: regularization parameter for dPCA (default: 0)
+            %       Order: whether to order components by explained variance (default: true)
+            %       Scale: whether to scale components by variance (default: false)
+            %       TimeSplits: time points to split for time marginalization (default: [])
+            %       TimeParameter: index of time parameter in labels (default: [])
+            %       NotToSplit: indices of parameters not to split (default: [])
+            %       Simultaneous: whether to perform simultaneous dPCA over all neurons
+            %           (default: false)
+            %       OptimizeLambda: whether to optimize lambda via cross-validation
+            %           (default: false)
+            %       NumRep: number of repetitions for lambda optimization (default: 3)
+            %       ExplainedVarianceSignalOnly: whether to compute explained variance
+            %           only for signal (not noise) (default: false)
+            %       Partition: partition of data for cross-validation (default: [])
+            %       Plot: whether to plot dPCA results (default: true)
+            arguments
+                obj spiky.trig.TrigFr
+                vars table % event labels
             end
-            [varargout{1:nargout}] = subsref@spiky.core.EventsTable(obj, s);
+            arguments
+                options.NComponents (1, 1) double {mustBeInteger, mustBePositive} = 10
+                options.CombinedParams cell = {}
+                options.Lambda (1, 1) double {mustBeNonnegative} = 1e-6
+                options.Order (1, 1) logical = true
+                options.Scale (1, 1) logical = false
+                options.TimeSplits double = []
+                options.TimeParameter double = []
+                options.NotToSplit = []
+                options.Simultaneous (1, 1) logical = false
+                options.OptimizeLambda (1, 1) logical = false
+                options.NumRep (1, 1) double {mustBeInteger, mustBeNonnegative} = 3
+                options.ExplainedVarianceSignalOnly (1, 1) logical = false
+                options.Partition = []
+                options.Plot (1, 1) logical = true
+            end
+
+            %% Parse label name/value pairs
+            assert(height(vars)==obj.NEvents, ...
+                "Number of rows in vars must match number of events in obj");
+            labelNames = string(vars.Properties.VariableNames(:));
+            margNames = [labelNames; "Time"];
+            labels = cellfun(@(x) removecats(categorical(vars.(x))), labelNames, UniformOutput=false);
+            assert(all(cellfun(@(x) isvector(x) && numel(x)==obj.NEvents, labels)), ...
+                "Each label value must be a vector of length equal to number of events");
+            nLabels = numel(labelNames);
+
+            %% Cross-validation
+            if ~isempty(options.Partition)
+                if isnumeric(options.Partition)
+                    options.Partition = cvpartition(labels{1}, KFold=options.Partition);
+                end
+                idcTraining = options.Partition.training("all");
+                dpcas = cell(options.Partition.NumTestSets, 1);
+                options1 = options;
+                options1.Partition = [];
+                optionArgs = namedargs2cell(options1);
+                for ii = 1:options.Partition.NumTestSets
+                    idc1 = idcTraining(:, ii);
+                    objTrain = subsref(obj, substruct("()", {':', idc1, ':'}));
+                    varsTrain = vars(idc1, :);
+                    dpcas{ii} = objTrain.dpca(varsTrain, optionArgs{:});
+                end
+                dpca = cat(3, dpcas{:});
+                dpca.Partition = options.Partition;
+                return
+            end
+
+            %% Build condition indexing (shared across regions)
+            condSizes = zeros(1, nLabels);
+            subs = zeros(obj.NEvents, nLabels);
+            for ii = 1:nLabels
+                condSizes(ii) = numel(categories(labels{ii}));
+                subs(:, ii) = double(labels{ii});
+                if any(subs(:, ii) <= 0)
+                    error("Label '%s' contains invalid/undefined codes.", labelNames(ii));
+                end
+            end
+            if isscalar(condSizes)
+                counts = accumarray(subs, 1, [condSizes 1]);
+            else
+                counts = accumarray(subs, 1, condSizes);
+            end
+            maxTrialNum = max(counts(:));
+            trialCounter = zeros(condSizes);
+            trialIdxPerEvent = zeros(obj.NEvents, 1);
+            for ii = 1:obj.NEvents
+                idxCell = num2cell(subs(ii, :));
+                trialCounter(idxCell{:}) = trialCounter(idxCell{:}) + 1;
+                trialIdxPerEvent(ii) = trialCounter(idxCell{:});
+            end
+
+            nNeurons = size(obj.Data, 3);
+            nT = size(obj.Data, 1);
+            % trialNum: N x condDims...
+            trialNum = repmat(reshape(counts, [1 condSizes]), [nNeurons ones(1, nLabels)]);
+            % firingRates: N x condDims... x T x maxTrialNum
+            firingRates = NaN([nNeurons condSizes nT maxTrialNum]);
+            for ii = 1:obj.NEvents
+                idxCell = num2cell(subs(ii, :));
+                tr = trialIdxPerEvent(ii);
+                fr = permute(obj.Data(:, ii, :), [3 1 2]); % N x T
+                fr = reshape(fr, [nNeurons ones(1, nLabels) nT]); % N x 1... x T
+                firingRates(:, idxCell{:}, :, tr) = fr;
+            end
+            % firingRatesAverage: N x condDims... x T
+            firingRatesAverage = mean(firingRates, ndims(firingRates), "omitnan");
+            % fireRatesAverageAll: N x 1... x T
+            firingRatesAverageAll = mean(firingRatesAverage, 2:ndims(firingRatesAverage)-1, ...
+                "omitnan");
+            % Fill missing combinations with overall mean
+            missingIdc = cell(1, nLabels);
+            if isscalar(condSizes)
+                [missingIdc{:}] = ind2sub([condSizes, 1], find(counts==0));
+            else
+                [missingIdc{:}] = ind2sub(condSizes, find(counts==0));
+            end
+            nMissing = numel(missingIdc{1});
+            for ii = 1:nMissing
+                idxCell = cellfun(@(x) x(ii), missingIdc, UniformOutput=false);
+                firingRates(:, idxCell{:}, :, 1) = firingRatesAverageAll;
+                firingRatesAverage(:, idxCell{:}, :) = firingRatesAverageAll;
+            end
+            CNoise = spiky.utils.dPCA.dpca_getNoiseCovariance( ...
+                firingRatesAverage, firingRates, trialNum, ...
+                simultaneous=options.Simultaneous, type="pooled");
+
+            %% Determine combinedParams (default if not provided)
+            if isempty(options.CombinedParams)
+                timeParam = nLabels + 1;
+                % group each label with its label/time interaction
+                combinedParams = cell(nLabels + 1, 1);
+                for ii = 1:nLabels
+                    combinedParams{ii} = {ii, sort([ii timeParam])};
+                end
+                % time-only marginalization
+                combinedParams{nLabels + 1} = {timeParam};
+            else
+                combinedParams = options.CombinedParams;
+            end
+
+            %% Group by brain region (neurons)
+            [groupNames, ~, idcGroups] = unique(obj.Neuron.Region);
+            groupIndices = arrayfun(@(x) find(idcGroups==x), unique(idcGroups), UniformOutput=false);
+            nGroups = numel(groupNames);
+
+            %% Run dPCA per region, then combine W/V into full-neuron bases
+            nNeurons = size(obj.Data, 3);
+            ssDecoder = cell(1, nGroups);
+            ssEncoder = cell(1, nGroups);
+            stats = cell(1, nGroups);
+            idcColon = repmat({':'}, 1, nLabels+2);
+
+            for jj = 1:nGroups
+                neuronIdx = groupIndices{jj};
+                nNeuronsReg = numel(neuronIdx);
+                trialNumReg = trialNum(neuronIdx, idcColon{1:end-2});
+                firingRatesReg = firingRates(neuronIdx, idcColon{:});
+                firingRatesAverageReg = firingRatesAverage(neuronIdx, idcColon{1:end-1});
+                thisLambda = options.Lambda;
+                CnoiseReg = CNoise(neuronIdx, neuronIdx);
+
+                if options.OptimizeLambda
+                    thisLambda = spiky.utils.dPCA.dpca_optimizeLambda( ...
+                        firingRatesAverageReg, firingRatesReg, trialNumReg, ...
+                        "combinedParams", combinedParams, ...
+                        "simultaneous", options.Simultaneous, ...
+                        "numRep", options.NumRep);
+                end
+
+                % dPCA call (dPCA package uses char for option values)
+                dpcaOps = struct();
+                dpcaOps.combinedParams = combinedParams;
+                dpcaOps.lambda = thisLambda;
+                dpcaOps.order = spiky.utils.ternary(options.Order, "yes", "no");
+                dpcaOps.scale = spiky.utils.ternary(options.Scale, "yes", "no");
+                if ~isempty(options.TimeSplits)
+                    dpcaOps.timeSplits = options.TimeSplits;
+                end
+                if ~isempty(options.TimeParameter)
+                    dpcaOps.timeParameter = options.TimeParameter;
+                end
+                if ~isempty(options.NotToSplit)
+                    dpcaOps.notToSplit = options.NotToSplit;
+                end
+                if ~isempty(CnoiseReg)
+                    dpcaOps.Cnoise = CnoiseReg;
+                end
+                dpcaArgs = namedargs2cell(dpcaOps);
+                nComponents = min([options.NComponents, nNeuronsReg]);
+
+                [Wreg, Vreg, whichMarg] = spiky.utils.dPCA.dpca(firingRatesAverageReg, ...
+                    nComponents, dpcaArgs{:});
+                % Explained variance
+                evArgs = {"combinedParams", combinedParams};
+                if ~isempty(CnoiseReg)
+                    evArgs = [evArgs, {"Cnoise", CnoiseReg}]; %#ok<AGROW>
+                end
+                if options.ExplainedVarianceSignalOnly
+                    evArgs = [evArgs, {"numOfTrials", trialNumReg}]; %#ok<AGROW>
+                end
+                explVar = spiky.utils.dPCA.dpca_explainedVariance(firingRatesAverageReg, Wreg, Vreg, evArgs{:});
+
+                m = mean(firingRatesAverageAll(neuronIdx, idcColon{1:end-1}), nLabels+2);
+                ssDecoder{jj} = spiky.stat.Coords(m, Wreg, obj.Neuron(neuronIdx), margNames(whichMarg));
+                ssEncoder{jj} = spiky.stat.Coords(m, Vreg, obj.Neuron(neuronIdx), margNames(whichMarg));
+                s = struct;
+                s.TotalVar = explVar.totalVar;
+                s.TotalMargVar = explVar.totalMarginalizedVar;
+                s.ComponentVar = explVar.componentVar;
+                s.MargVar = explVar.margVar;
+                s.CumulativePCA = explVar.cumulativePCA;
+                s.CumulativeDPCA = explVar.cumulativeDPCA;
+                stats{jj} = s;
+            end
+            dpca = spiky.stat.DPCA(ssDecoder, ssEncoder, cell2mat(stats), margNames, ...
+                groupNames, groupIndices);
+            if options.Plot
+                dpca.plotSummary(obj, vars);
+            end
         end
     end
 end

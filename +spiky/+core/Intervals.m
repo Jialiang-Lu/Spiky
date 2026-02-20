@@ -323,6 +323,37 @@ classdef Intervals < spiky.core.ArrayBase
             [events, idc, idcIntervals] = events.inIntervals(obj, optionsCell{:});
         end
 
+        function [idcSeq, idcInSeq, seqLength] = findSequence(obj, maxGap, options)
+            %FINDSEQUENCE Find sequences of intervals with gap less than maxGap
+            %   idcSeq = findSequence(obj, maxGap)
+            %
+            %   obj: intervals
+            %   maxGap: maximum gap between intervals in a sequence
+            %
+            %   idcSeq: sequence index of each sequence from 1 to number of sequences
+            %   idcInSeq: index of intervals within each sequence, 1 for first element in sequence
+            %   seqLength: length of sequence that each interval belongs to
+            %   Name-value arguments:
+            %       IdcJump: indices of intervals that are considered as jumps regardless of gap, 
+            %           either logical or numeric indices
+            arguments
+                obj spiky.core.Intervals
+                maxGap double
+                options.IdcJump = []
+            end
+            gaps = obj.Start(2:end)-obj.End(1:end-1);
+            isJump = [1; gaps>maxGap];
+            if ~isempty(options.IdcJump)
+                isJump(options.IdcJump) = 1;
+            end
+            idcSeq = cumsum(isJump);
+            nSeqs = numel(unique(idcSeq));
+            nPerSeq = groupcounts(idcSeq);
+            offsets = repelem(cumsum([0; nPerSeq(1:end-1)]), nPerSeq);
+            idcInSeq = (1:length(idcSeq))'-offsets;
+            seqLength = nPerSeq(idcSeq);
+        end
+
         function h = plot(obj, plotOps, options)
             %PLOT Plot intervals
             arguments

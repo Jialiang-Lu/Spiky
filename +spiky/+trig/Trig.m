@@ -68,11 +68,7 @@ classdef Trig < spiky.core.EventsTable
         end
 
         function n = get.NEvents(obj)
-            if obj.EventDim == 1
-                n = height(obj.Data);
-            else
-                n = numel(obj.Events_);
-            end
+            n = size(obj.Data, obj.EventDim);
         end
 
         function n = get.NGroups(obj)

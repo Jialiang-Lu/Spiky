@@ -254,55 +254,75 @@ classdef EyeData
                     trProjSorted = trProj(idcSortTr, :, :);
                     trTrialSorted = trTrial(idcSortTr);
                     %%
-                    [~, idcFix, idcTrWithFix] = spiky.core.Intervals(trTSorted).haveEvents(fixations.Start+0.01);
-                    ang = squeeze(spiky.utils.angle(trVecSorted(idcTrWithFix, :, :), gaze(idcFix, :), 2));
-                    %%
+                    [~, idcFixInTr, idcTrWithFix] = spiky.core.Intervals(trTSorted).haveEvents(fixations.Start+0.01);
+                    ang = squeeze(spiky.utils.angle(trVecSorted(idcTrWithFix, :, :), gaze(idcFixInTr, :), 2));
                     tbl = table();
                     tbl.Angle = ang;
-                    tbl.IdcFix = idcFix;
+                    tbl.IdcFix = idcFixInTr;
                     tbl1 = groupsummary(tbl, "IdcFix", ...
                         @(x) spiky.utils.wrap(@min, 1:2, x(:, 2:end)', [], "all"), ...
                         "Angle");
-                    minAng = cell2mat(tbl1.fun1_Angle(:, 1));
-                    minInd = cell2mat(tbl1.fun1_Angle(:, 2));
+                    idcFixValid = tbl1.IdcFix;
+                    ang1 = tbl1.fun1_Angle;
+                    minAng = cell2mat(ang1(:, 1));
+                    minInd = cell2mat(ang1(:, 2));
                     idcMinTrEach = floor((minInd-1)/11)+1;
                     idcMinPart = mod(minInd-1, 11)+1;
-                    idcMinTr = zeros(height(tbl1), 1); % index in idcTrWithFix
-                    idcFixValid = tbl1.IdcFix;
-                    for ii = 1:height(tbl1)
-                        idc1 = find(idcFix==idcFixValid(ii));
-                        idcMinTr(ii) = idc1(idcMinTrEach(ii));
+                    idcMinTr = zeros(height(ang1), 1);
+                    idcAllTr = cell(height(ang1), 1);
+                    idcOtherTr = cell(height(ang1), 1);
+                    isDouble = false(height(ang1), 1);
+                    for ii = 1:height(ang1)
+                        idc1 = find(idcFixInTr==idcFixValid(ii));
+                        idx1 = idcMinTrEach(ii);
+                        idcMinTr(ii) = idcTrWithFix(idc1(idx1));
+                        idcAllTr{ii} = idcTrWithFix(idc1);
+                        idcOtherTr{ii} = idcTrWithFix(idc1(1:end~=idx1));
+                        isDouble(ii) = numel(idc1)==2;
                     end
-                    idcCombined = idcTrWithFix(idcMinTr); % index in the combined arrays
-                    idcTr = trIdcSorted(idcCombined);
+                    idcTr = trIdcSorted(idcMinTr);
+                    idcTrAll = cellfun(@(x) trIdcSorted(x), idcAllTr, UniformOutput=false);
+                    idcTrOther = cellfun(@(x) trIdcSorted(x), idcOtherTr, UniformOutput=false);
                     nValid = numel(idcFixValid);
                     %%
                     ids = zeros(nFixations, 1, "int32");
-                    names = categorical(strings(nFixations, 1));
+                    idss = cell(nFixations, 1);
+                    otherIds = zeros(nFixations, 1, "int32");
+                    names = categorical(NaN(nFixations, 1));
+                    namess = cell(nFixations, 1);
+                    otherNames = categorical(NaN(nFixations, 1));
                     trials = zeros(nFixations, 1, "int32");
                     parts = spiky.minos.BodyPart(zeros(nFixations, 1));
                     targetPos = zeros(nFixations, 3, "single");
                     targetProj = zeros(nFixations, 3, "single");
                     angles = zeros(nFixations, 1, "single");
                     %%
-                    ids(idcFixValid) = vertcat(transform(idcTr).Id);
-                    names(idcFixValid) = categorical(vertcat(transform(idcTr).Name));
-                    trials(idcFixValid) = trTrialSorted(idcCombined);
+                    ids(idcFixValid) = transform.Id(idcTr);
+                    idss(idcFixValid) = cellfun(@(x) transform.Id(x), idcTrAll, UniformOutput=false);
+                    otherIds(idcFixValid(isDouble)) = transform.Id(cell2mat(idcTrOther(isDouble)));
+                    names(idcFixValid) = categorical(transform.Name(idcTr));
+                    namess(idcFixValid) = cellfun(@(x) categorical(transform.Name(x)), idcTrAll, UniformOutput=false);
+                    otherNames(idcFixValid(isDouble)) = categorical(transform.Name(cell2mat(idcTrOther(isDouble))));
+                    trials(idcFixValid) = trTrialSorted(idcMinTr);
                     parts(idcFixValid) = spiky.minos.BodyPart(idcMinPart);
                     idcPos = sub2ind(size(trPosSorted), ...
-                        repmat(idcCombined, 3, 1), reshape(repmat(1:3, nValid, 1), [], 1), ...
+                        repmat(idcMinTr, 3, 1), reshape(repmat(1:3, nValid, 1), [], 1), ...
                         repmat(idcMinPart+1, 3, 1));
                     targetPos(idcFixValid, :) = reshape(trPosSorted(idcPos), [], 3);
                     targetProj(idcFixValid, :) = reshape(trProjSorted(idcPos), [], 3);
                     angles(idcFixValid) = minAng;
                     %%
-                    fixationTargets = table(trials, ids, names, parts, gaze, proj, ...
-                        targetPos, targetProj, angles, VariableNames=["Trial" "Id" "Name" "Part" ...
+                    fixationTargets = table(trials, ids, names, idss, namess, otherIds, ...
+                        otherNames, parts, gaze, proj, ...
+                        targetPos, targetProj, angles, VariableNames=["Trial" "Id" "Name" "Ids" ...
+                        "Names" "OtherId" "OtherName" "Part" ...
                         "Gaze" "Proj" "TargetPos" "TargetProj" "MinAngle"]);
                 else
                     fixationTargets = table(Size=[0 9], VariableTypes=["int32" "int32" "categorical" ...
+                        "cell" "cell" "int32" "categorical" ...
                         "spiky.minos.BodyPart" "single" "single" "single" "single" "single"], ...
-                        VariableNames=["Trial" "Id" "Name" "Part" ...
+                        VariableNames=["Trial" "Id" "Name" "Ids" ...
+                        "Names" "OtherId" "OtherName" "Part" ...
                         "Gaze" "Proj" "TargetPos" "TargetProj" "MinAngle"]);
                 end
             else

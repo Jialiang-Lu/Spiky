@@ -32,26 +32,9 @@ classdef ActionTheater < spiky.par.Paradigm
             actionAdjs = fGetVar(obj.Vars.ActionAdjs);
             actionAdjTargets = fGetVar(obj.Vars.ActionAdjTargets);
             actionAdjTargetAdjs = fGetVar(obj.Vars.ActionAdjTargetAdjs);
-            %% Fix bug
-            idcFix = find(ti.SubjectId>0);
-            if ~isempty(idcFix)
-                idcFixNew = zeros(size(idcFix));
-                tiNumber = ti.Number;
-                tiIsStart = ti.IsStart;
-                tiName = ti.SubjectName;
-                tiId = ti.SubjectId;
-                for ii = 1:numel(idcFix)
-                    idc = idcFix(ii);
-                    idcNew = find(tiNumber(idc+1:end)==tiNumber(idc) & ...
-                        tiIsStart(idc+1:end)==tiIsStart(idc) & ...
-                        tiName(idc+1:end)==tiName(idc), 1, "first");
-                    tiId(idc) = tiId(idc+idcNew);
-                end
-                ti.SubjectId = tiId;
-            end
             %% Preprocessing
             isVersion1 = ismember("Type", ti.VarNames);
-            isVersion2 = ismember("Human", ti.SubjectType);
+            isVersion2 = ismember("SubjectType", ti.VarNames) && ismember("Human", ti.SubjectType);
             isVersion3 = ~isVersion1 && ~isVersion2;
             if isVersion1
                 %% Old version
@@ -121,6 +104,29 @@ classdef ActionTheater < spiky.par.Paradigm
                 ti.PredicateName = tiAction;
             elseif isVersion3
                 %% Latest version
+                %% Fix bug 1
+                idcFix = find(ti.SubjectId>0);
+                if ~isempty(idcFix)
+                    idcFixNew = zeros(size(idcFix));
+                    tiNumber = ti.Number;
+                    tiIsStart = ti.IsStart;
+                    tiName = ti.SubjectName;
+                    tiId = ti.SubjectId;
+                    for ii = 1:numel(idcFix)
+                        idc = idcFix(ii);
+                        idcNew = find(tiNumber(idc+1:end)==tiNumber(idc) & ...
+                            tiIsStart(idc+1:end)==tiIsStart(idc) & ...
+                            tiName(idc+1:end)==tiName(idc), 1, "first");
+                        tiId(idc) = tiId(idc+idcNew);
+                    end
+                    ti.SubjectId = tiId;
+                end
+                %% Fix bug 2
+                idcFix = find(ti.PredicateType=="IndirectAction" & ti.ObjectType=="Target");
+                if ~isempty(idcFix)
+                    ti.ObjectType(idcFix) = "Actor";
+                end
+                %% 
                 idcUnique = ismember(ti.Id, ti.Id(~ti.IsStart));
                 ti = ti(idcUnique);
                 tmp = categorical(strings(height(ti), 1));
@@ -164,6 +170,9 @@ classdef ActionTheater < spiky.par.Paradigm
                 ti.PredicateName = tiAction;
             end
             %% Visibility of each entity
+            itvTrials = spiky.core.Intervals(obj.Trials{:, ["Move" "End"]}); 
+            itvTrials.Time(1) = 0; 
+            itvTrials.Time(end) = Inf;
             vis = {tr.Visible}';
             idcVis = find(cellfun(@any, vis));
             nVis = numel(idcVis);
@@ -202,7 +211,10 @@ classdef ActionTheater < spiky.par.Paradigm
                 nodesAdj = spiky.scene.SceneNode(nodesVis.Time, tiAdj.ObjectName(idcAdjInVis), ...
                     "Adj", tiAdj.ObjectId(idcAdjInVis), nodesVis.Pos, nodesVis.Rot, nodesVis.Proj);
             end
-            graphVis = spiky.scene.SceneGraph(nodesVis.Time, nodesVis, [], nodesAdj);
+            [~, ~, idcStart] = itvTrials.haveEvents(nodesVis.Time(:, 1));
+            [~, ~, idcEnd] = itvTrials.haveEvents(nodesVis.Time(:, 2));
+            graphVis = spiky.scene.SceneGraph(nodesVis.Time, ...
+                obj.Trials.Number(idcStart), obj.Trials.Number(idcEnd), nodesVis, [], nodesAdj);
             graphVis.Time = graphVis.Time+obj.Latency;
             %% Walk
             per = trials{:, ["Move" "Wait"]};
@@ -217,7 +229,9 @@ classdef ActionTheater < spiky.par.Paradigm
                 "Humanoid", trWalk.Id, posWalk, rotWalk, projWalk);
             nodesWalkVerb = spiky.scene.SceneNode(per, "Walk", ...
                 "Verb", 0, posWalk, rotWalk, projWalk);
-            graphWalk = spiky.scene.SceneGraph(per, nodesWalk, nodesWalkVerb);
+            [~, ~, idcEnd] = itvTrials.haveEvents(per(:, 2));
+            graphWalk = spiky.scene.SceneGraph(per, obj.Trials.Number(idcEnd), ...
+                obj.Trials.Number(idcEnd), nodesWalk, nodesWalkVerb);
             %% Idle
             if isVersion1
                 isIdle = ~ismissing(ti.Actor) & ti.Action=="Idle" & ti.Role=="Source";
@@ -239,7 +253,9 @@ classdef ActionTheater < spiky.par.Paradigm
                 nodesVerb = spiky.scene.SceneNode(per, "Idle", "Verb", 0, ...
                     tiIdle.SubjectPos, tiIdle.SubjectRot, tiIdle.SubjectProj);
             end
-            graphIdle = spiky.scene.SceneGraph(per, nodesSubject, nodesVerb);
+            [~, ~, idcStart] = itvTrials.haveEvents(per(:, 1));
+            graphIdle = spiky.scene.SceneGraph(per, obj.Trials.Number(idcStart), ...
+                obj.Trials.Number(idcStart), nodesSubject, nodesVerb);
             %% Action
             if isVersion1
                 idcSource = find(ti.Role=="Source" & isDoubleAction);
@@ -284,7 +300,9 @@ classdef ActionTheater < spiky.par.Paradigm
                     tiAction.DirectObjectRot(isIndirectAction, :), ...
                     tiAction.DirectObjectProj(isIndirectAction, :));
             end
-            graphAction = spiky.scene.SceneGraph(per, nodesSubject, nodesVerb, nodesObject, nodesIndirect);
+            [~, ~, idcStart] = itvTrials.haveEvents(per(:, 1));
+            graphAction = spiky.scene.SceneGraph(per, obj.Trials.Number(idcStart), ...
+                obj.Trials.Number(idcStart), nodesSubject, nodesVerb, nodesObject, nodesIndirect);
             %% ActionAdj
             if isVersion1 || isVersion2
                 graphActionAdj = spiky.scene.SceneGraph;
@@ -299,7 +317,10 @@ classdef ActionTheater < spiky.par.Paradigm
                     tiActionAdj.Id, tiActionAdj.PredicatePos, tiActionAdj.PredicateRot, tiActionAdj.PredicateProj);
                 nodesObject = spiky.scene.SceneNode(per, tiActionAdj.ObjectName, "Object", ...
                     tiActionAdj.ObjectId, tiActionAdj.ObjectPos, tiActionAdj.ObjectRot, tiActionAdj.ObjectProj);
-                graphActionAdj = spiky.scene.SceneGraph(per, nodesSubject, nodesVerb, nodesObject);
+                [~, ~, idcStart] = itvTrials.haveEvents(per(:, 1));
+                [~, ~, idcEnd] = itvTrials.haveEvents(per(:, 2));
+                graphActionAdj = spiky.scene.SceneGraph(per, obj.Trials.Number(idcStart), ...
+                    obj.Trials.Number(idcEnd), nodesSubject, nodesVerb, nodesObject);
             end
             %%
             obj.TrialInfo = ti;
@@ -307,49 +328,123 @@ classdef ActionTheater < spiky.par.Paradigm
             obj.Graph = obj.Graph.sort();
             %% Fixations
             fix = minos.Eye.FixationTargets;
-            fix = fix(fix.Start>=obj.Intervals.Time(1) & fix.End<=obj.Intervals.Time(end), :);
+            fix = fix(fix.Start>=obj.Intervals.Time(1) & fix.End<=obj.Intervals.Time(end) & ...
+                fix.Trial>=obj.Trials.Number(1) & fix.Trial<=obj.Trials.Number(end), :);
             fix.Data.IsFace = ~ismissing(fix.Name) & fix.MinAngle<8 & ismember(fix.Part, ...
                 [spiky.minos.BodyPart.Head spiky.minos.BodyPart.UpperChest ...
+                spiky.minos.BodyPart.Hip ...
                 spiky.minos.BodyPart.LeftArm spiky.minos.BodyPart.RightArm ...
                 spiky.minos.BodyPart.LeftHand spiky.minos.BodyPart.RightHand]);
-            idcFixFace = find(fix.IsFace);
+            fix = fix(fix.IsFace, :);
             nFix = height(fix);
+            %% Fixation sequences
+            idcNameGroup = findgroups(fix.Name);
+            isNameChange = [true; diff(idcNameGroup)~=0];
+            idcSeq = zeros(nFix, 1);
+            idcInSeq = zeros(nFix, 1);
+            seqLength = zeros(nFix, 1);
+            for ii = 1:max(idcNameGroup)
+                idc1 = idcNameGroup==ii;
+                [idcSeq(idc1), idcInSeq(idc1), seqLength(idc1)] = fix(idc1, :).findSequence(0.2, ...
+                    IdcJump=isNameChange(idc1));
+            end
+            idcSeq = fix.Name.*categorical(idcSeq);
+            [~, ~, idcSeq] = unique(idcSeq, "stable");
+            fix.Data.IdcSeq = idcSeq;
+            fix.Data.IdcInSeq = idcInSeq;
+            fix.Data.SeqLength = seqLength;
+            %% Find prev fixation
+            prevName = categorical(NaN(nFix, 1));
+            prevName(2:end) = fix.Name(1:end-1);
+            fix.Data.PrevName = prevName;
+            prevSeqName = categorical(NaN(nFix, 1));
+            idcFirst = find(idcInSeq==1);
+            [hasPrevSeq, idcPrevSeq] = ismember(idcSeq-1, idcSeq(idcFirst));
+            prevSeqName(hasPrevSeq) = fix.Name(idcFirst(idcPrevSeq(hasPrevSeq)));
+            fix.Data.PrevSeqName = prevSeqName;
             %% Find fixation role
             graphVerb = obj.Graph(obj.Graph.IsVerb, :);
             [~, idcFixVerb, idcVerbFix] = graphVerb.haveEvents(fix.Start);
-            idSubject = graphVerb.Subject.Id;
-            isFixSubject = fix.Id(idcFixVerb)==idSubject(idcVerbFix) | ...
+            isFixSubject = fix.Id(idcFixVerb)==graphVerb.Subject.Id(idcVerbFix) | ...
                 ismember(graphVerb.Predicate.Name(idcVerbFix), ["Walk" "Idle"]);
+            isFixObject = fix.Id(idcFixVerb)==graphVerb.Object.Id(idcVerbFix);
             fix.Data.Role = categorical(NaN(nFix, 1));
             fix.Role(idcFixVerb(isFixSubject)) = "Subject";
-            fix.Role(idcFixVerb(~isFixSubject)) = "Object";
+            fix.Role(idcFixVerb(isFixObject)) = "Object";
+            isAction = graphVerb.Predicate.Type(idcVerbFix)=="Action" & ...
+                ~ismember(graphVerb.Predicate.Name(idcVerbFix), ["Walk" "Idle"]);
             fix.Data.OtherRole = categorical(NaN(nFix, 1));
-            fix.OtherRole(idcFixVerb(isFixSubject)) = "Object";
-            fix.OtherRole(idcFixVerb(~isFixSubject)) = "Subject";
+            fix.OtherRole(idcFixVerb(isAction & isFixSubject)) = "Object";
+            fix.OtherRole(idcFixVerb(isAction & isFixObject)) = "Subject";
             fix.Data.Verb = categorical(NaN(nFix, 1));
             fix.Verb(idcFixVerb) = graphVerb.Predicate.Name(idcVerbFix);
             fix.Data.Action = fix.Verb;
             fix.Action(ismember(fix.Action, ["Walk" "Idle"])) = missing;
+            fix.Verb(ismissing(fix.Verb)) = "Wait";
             fix.Data.ActionRole = categorical(string(fix.Action)+string(fix.Role));
             fix.Data.OtherActionRole = categorical(string(fix.Action)+string(fix.OtherRole));
-            %% Find non-fixated targets
-            prdTr = spiky.core.Intervals.concat(trHuman.Interval);
-            [~, idcFixInTr, idcTrInFix] = prdTr.haveEvents(fix.Start+0.05);
-            idcFixValidTr = unique(idcFixInTr);
-            tmp = categorical(trHuman(idcTrInFix).Name);
-            fixNames = splitapply(@(x) {x}, tmp, findgroups(idcFixInTr));
-            fixOtherName = arrayfun(@(a, b) a{1}(setdiff(1:numel(a{1}), find(a{1}==b, 1))), ...
-                fixNames, fix.Name(idcFixValidTr), UniformOutput=false);
-            fix.Data.Names = categorical(NaN(nFix, 1));
-            fix.Names(idcFixValidTr) = categorical(cellfun(@(x) join(sort(string(x)), "|"), fixNames));
-            fix.Data.OtherName = categorical(NaN(nFix, 1));
-            for ii = 1:numel(idcFixValidTr)
-                if isscalar(fixOtherName{ii})
-                    fix.OtherName(idcFixValidTr(ii)) = fixOtherName{ii};
-                end
-            end
-            fix.Data.NActors = zeros(nFix, 1);
-            fix.NActors(idcFixValidTr) = cellfun(@numel, fixNames);
+            fix.Data.NActors = cellfun(@numel, fix.Names);
+            %% Find fixated actionadj
+            graphActionAdj = obj.Graph(obj.Graph.IsActionAdj, :).interpById(fix.Id, fix.Start+0.02);
+            graphActionAdjTarget = obj.Graph(obj.Graph.IsAttribute & ...
+                obj.Graph.Subject.Type=="Object").interpById(graphActionAdj.Object.Id);
+            fix.Data.ActionAdj = graphActionAdj.Predicate.Name;
+            fix.Data.ActionAdjTarget = graphActionAdjTarget.Subject.Name;
+            fix.Data.ActionAdjTargetAdj = graphActionAdjTarget.Object.Name;
+            %% Time after action start
+            idcAction = find(~ismissing(fix.Action));
+            trialsAction = unique(fix.Trial(idcAction));
+            [isValid, idcInGraph] = ismember(trialsAction, graphAction.TrialStart);
+            trialsAction = trialsAction(isValid);
+            tAction = graphAction.Time(idcInGraph(isValid), 1);
+            [isInActionTrial, idcFixInActionTrial] = ismember(fix.Trial, trialsAction);
+            timeAfterAction = NaN(nFix, 1);
+            timeAfterAction(isInActionTrial) = fix.Start(isInActionTrial)-tAction(idcFixInActionTrial(isInActionTrial));
+            fix.Data.TimeAfterAction = timeAfterAction;
+            %% Assign roles before and after action
+            trialsAction = fix.Trial(idcAction);
+            idcBeforeAction = find(ismember(fix.Trial, trialsAction) & ismissing(fix.Action));
+            idcAfterAction = find(ismember(fix.Trial, trialsAction+1) & ismissing(fix.Action));
+            roleBeforeAction = categorical(NaN(nFix, 1));
+            roleAfterAction = categorical(NaN(nFix, 1));
+            actionBeforeAction = categorical(NaN(nFix, 1));
+            actionAfterAction = categorical(NaN(nFix, 1));
+            keyAction = [fix.Trial(idcAction) fix.Id(idcAction)];
+            [~, ia] = unique(keyAction, "rows", "stable");
+            keyActionFirst = keyAction(ia, :);
+            idcActionFirst = idcAction(ia);
+            keyBefore = [fix.Trial(idcBeforeAction) fix.Id(idcBeforeAction)];
+            [isMatchBefore, idcBeforeInAction] = ismember(keyBefore, keyActionFirst, "rows");
+            idcBeforeActionValid = idcBeforeAction(isMatchBefore);
+            idcActionBefore = idcActionFirst(idcBeforeInAction(isMatchBefore));
+            roleBeforeAction(idcBeforeActionValid) = fix.Role(idcActionBefore);
+            actionBeforeAction(idcBeforeActionValid) = fix.Action(idcActionBefore);
+            keyAfter = [fix.Trial(idcAfterAction)-1 fix.Id(idcAfterAction)];
+            [isMatchAfter, idcAfterInAction] = ismember(keyAfter, keyActionFirst, "rows");
+            idcAfterActionValid = idcAfterAction(isMatchAfter);
+            idcActionAfter = idcActionFirst(idcAfterInAction(isMatchAfter));
+            roleAfterAction(idcAfterActionValid) = fix.Role(idcActionAfter);
+            actionAfterAction(idcAfterActionValid) = fix.Action(idcActionAfter);
+            fix.Data.RoleBeforeAction = roleBeforeAction;
+            fix.Data.RoleAfterAction = roleAfterAction;
+            fix.Data.ActionBeforeAction = actionBeforeAction;
+            fix.Data.ActionAfterAction = actionAfterAction;
+            %% Randomize role for handshake
+            idcHandshake = find(fix.Action=="Handshake");
+            nHandshake = numel(idcHandshake);
+            idcSwap = rand(nHandshake, 1)<0.5;
+            fix.Role(idcHandshake(idcSwap)) = "Object";
+            fix.Role(idcHandshake(~idcSwap)) = "Subject";
+            idcHandshake = find(fix.ActionBeforeAction=="Handshake");
+            nHandshake = numel(idcHandshake);
+            idcSwap = rand(nHandshake, 1)<0.5;
+            fix.RoleBeforeAction(idcHandshake(idcSwap)) = "Object";
+            fix.RoleBeforeAction(idcHandshake(~idcSwap)) = "Subject";
+            idcHandshake = find(fix.ActionAfterAction=="Handshake");
+            nHandshake = numel(idcHandshake);
+            idcSwap = rand(nHandshake, 1)<0.5;
+            fix.RoleAfterAction(idcHandshake(idcSwap)) = "Object";
+            fix.RoleAfterAction(idcHandshake(~idcSwap)) = "Subject";
             %%
             obj.Fix = fix;
         end

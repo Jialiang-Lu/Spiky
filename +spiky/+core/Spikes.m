@@ -152,14 +152,14 @@ classdef Spikes < spiky.core.Array
             counts = spiky.trig.TrigCounts(obj, events, window, Bernoulli=options.Bernoulli);
         end
 
-        function fr = trigFr(obj, events, window, options)
+        function fr = trigFr(obj, events, t, options)
             %TRIGFR Compute firing rate triggered by events
             %
-            %   fr = trigFr(obj, events, window, options)
+            %   fr = trigFr(obj, events, t, options)
             %
             %   obj: Spikes object or array of Spikes objects
             %   events: (n, 1) double or Events object
-            %   window: time window around the events
+            %   t: time vector around events, e.g. -before:1/fs:after
             %   Name-value arguments:
             %       HalfWidth: half-width of the kernel (default: 0.1)
             %       Kernel: smoothing kernel, "gaussian" or "box" (default: "gaussian")
@@ -171,7 +171,7 @@ classdef Spikes < spiky.core.Array
             arguments
                 obj spiky.core.Spikes = spiky.core.Spikes
                 events = [] % (n, 1) double or spiky.core.Events
-                window double {mustBeVector} = [0, 1]
+                t double {mustBeVector} = [0, 1]
                 options.HalfWidth double {mustBePositive} = 0.1
                 options.Kernel string {mustBeMember(options.Kernel, ["gaussian", "box"])} = "gaussian"
                 options.Normalize logical = false
@@ -185,7 +185,7 @@ classdef Spikes < spiky.core.Array
                 events = events.Time;
             end
             events = events(:);
-            t = window(:);
+            t = t(:);
             nEvents = numel(events);
             nT = numel(t);
             if isscalar(t)
@@ -225,7 +225,7 @@ classdef Spikes < spiky.core.Array
                     fr.Start_ = t(1);
                     fr.Step_ = res;
                     fr.N_ = nT;
-                    fr.Window = window;
+                    fr.Window = t;
                     fr.Options = options;
                     return
                 otherwise
@@ -234,8 +234,32 @@ classdef Spikes < spiky.core.Array
             if options.Unit=="Count"
                 fr = fr*res;
             end
-            fr = spiky.trig.TrigFr(t(1), res, fr, events, window, obj.Neuron);
+            fr = spiky.trig.TrigFr(t(1), res, fr, events, t, obj.Neuron);
             fr.Options = options;
+        end
+
+        function fr = trigFrWindow(obj, events, window, options)
+            %TRIGFRWINDOW Compute firing rate triggered by events in a time window
+            %
+            %   fr = trigFrWindow(obj, events, window, options)
+            %
+            %   obj: Spikes object or array of Spikes objects
+            %   events: (n, 1) double or Events object
+            %   window: [start end] time window around events
+            %   Name-value arguments:
+            %       Normalize: if true, normalize the firing rate (default: false)
+            %       Unit: "Hz" or "count" for the output unit (default: "Hz")
+            arguments
+                obj spiky.core.Spikes
+                events = [] % (n, 1) double or spiky.core.Events
+                window (1, 2) double = [0, 1]
+                options.Normalize logical = false
+                options.Unit string {mustBeMember(options.Unit, ["Hz", "count"])} = "Hz"
+            end
+            t = mean(window);
+            halfWidth = diff(window)/2;
+            fr = obj.trigFr(events, t, HalfWidth=halfWidth, Kernel="box", ...
+                Normalize=options.Normalize, Unit=options.Unit);
         end
 
         function zeta = zeta(obj, events, window, options)
@@ -252,8 +276,48 @@ classdef Spikes < spiky.core.Array
                 window (1, 1) double = 1
                 options.NumResample (1, 1) double = 100
             end
-            zeta = spiky.stat.Zeta(obj, events, window, ...
-                NumResample=options.NumResample);
+            if isa(events, "spiky.core.Events")
+                events = events.Time;
+            end
+            n = height(obj.Data);
+            nResample = options.NumResample;
+            p = cell(1, n);
+            z = cell(1, n);
+            d = cell(1, n);
+            onset = cell(1, n);
+            halfPeak = cell(1, n);
+            peak = cell(1, n);
+            offset = cell(1, n);
+            peakFr = cell(1, n);
+            pb = spiky.plot.ProgressBar(n, "Performing Zeta test", Parallel=true);
+            parfor ii = 1:n
+                [p1, s1, s2, s3] = spiky.utils.zetatest.zetatest(obj.Data{ii}, events, window, ...
+                    nResample);
+                if ~isempty(s2)
+                    p{ii} = p1;
+                    z{ii} = s1.dblZETA;
+                    d{ii} = s1.dblD;
+                    onset{ii} = s2.vecPeakStartStop(1);
+                    halfPeak{ii} = s3.Onset;
+                    peak{ii} = s3.Peak;
+                    offset{ii} = s2.vecPeakStartStop(2);
+                    peakFr{ii} = s1.vecLatencyVals(3);
+                else
+                    p{ii} = 1;
+                    z{ii} = 0;
+                    d{ii} = 0;
+                    onset{ii} = NaN;
+                    halfPeak{ii} = NaN;
+                    peak{ii} = NaN;
+                    offset{ii} = NaN;
+                    peakFr{ii} = NaN;
+                end
+                pb.step
+            end
+            data = struct("P", p, "Z", z, "D", d, ...
+                "Onset", onset, "HalfPeak", halfPeak, "Peak", peak, ...
+                "Offset", offset, "PeakFr", peakFr);
+            zeta = spiky.stat.Zeta(data, window, events, options, obj.Neuron);
         end
     end
 end

@@ -23,58 +23,16 @@ classdef Zeta < spiky.stat.GroupedStat
     end
     
     methods
-        function obj = Zeta(spikes, events, window, options)
+        function obj = Zeta(data, window, events, options, groups)
             %ZETA Constructor for the Zeta class
             %
             arguments
-                spikes spiky.core.Spikes
-                events
-                window (1, 1) double = 1
-                options.NumResample (1, 1) double = 100
+                data (1, :) struct = struct.empty % data for the Zeta test
+                window (1, 1) double = NaN % time window for the Zeta test
+                events (:, 1) double = []
+                options struct = struct() % options for the Zeta test
+                groups (:, 1) = categorical(strings(size(data, 2), 1))
             end
-
-            if isa(events, "spiky.core.Events")
-                events = events.Time;
-            end
-            n = height(spikes);
-            nResample = options.NumResample;
-            p = cell(1, n);
-            z = cell(1, n);
-            d = cell(1, n);
-            onset = cell(1, n);
-            halfPeak = cell(1, n);
-            peak = cell(1, n);
-            offset = cell(1, n);
-            peakFr = cell(1, n);
-            pb = spiky.plot.ProgressBar(n, "Performing Zeta test", Parallel=true);
-            parfor ii = 1:n
-                [p1, s1, s2, s3] = spiky.utils.zetatest.zetatest(spikes{ii}, events, window, ...
-                    nResample);
-                if ~isempty(s2)
-                    p{ii} = p1;
-                    z{ii} = s1.dblZETA;
-                    d{ii} = s1.dblD;
-                    onset{ii} = s2.vecPeakStartStop(1);
-                    halfPeak{ii} = s3.Onset;
-                    peak{ii} = s3.Peak;
-                    offset{ii} = s2.vecPeakStartStop(2);
-                    peakFr{ii} = s1.vecLatencyVals(3);
-                else
-                    p{ii} = 1;
-                    z{ii} = 0;
-                    d{ii} = 0;
-                    onset{ii} = NaN;
-                    halfPeak{ii} = NaN;
-                    peak{ii} = NaN;
-                    offset{ii} = NaN;
-                    peakFr{ii} = NaN;
-                end
-                pb.step
-            end
-            data = struct("P", p, "Z", z, "D", d, ...
-                "Onset", onset, "HalfPeak", halfPeak, "Peak", peak, ...
-                "Offset", offset, "PeakFr", peakFr);
-            groups = spikes.Neuron;
             obj@spiky.stat.GroupedStat(0, data, groups);
             obj.Window = window;
             obj.Events = events;

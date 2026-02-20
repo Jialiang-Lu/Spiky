@@ -75,7 +75,8 @@ classdef ObjArray < spiky.core.ArrayBase & matlab.mixin.CustomDisplay & ...
 
     methods (Access = protected)
         function s = processSubstruct(obj, s)
-            if ~strcmp(s(1).type, '.') || obj.isProperty(s(1).subs) || obj.isMethod(s(1).subs)
+            if ~strcmp(s(1).type, '.') || strcmp(s(1).subs, "VarNames") || ...
+                ~ismember(s(1).subs, obj.VarNames)
                 return
             end
             s1 = substruct('{}', {':'});
@@ -98,7 +99,7 @@ classdef ObjArray < spiky.core.ArrayBase & matlab.mixin.CustomDisplay & ...
             if istable(data)
                 names = string(data.Properties.VariableNames);
             elseif isa(data, "spiky.core.ArrayBase")
-                names = data.getVarNames();
+                names = union(data.getVarNames(), string(properties(data)));
             else
                 names = string.empty;
             end

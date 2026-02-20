@@ -2,11 +2,12 @@ classdef GroupedStat < spiky.core.EventsTable
     %GROUPEDSTAT Base class representing grouped statistics
     %
     % The first dimension is time and the second dimension is the groups, which can be neurons or
-    % events, the third dimension is the samples.
+    % events, the third dimension is the partions or samples.
 
     properties
         Groups (:, 1)
         GroupIndices (:, 1) cell
+        Partition % Partition of the data used to compute the grouped statistics, e.g. for cross-validation
     end
 
     properties (Dependent)
@@ -88,7 +89,7 @@ classdef GroupedStat < spiky.core.EventsTable
         end
 
         function h = boxchart(obj, plotOps, options)
-            %BOXCHART Plot the accuracy as box charts
+            %BOXCHART Plot the data as box charts
             %
             %   h = BOXCHART(obj, plotOps, options)
             %

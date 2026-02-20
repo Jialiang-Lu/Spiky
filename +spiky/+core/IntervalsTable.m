@@ -117,25 +117,29 @@ classdef IntervalsTable < spiky.core.Intervals & spiky.core.Array
             out = obj.toEventsTable().interp(t, "previous", "extrap", optionArgs{:});
         end
 
-        function [h, hText] = plotStates(obj, plotOps)
+        function [h, hText] = plotStates(obj, idxVar, plotOps)
             %PLOTSTATES Plot the states over time
-            %   [h, hText] = PLOTSTATES(obj, options)
+            %   [h, hText] = PLOTSTATES(obj, idxVar, options)
             %
             %   obj: IntervalsTable, which data must be categorial or logical or string
+            %   idxVar: index of the variable to plot (or name if data is a table)
             %
             %   h: line handle
             %   hText: text handle
             arguments
                 obj spiky.core.IntervalsTable
+                idxVar (1, 1) = 1
                 plotOps.?matlab.graphics.chart.primitive.Line
             end
             if istable(obj.Data)
-                data = string(obj.Data{:, 1});
+                data = categorical(obj.Data{:, idxVar});
             else
-                data = string(obj.Data(:, 1));
+                data = categorical(obj.Data(:, idxVar));
             end
+            data(ismissing(data)) = "_";
             plotArgs = namedargs2cell(plotOps);
-            [labels, ~, idc] = unique(data);
+            labels = categories(data, OutputType="categorical");
+            [~, idc] = ismember(data, labels);
             nLabels = numel(labels);
             x = obj.Time(:, [1 1 2 2])';
             y = zeros(4, width(x));

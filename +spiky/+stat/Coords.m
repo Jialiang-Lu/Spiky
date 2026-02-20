@@ -63,7 +63,7 @@ classdef Coords < spiky.core.Array
             obj.BasisNames = basisNames;
         end
 
-        function [data, proj] = project(obj, data, idcBases)
+        function [data, proj] = project(obj, data, idcBases, options)
             %PROJECT Project the data onto the coordinate system
             %
             %   data = PROJECT(obj, data)
@@ -71,6 +71,8 @@ classdef Coords < spiky.core.Array
             %   obj: coordinate system
             %   data: data to project, nDim x nObs
             %   idcBases: indices of the bases to use for projection
+            %   Name-value arguments:
+            %       Individual: whether to project each basis vector individually
             %
             %   data: projected data, length(idcBases) x nObs
             %   proj: projected data in the original space, nDims x nObs
@@ -78,12 +80,18 @@ classdef Coords < spiky.core.Array
                 obj spiky.stat.Coords
                 data double
                 idcBases double = 1:obj.NBases
+                options.Individual logical = false
             end
             assert(height(data)==obj.NDims, ...
                 "The number of rows in data must be the same as the number of dimensions in the coordinate system")
             B = obj.Bases(:, idcBases);
-            data = (B'*B)\(B'*(data-obj.Origin));
-            proj = B*data+obj.Origin;
+            if options.Individual
+                data = B'*(data-obj.Origin);
+                proj = B*data+obj.Origin;
+            else
+                data = (B'*B)\(B'*(data-obj.Origin));
+                proj = B*data+obj.Origin;
+            end
         end
 
         function data = unproject(obj, data, idcBases)
@@ -121,11 +129,11 @@ classdef Coords < spiky.core.Array
             end
             assert(nDims<=obj.NBases, ...
                 "nDims must be less than or equal to the number of bases");
-            [coeff, ~, ~, ~, explained, mu] = pca(obj.Bases, NumComponents=nDims);
-            obj.Origin = mu(:);
-            obj.Bases = coeff;
-            obj.DimNames = obj.BasisNames;
-            obj.BasisNames = explained(:);
+            [~, s, v] = svd(obj.Bases, "econ");
+            sv = diag(s);
+            explained = sv.^2/sum(sv.^2)*100;
+            obj.Bases = obj.Bases*v(:, 1:nDims);
+            obj.BasisNames = explained(1:nDims);
         end
 
         function obj = addPCA(obj, data, options)

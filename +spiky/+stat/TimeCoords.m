@@ -227,30 +227,34 @@ classdef TimeCoords < spiky.stat.Coords & spiky.core.EventsTable
             end
         end
 
-        function plot(obj)
+        function h = plot(obj)
             %PLOT Plot the basis functions
             %
             %   obj: TimeCoords object
 
             figure;
-            plot(obj.Time, obj.Bases);
+            h1 = plot(obj.Time, obj.Bases);
             xlim([min(obj.Time) max(obj.Time)]);
             xlabel("Time (s)");
             ylabel("Basis functions");
-            spiky.plot.fixfig
+            if nargout>0
+                h = h1;
+            end
         end
 
-        function image(obj)
+        function h = image(obj)
             %IMAGE Plot the basis functions as an image
             %
             %   obj: TimeCoords object
 
             figure;
-            imagesc(obj.Time, 1:obj.NBases, obj.Bases.');
+            h1 = imagesc(obj.Time, 1:obj.NBases, obj.Bases.');
             xlabel("Time (s)");
             ylabel("Basis functions");
-            colorbar;
-            spiky.plot.fixfig
+            colorbar
+            if nargout>0
+                h = h1;
+            end
         end
     end
 end

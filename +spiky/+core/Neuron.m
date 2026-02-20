@@ -20,6 +20,31 @@ classdef Neuron < spiky.core.Array
             %   obj: array of Neuron objects
             obj = repmat(spiky.core.Neuron(spiky.ephys.Session(""), 0, 0, 0, 0, 0, 0, 0), n, 1);
         end
+
+        function obj = create(session, regions, nNeuronsPerRegion)
+            %CREATE Create an array of Neuron objects with specified session, regions, and 
+            %   number of neurons per region
+            %
+            %   session: spiky.ephys.Session object representing the recording session
+            %   regions: array of brain regions
+            %   nNeuronsPerRegion: number of neurons to create for each region
+            %
+            %   obj: array of Neuron objects
+            arguments
+                session spiky.ephys.Session
+                regions (:, 1) categorical
+                nNeuronsPerRegion (:, 1) double
+            end
+            if numel(nNeuronsPerRegion)==1
+                nNeuronsPerRegion = repmat(nNeuronsPerRegion, numel(regions), 1);
+            end
+            nNeurons = sum(nNeuronsPerRegion);
+            obj = spiky.core.Neuron.zeros(nNeurons);
+            obj.Data.Session = repmat(session, nNeurons, 1);
+            obj.Data.Region = repelem(regions, nNeuronsPerRegion);
+            obj.Data.Group = repelem((1:numel(regions))', nNeuronsPerRegion);
+            obj.Data.Id = grouptransform(obj.Data.Group, obj.Data.Group, @(x) (1:numel(x))');
+        end
     end
 
     methods

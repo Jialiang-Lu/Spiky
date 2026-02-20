@@ -101,6 +101,7 @@ classdef Session < spiky.core.ArrayBase
             if ~isempty(options.RegionSubset)
                 idcKeep = ismember(spikes.Neuron.Region, options.RegionSubset);
                 spikes = spikes(idcKeep, :);
+                spikes.Neuron.Region = removecats(spikes.Neuron.Region);
             end
         end
 

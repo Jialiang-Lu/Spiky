@@ -201,6 +201,7 @@ classdef Classifier < spiky.stat.GroupedStat
             %   groupIndices: group indices
             %   Name-Value pairs:
             %       Balance: if true, balance the number of events in each class
+            %       UseTrainingPartition: if true, use the training partition for cross-validated
             %       Subset: subset of y to use for accuracy calculation
             %
             %   acc: accuracy, nT x nGroups x nFolds spiky.stat.Accuracy object
@@ -211,6 +212,7 @@ classdef Classifier < spiky.stat.GroupedStat
                 eventsIndices = []
                 groupIndices = obj.GroupIndices
                 options.Balance string {mustBeMember(options.Balance, ["none", "min", "max"])} = "none"
+                options.UseTrainingPartition logical = false
                 options.Subset = []
             end
             if isnumeric(groupIndices) || iscategorical(groupIndices)
@@ -274,6 +276,7 @@ classdef Classifier < spiky.stat.GroupedStat
                 %         1/numel(obj.Data{1}.ClassNames));
                 %     return
                 % end
+                options.UseTrainingPartition = true;
             end
             if ~isempty(options.Subset)
                 idcValid = ismember(y, options.Subset);
@@ -294,19 +297,25 @@ classdef Classifier < spiky.stat.GroupedStat
                 %     1-c1.loss(x, y, ObservationsIn="columns"), c.Trained), [3 2 1]);
                 % acc = spiky.utils.cellfun(func, classifiers, x);
                 acc = cell(size(classifiers));
-                parfor ii = 1:numel(classifiers)
+                for ii = 1:numel(classifiers)
                     c = classifiers{ii};
                     x1 = x{ii};
                     nFolds = c.Partition.NumTestSets;
-                    idcTest = c.Partition.test("all");
-                    if options.Balance~="none"
-                        idcTest = idcTest(idcBalance, :);
+                    if options.UseTrainingPartition
+                        idcTest = c.Partition.test("all");
+                        if options.Balance~="none"
+                            idcTest = idcTest(idcBalance, :);
+                        end
+                    else
+                        cv1 = cvpartition(y, KFold=nFolds);
+                        idcTest = cv1.test("all");
                     end
                     acc1 = zeros(1, 1, nFolds);
                     for kk = 1:nFolds
                         idcFold = idcTest(:, kk);
                         xFold = x1(:, idcFold);
                         yFold = y(idcFold)';
+                        % fprintf("Predicting %d samples for fold %d/%d...\n", sum(idcFold), kk, nFolds);
                         acc1(kk) = sum(c.Trained{kk}.predict(xFold, ...
                             ObservationsIn="columns")'==yFold)./numel(yFold);
                     end

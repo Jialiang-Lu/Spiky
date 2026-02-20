@@ -1,5 +1,14 @@
 classdef SceneGraph < spiky.core.IntervalsTable
     %SCENEGRAPH represents a scene graph structure for entities, attributes, and predicates
+    %
+    %   Properties:
+    %       Time: time intervals for the scene graph
+    %       TrialStart: trial number at the start of each interval
+    %       TrialEnd: trial number at the end of each interval
+    %       Subject: SceneNode representing the subject
+    %       Predicate: SceneNode representing the predicate
+    %       Object: SceneNode representing the object
+    %       DirectObject: SceneNode representing the direct object
 
     properties
         Entities table % Table of entities with columns: Name, Type (Humanoid, Object)
@@ -14,13 +23,17 @@ classdef SceneGraph < spiky.core.IntervalsTable
         IsVerb % If the rows represent verbs in the scene graph
         IsDirectVerb % If the rows represent direct verbs in the scene graph
         IsIndirectVerb % If the rows represent indirect verbs in the scene graph
+        IsActionAdj % If the rows represent action adjectives in the scene graph
     end
 
     methods
-        function obj = SceneGraph(intervals, subject, predicate, object, directObject)
+        function obj = SceneGraph(intervals, trialStart, trialEnd, subject, predicate, object, ...
+            directObject)
             %SCENEGRAPH Constructor for the SceneGraph class
             % 
             %   intervals: time intervals for the scene graph
+            %   trialStart: trial number at the start of each interval
+            %   trialEnd: trial number at the end of each interval
             %   subject: SceneNode representing the subject
             %   predicate: SceneNode representing the predicate
             %   object: SceneNode representing the object
@@ -28,10 +41,12 @@ classdef SceneGraph < spiky.core.IntervalsTable
             
             arguments
                 intervals (:, 2) double = double.empty
-                subject spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(intervals))
-                predicate spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(intervals))
-                object spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(intervals))
-                directObject spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(intervals))
+                trialStart (:, 1) double = zeros(height(intervals), 1)
+                trialEnd (:, 1) double = zeros(height(intervals), 1)
+                subject (:, 1) spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(intervals))
+                predicate (:, 1) spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(intervals))
+                object (:, 1) spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(intervals))
+                directObject (:, 1) spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(intervals))
             end
 
             if isempty(predicate)
@@ -56,8 +71,8 @@ classdef SceneGraph < spiky.core.IntervalsTable
                 end
             end
             obj.Time = intervals;
-            obj.Data = table(subject, predicate, object, directObject, ...
-                VariableNames=["Subject", "Predicate", "Object", "DirectObject"]);
+            obj.Data = table(trialStart, trialEnd, subject, predicate, object, directObject, ...
+                VariableNames=["TrialStart", "TrialEnd", "Subject", "Predicate", "Object", "DirectObject"]);
             obj.Entities = unique([subject.Data(~ismissing(subject), ["Name" "Type"]);
                 object.Data(~ismissing(predicate)&~ismissing(object), ["Name" "Type"]);
                 directObject.Data(~ismissing(directObject), ["Name" "Type"])], "rows");
@@ -93,6 +108,13 @@ classdef SceneGraph < spiky.core.IntervalsTable
         function b = get.IsIndirectVerb(obj)
             %ISINDIRECTVERB if the rows represent indirect verbs in the scene graph
             b = obj.IsVerb & ~ismissing(obj.Data.DirectObject);
+        end
+
+        function b = get.IsActionAdj(obj)
+            %ISACTIONADJ if the rows represent action adjectives in the scene graph
+            b = ~ismissing(obj.Data.Subject) & ...
+                ~ismissing(obj.Data.Predicate) & ...
+                obj.Data.Predicate.Type=="ActionAdj";
         end
 
         function tt = getCounts(obj, t)
@@ -182,6 +204,39 @@ classdef SceneGraph < spiky.core.IntervalsTable
             roles(~obj.Data.SubjectLeft, :) = fliplr(roles(~obj.Data.SubjectLeft, :));
             obj.Data.LeftRole = roles(:, 1);
             obj.Data.RightRole = roles(:, 2);
+        end
+
+        function out = interpById(obj, ids, t, options)
+            arguments
+                obj spiky.scene.SceneGraph
+                ids (:, 1) int32
+                t (:, 1) double = []
+                options.CellMode (1, 1) logical = false
+            end
+            n = numel(ids);
+            if ~isempty(t)
+                assert(numel(t)==numel(ids), ...
+                    "The number of time points must be the same as the number of IDs");
+                [~, idcQueryInGraph, idcGraphInQuery] = obj.haveEvents(t);
+                isValid = obj.Data.Subject.Id(idcGraphInQuery)==ids(idcQueryInGraph);
+                idcQueryInGraph = idcQueryInGraph(isValid);
+                idcGraphInQuery = idcGraphInQuery(isValid);
+            else
+                [isValid, idcGraphInQuery] = ismember(ids, obj.Data.Subject.Id);
+                idcGraphInQuery = idcGraphInQuery(isValid);
+                idcQueryInGraph = find(isValid);
+            end
+            if options.CellMode
+                out = arrayfun(@(idx) obj.Data(idcGraphInQuery(idcQueryInGraph==idx), :), ...
+                    (1:n)', UniformOutput=false);
+            else
+                out = spiky.scene.SceneGraph(zeros(n, 2));
+                [~, idcUnique] = unique(idcQueryInGraph);
+                idcQueryInGraph = idcQueryInGraph(idcUnique);
+                idcGraphInQuery = idcGraphInQuery(idcUnique);
+                out1 = subsref(obj, substruct("()", {idcGraphInQuery}));
+                out = subsasgn(out, substruct("()", {idcQueryInGraph}), out1);
+            end
         end
 
         function str = toStrings(obj)

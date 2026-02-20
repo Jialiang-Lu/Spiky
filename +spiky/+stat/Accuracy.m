@@ -40,6 +40,51 @@ classdef Accuracy < spiky.stat.GroupedStat
             chance = max(b)./sum(b);
         end
 
+        function h = plots(objs, plotOps, options)
+            %PLOTS Plot multiple Accuracy objects
+            %
+            %   h = PLOTS(objs, plotOps, options)
+            %
+            %   objs: Accuracy objects
+            %   plotOps: options passed to plot()
+            %   options: additional options for the plot
+            %
+            %   h: handle to the plot
+            arguments (Repeating)
+                objs spiky.stat.Accuracy
+            end
+            arguments
+                plotOps.?matlab.graphics.chart.primitive.Line
+                options.Parent matlab.graphics.axis.Axes = gca
+                options.ClassLabels string = compose("Class %d", 1:numel(objs))'
+                options.PlotChance logical = true
+                options.Smooth double = 0
+            end
+            objs = objs(:);
+            options.ClassLabels = categorical(options.ClassLabels, options.ClassLabels);
+            h1 = gobjects(numel(objs), 1);
+            plotArgs = namedargs2cell(plotOps);
+            hold(options.Parent, "on");
+            for ii = 1:numel(objs)
+                h1(ii) = objs{ii}.plot("Parent", options.Parent, "Smooth", options.Smooth, ...
+                    "Chance", NaN, plotArgs{:});
+            end
+            if options.PlotChance
+                yline(options.Parent, objs{1}.Chance*100, "-", "Chance", LineWidth=1);
+            end
+            legend(options.Parent, h1, options.ClassLabels);
+            box off
+            xlim(objs(1).Time([1 end]));
+            l = xline(0, "g", LineWidth=1, Parent=options.Parent);
+            l.Annotation.LegendInformation.IconDisplayStyle = "off";
+            xlabel("Time (s)");
+            ylabel("Accuracy (%)");
+            hold(options.Parent, "off");
+            if nargout>0
+                h = h1;
+            end
+        end
+
         function h = boxcharts(objs, plotOps, options)
             %BOXCHARTS Plot multiple Accuracy objects as box charts
             %
@@ -104,6 +149,50 @@ classdef Accuracy < spiky.stat.GroupedStat
                 n = size(obj.Data, 3);
             end
         end
+
+        function h = errorbar(obj, plotOps, options)
+            %ERRORBAR Plot the accuracy with error bars
+            %
+            %   h = ERRORBAR(obj, ...)
+            %
+            %   obj: Accuracy object
+            %   Name-value arguments:
+            %       Color, LineWidth, ...: options passed to errorbar()
+            %       Chance: chance level to plot
+            %
+            %   h: handle to the error bars
+            arguments
+                obj spiky.stat.Accuracy
+                plotOps.?matlab.graphics.chart.primitive.ErrorBar
+                options.Parent matlab.graphics.axis.Axes = gca
+                options.Chance double = []
+                options.Smooth double = 0
+                options.ErrorType string {mustBeMember(options.ErrorType, ["se", "std"])} = "se"
+            end
+            if isempty(options.Chance) && ~isempty(obj.Chance)
+                options.Chance = obj.Chance;
+            end
+            plotArgs = namedargs2cell(plotOps);
+            m = mean(obj.Data, 3)*100;
+            if options.Smooth > 0
+                res = obj.Time(2)-obj.Time(1);
+                kSize = 2*ceil(2.5*options.Smooth/res)+1;
+                kernel = fspecial("gaussian", [kSize 1], options.Smooth/res);
+                m = imfilter(m, kernel, "replicate");
+            end
+            if options.ErrorType == "se"
+                se = std(obj.Data, 0, 3)./sqrt(obj.NFold)*100;
+            else
+                se = std(obj.Data, 0, 3)*100;
+            end
+            if options.Smooth > 0
+                se = imfilter(se, kernel, "replicate");
+            end
+            h = errorbar(options.Parent, obj.Time, m, se, plotArgs{:});
+            if ~isempty(options.Chance) && ~isnan(options.Chance)
+                yline(options.Chance*100, "-", "Chance", LineWidth=1);
+            end
+        end
         
         function [h, hError] = plot(obj, lineSpec, plotOps, options)
             %PLOT Plot the accuracy
@@ -162,9 +251,8 @@ classdef Accuracy < spiky.stat.GroupedStat
             xlim(obj.Time([1 end]));
             l = xline(0, "g", LineWidth=1);
             l.Annotation.LegendInformation.IconDisplayStyle = "off";
-            if ~isempty(options.Chance)
-                l2 = yline(options.Chance*100, "-", "Chance", LineWidth=1);
-                l2.Annotation.LegendInformation.IconDisplayStyle = "off";
+            if ~isempty(options.Chance) && ~isnan(options.Chance)
+                yline(options.Chance*100, "-", "Chance", LineWidth=1);
             end
             xlabel("Time (s)");
             ylabel("Accuracy (%)");
