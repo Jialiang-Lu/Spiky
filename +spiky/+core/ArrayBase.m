@@ -684,6 +684,14 @@ classdef (Abstract) ArrayBase
                     name = dataNames(ii);
                     p = obj.(name);
                     sz = size(p);
+                    if n>1 
+                        % If there are multiple data properties, allow singleton dimensions
+                        for jj = 1:numel(idcDims)
+                            if sz(jj)==1
+                                idcDims{jj} = 1;
+                            end
+                        end
+                    end
                     obj.(name) = subsref(p, substruct('()', idcDims));
                 end
             else

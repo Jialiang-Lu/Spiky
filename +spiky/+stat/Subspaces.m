@@ -132,7 +132,7 @@ classdef Subspaces < spiky.stat.GroupedStat
                 idxT = idcT(ii);
                 for jj = 1:nGroups
                     for kk = 1:nSamples
-                        V1 = permute(V(ii, :, obj.GroupIndices{jj}), [3 2 1]);
+                        V1 = permute(V(ii, :, obj.GroupIndices(jj, :)), [3 2 1]);
                         C1 = obj.Data{idxT, jj, kk}.project(V1, idcDim, Individual=options.Individual);
                         C1 = permute(C1, [3 2 1]);
                         C(ii, :, (1:nBases)+(jj-1)*nBases, kk) = C1;
@@ -263,7 +263,7 @@ classdef Subspaces < spiky.stat.GroupedStat
                 for jj = 1:nGroups
                     for kk = 1:nSamples
                         coords = obj.Data{idxT, jj, kk};
-                        V1 = permute(V(ii, :, obj.GroupIndices{jj}), [3 2 1]);
+                        V1 = permute(V(ii, :, obj.GroupIndices(jj, :)), [3 2 1]);
                         V2 = V1-coords.Origin;
                         C1 = coords.project(V1, idcDim);
                         V3 = coords.Bases(:, idcDim)*C1;

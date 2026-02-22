@@ -25,7 +25,7 @@ classdef Array < spiky.core.ArrayBase
             arguments
                 data = []
             end
-            obj = obj.setData(data);
+            obj.Data = data;
         end
     end
 end

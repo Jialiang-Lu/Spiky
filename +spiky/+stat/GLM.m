@@ -106,7 +106,7 @@ classdef GLM < spiky.core.Array
             for ii = 1:numel(groupIndices)
                 for jj = 1:size(bases, 3)
                     coords{1, ii, jj} = spiky.stat.Coords(zeros(n, 1), ...
-                        bases(:, groupIndices{ii}, jj), newNames, obj.Neuron(groupIndices{ii}));
+                        bases(:, groupIndices(ii, :), jj), newNames, obj.Neuron(groupIndices(ii, :)));
                 end
             end
             ss = spiky.stat.Subspaces(0, coords, regions, groupIndices);

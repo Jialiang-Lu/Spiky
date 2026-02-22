@@ -329,7 +329,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             end
         end
 
-        function groupedFr = group(obj, options)
+        function [groupedFr, groupedFrTest] = group(obj, options)
             %GROUP Group the triggered firing rate by neuron region
             %   groupedFr = group(obj, options)
             %
@@ -337,33 +337,75 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             %   Name-value arguments:
             %       GroupTime: group the time dimension as well
             %       Permute: permutation of the dimensions
+            %       Partition: partition of events
             %
-            %   groupedFr: grouped triggered firing rate object
+            %   groupedFr: grouped triggered firing rate object, (nT or 1) x nGroups x nPartitions
+            %   groupedFrTest: same as groupedFr but with test events if partition is provided
             arguments
                 obj spiky.trig.TrigFr
                 options.GroupTime logical = false
                 options.Permute double = 1:5
+                options.Partition = []
             end
             [groupNames, ~, idcGroups] = unique(obj.Neuron.Region);
-            groupIndices = arrayfun(@(x) find(idcGroups==x), unique(idcGroups), ...
-                UniformOutput=false);
+            groupIndices = spiky.utils.flagsencode(idcGroups)';
             nGroups = numel(groupNames);
+            nEvents = obj.NEvents;
+            if isempty(options.Partition)
+                nSamples = 1;
+                testIndices = false(1, nEvents);
+            elseif isnumeric(options.Partition) && isscalar(options.Partition)
+                nSamples = options.Partition;
+                cv = cvpartition(nEvents, KFold=nSamples);
+                testIndices = cv.test("all")';
+            elseif islogical(options.Partition)
+                nSamples = height(options.Partition);
+                testIndices = options.Partition;
+            elseif isa(options.Partition, "cvpartition")
+                nSamples = options.Partition.NumTestSets;
+                testIndices = options.Partition.test("all")';
+            else
+                error("Invalid partition option");
+            end
             if options.GroupTime
-                data = cell(height(obj), nGroups);
+                data = cell(height(obj), nGroups, nSamples);
+                if nargout>1
+                    dataTest = cell(height(obj), nGroups, nSamples);
+                end
                 for ii = 1:height(obj)
                     for jj = 1:nGroups
-                        data{ii, jj} = permute(obj.Data(ii, :, groupIndices{jj}, :, :), options.Permute);
+                        for kk = 1:nSamples
+                            data{ii, jj, kk} = permute(obj.Data(...
+                                ii, ~testIndices(kk, :), groupIndices(jj, :), :), options.Permute);
+                            if nargout>1
+                                dataTest{ii, jj, kk} = permute(obj.Data(...
+                                    ii, testIndices(kk, :), groupIndices(jj, :), :), options.Permute);
+                            end
+                        end
                     end
                 end
                 t = obj.Time;
             else
-                data = cell(1, nGroups);
+                data = cell(1, nGroups, nSamples);
+                if nargout>1
+                    dataTest = cell(1, nGroups, nSamples);
+                end
                 for jj = 1:nGroups
-                    data{1, jj} = permute(obj.Data(:, :, groupIndices{jj}, :, :), options.Permute);
+                    for kk = 1:nSamples
+                        data{1, jj, kk} = permute(obj.Data(...
+                            :, ~testIndices(kk, :), groupIndices(jj, :), :), options.Permute);
+                        if nargout>1
+                            dataTest{1, jj, kk} = permute(obj.Data(...
+                                :, testIndices(kk, :), groupIndices(jj, :), :), options.Permute);
+                        end
+                    end
                 end
                 t = 0;
             end
             groupedFr = spiky.stat.GroupedStat(t, data, groupNames, groupIndices);
+            if nargout>1
+                groupedFrTest = spiky.stat.GroupedStat(t, dataTest, groupNames, groupIndices);
+            end
         end
 
         function obj = flatten(obj)
@@ -1044,7 +1086,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             data = cell(nT, nGroups, nFolds);
             for ii = 1:nT
                 for jj = 1:nGroups
-                    idcGroups = groupIndices{jj};
+                    idcGroups = groupIndices(jj, :);
                     for kk = 1:nFolds
                         idcEvents = indices{kk};
                         d = obj.Data(ii, idcEvents, idcGroups);
@@ -1183,6 +1225,84 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             mdl = fscnca(data, labels, varargin{:});
         end
 
+        function mdls = buildDecoder(obj, name, labels, options)
+            arguments
+                obj spiky.trig.TrigFr
+                name (1, 1) categorical
+                labels (:, 1) categorical
+                options.Type (1, 1) string = "mean"
+                options.IdcEvents = []
+                options.SubSet = []
+                options.KFold (1, 1) double = 5
+                options.Holdout (1, 1) double = 0.2
+                options.Center logical = false
+            end
+            %% Preprocess data
+            idcEvents = options.IdcEvents;
+            if islogical(idcEvents)
+                idcEvents = find(idcEvents);
+            end
+            if isempty(idcEvents)
+                idcEvents = 1:width(obj);
+            end
+            obj = subsref(obj, substruct("()", {':', idcEvents, ':'}));
+            if numel(labels)>=width(obj)
+                labels = labels(idcEvents);
+            end
+            if ~isempty(options.SubSet)
+                idcEvents = ismember(labels, options.SubSet);
+                obj = subsref(obj, substruct("()", {':', idcEvents, ':'}));
+                labels = labels(idcEvents);
+            end
+            nT = height(obj);
+            nEvents = width(obj);
+            cats = categories(labels, OutputType="categorical");
+            nCats = numel(cats);
+            if options.Holdout==1/options.KFold
+                cv = cvpartition(labels, KFold=options.KFold);
+                testIdc = cv.test("all")';
+            else
+                cv = cvpartition(labels, Holdout=options.Holdout);
+                testIdc = false(options.KFold, nEvents);
+                for ii = 1:options.KFold
+                    testIdc(ii, :) = cv.test;
+                    cv = repartition(cv);
+                end
+            end
+            nPartitions = height(testIdc);
+            [groupedFr, groupedFrTest] = obj.group(GroupTime=true, Permute=[3 2 1], Partition=testIdc);
+            dataTrain = groupedFr.Data; % nT x nGroups x nPartitions cell of nNeurons x nTrials
+            dataTest = groupedFrTest.Data;
+            labelTrain = cell(size(dataTrain));
+            labelTest = cell(size(dataTest));
+            nGroups = width(groupedFr);
+            mdls = cell(nT, nGroups, nPartitions);
+            sz = size(mdls);
+            n = numel(mdls);
+            pb = spiky.plot.ProgressBar(n, "Building decoders "+string(name), Parallel=1);
+            parfor ii = 1:n
+                [idxT, idxG, idxP] = ind2sub(sz, ii);
+                X = dataTrain{ii}; % nNeurons x nTrials
+                y = labels(~testIdc(idxP, :)); % nTrials x 1
+                labelTrain{ii} = y;
+                labelTest{ii} = labels(testIdc(idxP, :));
+                switch options.Type
+                    case "mean"
+                        mu = mean(X, 2); % nNeurons x 1 overall mean
+                        Xc = X-mu; % nNeurons x nTrials centered data
+                        m = groupsummary(Xc', y, "mean")';
+                            % nCats x nNeurons mean response for each category
+                        mdls{ii} = spiky.stat.Coords(mu, m, 1:height(X), cats);
+                    otherwise
+                        error("Unsupported decoder type: "+options.Type)
+                end
+                pb.step
+            end
+            mdls = spiky.stat.Decoder(obj.Time, mdls, dataTrain, dataTest, labelTrain, labelTest, ...
+                groupedFr.Groups, groupedFr.GroupIndices, ...
+                {testIdc}, name, Type=options.Type);
+        end
+
         function mdls = fitcecoc(obj, labels, options)
             %FITCECOC Fit a multiclass error-correcting output codes model
             %
@@ -1314,7 +1434,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             parfor ii = 1:n
                 [idxT, idxGroup, idxCondition] = ind2sub([nT, nGroups, nConditions], ii);
                 idcCondition = options.Conditions==conditionSet(idxCondition);
-                idcNeurons = options.GroupIndices{idxGroup};
+                idcNeurons = options.GroupIndices(idxGroup, :);
                 if options.TimeDependent
                     X1 = X(idcNeurons, idcCondition, idxT);
                     y1 = labels(idcCondition);
@@ -2091,7 +2211,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             idcColon = repmat({':'}, 1, nLabels+2);
 
             for jj = 1:nGroups
-                neuronIdx = groupIndices{jj};
+                neuronIdx = groupIndices(jj, :);
                 nNeuronsReg = numel(neuronIdx);
                 trialNumReg = trialNum(neuronIdx, idcColon{1:end-2});
                 firingRatesReg = firingRates(neuronIdx, idcColon{:});

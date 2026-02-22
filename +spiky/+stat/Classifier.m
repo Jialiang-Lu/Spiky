@@ -131,7 +131,7 @@ classdef Classifier < spiky.stat.GroupedStat
                 if obj.IsCrossValidated
                     [outs{ii}{1:nOuts}] = obj.Data{ii}.kfoldPredict(optionsCell{:});
                 else
-                    [outs{ii}{1:nOuts}] = obj.Data{ii}.predict(x(obj.GroupIndices{idxGroup}), ...
+                    [outs{ii}{1:nOuts}] = obj.Data{ii}.predict(x(obj.GroupIndices(idxGroup, :)), ...
                         optionsCell{:});
                 end
                 pb.step;
@@ -239,7 +239,7 @@ classdef Classifier < spiky.stat.GroupedStat
                 x = cell(nT, numel(groupIndices));
                 for ii = 1:nT
                     for jj = 1:width(x)
-                        x{ii, jj} = x1(obj.GroupIndices{jj}, :, ii);
+                        x{ii, jj} = x1(obj.GroupIndices(jj, :), :, ii);
                     end
                 end
                 clear x1
@@ -406,7 +406,7 @@ classdef Classifier < spiky.stat.GroupedStat
                 c = betas{ii};
                 [U, ~, ~] = svd(c);
                 ss{ii} = spiky.stat.Coords(zeros(size(c, 1), 1), U(:, 1:nDims), ...
-                    obj.GroupIndices{idxGroup}, (1:nDims)');
+                    obj.GroupIndices(idxGroup, :), (1:nDims)');
             end
             ss = spiky.stat.Subspaces(t, ss, obj.Groups, obj.GroupIndices);
         end

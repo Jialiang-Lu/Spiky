@@ -54,9 +54,9 @@ classdef PCA < spiky.stat.GroupedStat
             pcData = cell(nT, nGroups, nSamples);
             parfor ii = 1:n
                 [idxT, idxG, idxS] = ind2sub([nT nGroups nSamples], ii);
-                data1 = groupsummary(data{idxT, idxS}(:, groupIndices{idxG}), eventLabels{idxS}, @mean);
+                data1 = groupsummary(data{idxT, idxS}(:, groupIndices(idxG, :)), eventLabels{idxS}, @mean);
                 [coeff, ~, latent, tsquared, explained, mu] = pca(data1, optionArgs{:});
-                score = (data{idxT, idxS}(:, groupIndices{idxG})-mu)*coeff;
+                score = (data{idxT, idxS}(:, groupIndices(idxG, :))-mu)*coeff;
                 pcData{ii} = struct("Coeff", coeff, "Score", score, "Latent", latent, ...
                     "Tsquared", tsquared, "Explained", explained, "Mu", mu);
             end
