@@ -190,7 +190,7 @@ classdef ActionTheater < spiky.par.Paradigm
             pos = zeros(nVis, 3);
             rot = zeros(nVis, 3);
             proj = zeros(nVis, 3);
-            % pb = spiky.plot.ProgressBar(nVis, "Calculating visibility", Parallel=true);
+            % pb = spiky.plot.ProgressBar(nVis, "Calculating visibility");
             parfor ii = 1:nVis
                 idx1 = idcStart(ii);
                 idx2 = idcEnd(ii);
@@ -322,7 +322,7 @@ classdef ActionTheater < spiky.par.Paradigm
                 graphActionAdj = spiky.scene.SceneGraph(per, obj.Trials.Number(idcStart), ...
                     obj.Trials.Number(idcEnd), nodesSubject, nodesVerb, nodesObject);
             end
-            %%
+            %% Combine graphs and store in the object
             obj.TrialInfo = ti;
             obj.Graph = [graphVis; graphWalk; graphAction; graphIdle; graphActionAdj];
             obj.Graph = obj.Graph.sort();
@@ -338,17 +338,17 @@ classdef ActionTheater < spiky.par.Paradigm
             fix = fix(fix.IsFace, :);
             nFix = height(fix);
             %% Fixation sequences
-            idcNameGroup = findgroups(fix.Name);
+            idcNameGroup = findgroups(fix.Id);
             isNameChange = [true; diff(idcNameGroup)~=0];
             idcSeq = zeros(nFix, 1);
             idcInSeq = zeros(nFix, 1);
             seqLength = zeros(nFix, 1);
             for ii = 1:max(idcNameGroup)
                 idc1 = idcNameGroup==ii;
-                [idcSeq(idc1), idcInSeq(idc1), seqLength(idc1)] = fix(idc1, :).findSequence(0.2, ...
+                [idcSeq(idc1), idcInSeq(idc1), seqLength(idc1)] = fix(idc1, :).findSequence(0.15, ...
                     IdcJump=isNameChange(idc1));
             end
-            idcSeq = fix.Name.*categorical(idcSeq);
+            idcSeq = categorical(fix.Id).*categorical(idcSeq);
             [~, ~, idcSeq] = unique(idcSeq, "stable");
             fix.Data.IdcSeq = idcSeq;
             fix.Data.IdcInSeq = idcInSeq;
@@ -430,23 +430,72 @@ classdef ActionTheater < spiky.par.Paradigm
             fix.Data.ActionBeforeAction = actionBeforeAction;
             fix.Data.ActionAfterAction = actionAfterAction;
             %% Randomize role for handshake
-            idcHandshake = find(fix.Action=="Handshake");
+            idcHandshake = find(fix.Action=="HandShake");
             nHandshake = numel(idcHandshake);
             idcSwap = rand(nHandshake, 1)<0.5;
             fix.Role(idcHandshake(idcSwap)) = "Object";
             fix.Role(idcHandshake(~idcSwap)) = "Subject";
-            idcHandshake = find(fix.ActionBeforeAction=="Handshake");
+            fix.ActionRole(idcHandshake(idcSwap)) = "HandShakeObject";
+            fix.ActionRole(idcHandshake(~idcSwap)) = "HandShakeSubject";
+            idcHandshake = find(fix.ActionBeforeAction=="HandShake");
             nHandshake = numel(idcHandshake);
             idcSwap = rand(nHandshake, 1)<0.5;
             fix.RoleBeforeAction(idcHandshake(idcSwap)) = "Object";
             fix.RoleBeforeAction(idcHandshake(~idcSwap)) = "Subject";
-            idcHandshake = find(fix.ActionAfterAction=="Handshake");
+            idcHandshake = find(fix.ActionAfterAction=="HandShake");
             nHandshake = numel(idcHandshake);
             idcSwap = rand(nHandshake, 1)<0.5;
             fix.RoleAfterAction(idcHandshake(idcSwap)) = "Object";
             fix.RoleAfterAction(idcHandshake(~idcSwap)) = "Subject";
             %%
             obj.Fix = fix;
+        end
+
+        function fr = getActionFr(obj, spikes, t, options)
+            arguments
+                obj spiky.par.ActionTheater
+                spikes spiky.core.Spikes
+                t (:, 1) double = -0.3:0.1:1.8
+                options.HalfWidth (1, 1) double = 0.15
+                options.MaxGap (1, 1) double = 0.3
+            end
+            idcStart = obj.Fix.IdcInSeq==1;
+            idcEnd = obj.Fix.IdcInSeq==obj.Fix.SeqLength;
+            fixSeq = obj.Fix(idcStart, :);
+            fixSeq.Time(:, 2) = obj.Fix.Time(idcEnd, 2);
+            graphAction = obj.Graph.getActions();
+            nT = numel(t);
+            nTrials = height(graphAction);
+            itvCenter = graphAction.Start'+t;
+            itvCenter = itvCenter(:);
+            itv = spiky.core.Intervals(itvCenter+[-0.01 0.01]);
+            idcTrial = repelem((1:nTrials)', nT, 1);
+            idcT = repmat((1:nT)', nTrials, 1);
+            graphItv = repelem(graphAction, nT, 1);
+            [~, idcInItv, idcInFix] = fixSeq.haveIntervals(itv);
+            itvCenter = itvCenter(idcInItv);
+            nValid = numel(idcInItv);
+            idcTrial = idcTrial(idcInItv);
+            idcT = idcT(idcInItv);
+            graphItv = graphItv(idcInItv, :);
+            fixInItv = fixSeq(idcInFix);
+            isViewSubject = fixInItv.Id==graphItv.Subject.Id;
+            isViewObject = fixInItv.Id==graphItv.Object.Id;
+            tbl = table();
+            tbl.Trial = graphItv.TrialStart;
+            tbl.IdcT = idcT;
+            tbl.TimeAfterAction = t(idcT);
+            tbl.Id = fixInItv.Id;
+            tbl.Name = fixInItv.Name;
+            tbl.Role = categorical(NaN(nValid, 1));
+            tbl.Role(isViewSubject) = "Subject";
+            tbl.Role(isViewObject) = "Object";
+            tbl.Action = graphItv.Predicate.Name;
+            idcValid = isViewSubject | isViewObject;
+            tbl = tbl(idcValid, :);
+            et = spiky.core.EventsTable(itvCenter(idcValid), tbl);
+            fr = spikes.trigFr(et, 0, HalfWidth=options.HalfWidth, ...
+                Kernel="box", Normalize=true);
         end
 
         function labels = getLabels(obj, t)

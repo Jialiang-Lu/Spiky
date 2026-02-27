@@ -98,7 +98,7 @@ classdef Tuning2 < spiky.stat.Tuning
             P_pos = occupancy; % Occupancy is already normalized to sum to 1
         
             % Compute mutual information for each neuron
-            pb = spiky.plot.ProgressBar(nNeurons, "Computing mutual information", Parallel=true);
+            pb = spiky.plot.ProgressBar(nNeurons, "Computing mutual information");
             parfor ii = 1:nNeurons
                 % Probability of firing given position (normalize over spatial bins)
                 pRPos = data(:, :, ii) ./ sum(data(:, :, ii), "all", "omitnan");

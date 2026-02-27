@@ -82,7 +82,7 @@ classdef EyeData
                 transform spiky.minos.Transform = spiky.minos.Transform
                 fov double = 60
             end
-            %%
+            %% Load eye data
             fprintf("Loading eye data\n");
             data0 = spiky.minos.Data(fullfile(fdir, "Eye.bin"));
             t = func(double(data0.Data.Timestamp)/1e7);
@@ -99,7 +99,7 @@ classdef EyeData
             data.LeftGaze(idcLeftClosed, :) = NaN("single");
             data.RightGaze(idcRightClosed, :) = NaN("single");
             data = spiky.core.EventsTable(t, data);
-            %%
+            %% Calibrate with FiveDot if available
             if ~isempty(fiveDot)
                 %% Calibrate with FiveDot
                 fprintf("Calibrating eye data with FiveDot paradigm\n");
@@ -117,7 +117,7 @@ classdef EyeData
                 isFix = angVel<5 & (data1.LeftPupil>0 | data1.RightPupil>0);
                 data1 = data1(isFix, :);
 
-                %%
+                %% Find fixated positions
                 leftGaze = NaN(nPos, 3, "single");
                 rightGaze = NaN(nPos, 3, "single");
                 names = ["LeftGaze" "RightGaze"];
@@ -146,7 +146,7 @@ classdef EyeData
                 idcValidLeft = ~isnan(leftGaze(:, 1));
                 idcValidRight = ~isnan(rightGaze(:, 1));
 
-                %%
+                %% Fit polynomial to correct systematic errors
                 w = warning;
                 warning off
                 fitTypeX = fittype("poly11");
@@ -179,7 +179,7 @@ classdef EyeData
                 ylabel("Elevation")
                 drawnow
 
-                %%
+                %% Apply the correction to the raw data
                 dataRaw.LeftGaze(:, 1) = leftFitX(dataRaw.LeftGaze(:, 1:2));
                 dataRaw.LeftGaze(:, 2) = leftFitY(dataRaw.LeftGaze(:, 1:2));
                 dataRaw.RightGaze(:, 1) = rightFitX(dataRaw.RightGaze(:, 1:2));
@@ -200,16 +200,10 @@ classdef EyeData
             fprintf("Loading eye events\n");
             events = spiky.minos.Data(fullfile(fdir, "EyeLinkEvent.bin"));
             if ~isempty(events.Data)
-                %%
-                fixations = spiky.core.Intervals(func(...
-                    spiky.minos.EyeData.extractIntervals(events.Data, "Fixation")));
-                saccades = spiky.core.Intervals(func(...
-                    spiky.minos.EyeData.extractIntervals(events.Data, "Saccade")));
-                leftBlinks = spiky.core.Intervals(func(...
-                    spiky.minos.EyeData.extractIntervals(events.Data, "Blink", 0)));
-                rightBlinks = spiky.core.Intervals(func(...
-                    spiky.minos.EyeData.extractIntervals(events.Data, "Blink", 1)));
-                blinks = leftBlinks|rightBlinks;
+                %% Extract intervals
+                fixations = spiky.minos.EyeData.extractIntervals(events.Data, "Fixation", func);
+                saccades = spiky.minos.EyeData.extractIntervals(events.Data, "Saccade", func);
+                blinks = spiky.minos.EyeData.extractIntervals(events.Data, "Blink", func);
                 %% Find fixation targets
                 if ~isempty(transform)
                     fprintf("Finding fixation targets\n");
@@ -221,7 +215,7 @@ classdef EyeData
                     vp = single(vp);
                     proj = interp1(t, vp, fixations.Start+0.01);
                     gaze = interp1(t, gaze, fixations.Start+0.01);
-                    %%
+                    %% Get transform data in the same time points as fixations
                     trT = cell(nTr, 1);
                     trIdc = cell(nTr, 1);
                     trIdcT = cell(nTr, 1);
@@ -253,7 +247,7 @@ classdef EyeData
                     trPosSorted = trPos(idcSortTr, :, :);
                     trProjSorted = trProj(idcSortTr, :, :);
                     trTrialSorted = trTrial(idcSortTr);
-                    %%
+                    %% Find the closest transform time point for each fixation
                     [~, idcFixInTr, idcTrWithFix] = spiky.core.Intervals(trTSorted).haveEvents(fixations.Start+0.01);
                     ang = squeeze(spiky.utils.angle(trVecSorted(idcTrWithFix, :, :), gaze(idcFixInTr, :), 2));
                     tbl = table();
@@ -284,7 +278,7 @@ classdef EyeData
                     idcTrAll = cellfun(@(x) trIdcSorted(x), idcAllTr, UniformOutput=false);
                     idcTrOther = cellfun(@(x) trIdcSorted(x), idcOtherTr, UniformOutput=false);
                     nValid = numel(idcFixValid);
-                    %%
+                    %% Get fixation target information
                     ids = zeros(nFixations, 1, "int32");
                     idss = cell(nFixations, 1);
                     otherIds = zeros(nFixations, 1, "int32");
@@ -296,7 +290,7 @@ classdef EyeData
                     targetPos = zeros(nFixations, 3, "single");
                     targetProj = zeros(nFixations, 3, "single");
                     angles = zeros(nFixations, 1, "single");
-                    %%
+                    %% For fixations with valid targets, fill in the information
                     ids(idcFixValid) = transform.Id(idcTr);
                     idss(idcFixValid) = cellfun(@(x) transform.Id(x), idcTrAll, UniformOutput=false);
                     otherIds(idcFixValid(isDouble)) = transform.Id(cell2mat(idcTrOther(isDouble)));
@@ -311,7 +305,7 @@ classdef EyeData
                     targetPos(idcFixValid, :) = reshape(trPosSorted(idcPos), [], 3);
                     targetProj(idcFixValid, :) = reshape(trProjSorted(idcPos), [], 3);
                     angles(idcFixValid) = minAng;
-                    %%
+                    %% Create fixation targets table
                     fixationTargets = table(trials, ids, names, idss, namess, otherIds, ...
                         otherNames, parts, gaze, proj, ...
                         targetPos, targetProj, angles, VariableNames=["Trial" "Id" "Name" "Ids" ...
@@ -334,7 +328,7 @@ classdef EyeData
                     VaraibleNames=["Trial" "Id" "Name" "Part" ...
                     "Gaze" "Proj" "TargetPos" "TargetProj" "MinAngle"]);
             end
-            %%
+            %% Create EyeData object
             obj = spiky.minos.EyeData;
             obj.Data = data;
             obj.Fixations = fixations;
@@ -347,25 +341,52 @@ classdef EyeData
             end
         end
 
-        function intervals = extractIntervals(events, type, eye)
+        function intervals = extractIntervals(events, type, func, eye)
             arguments
                 events table
                 type string
-                eye (1, 1) double = 0
+                func = @(x) x
+                eye (1, 1) string {mustBeMember(eye, ["Left" "Right" "Either" "Both"])} = "Either"
             end
-            events1 = events(endsWith(string(events.Type), type)&...
-                events.Eye==eye, :);
-            if startsWith(string(events1.Type(1)), "End")
-                events1(1, :) = [];
+            if ismember(eye, ["Either" "Both"])
+                intervals1 = spiky.minos.EyeData.extractIntervals(events, type, func, "Left");
+                intervals2 = spiky.minos.EyeData.extractIntervals(events, type, func, "Right");
+                if eye=="Either"
+                    intervals = intervals1|intervals2;
+                else
+                    intervals = intervals1&intervals2;
+                end
+                return
             end
-            if startsWith(string(events1.Type(end)), "Start")
-                events1(end, :) = [];
+            switch eye
+                case "Left"
+                    events = events(endsWith(string(events.Type), type)&...
+                        events.Eye==0, :);
+                case "Right"
+                    events = events(endsWith(string(events.Type), type)&...
+                        events.Eye==1, :);
+                case {"Either" "Both"}
+                    events1 = events(endsWith(string(events.Type), type)&...
+                        events.Eye==0, :);
+                    events2 = events(endsWith(string(events.Type), type)&...
+                        events.Eye==1, :);
+                    if eye=="Either"
+                        events = events1|events2;
+                    else
+                        events = events1&events2;
+                    end
             end
-            if mod(height(events1), 2)~=0
+            if startsWith(string(events.Type(1)), "End")
+                events(1, :) = [];
+            end
+            if startsWith(string(events.Type(end)), "Start")
+                events(end, :) = [];
+            end
+            if mod(height(events), 2)~=0
                 error("Odd number of events")
             end
-            intervals = double([events1.Timestamp(1:2:end), ...
-                events1.Timestamp(2:2:end)])./1e7;
+            intervals = spiky.core.Intervals(func(double([events.Timestamp(1:2:end), ...
+                events.Timestamp(2:2:end)])./1e7));
         end
     end
 

@@ -182,11 +182,12 @@ classdef Spikes < spiky.core.Array
                 return
             end
             if isa(events, "spiky.core.Events")
-                events = events.Time;
+                events1 = events.Time;
+            else
+                events1 = events(:);
             end
-            events = events(:);
             t = t(:);
-            nEvents = numel(events);
+            nEvents = numel(events1);
             nT = numel(t);
             if isscalar(t)
                 res = options.HalfWidth*2;
@@ -197,7 +198,7 @@ classdef Spikes < spiky.core.Array
             switch options.Kernel
                 case "box"
                     fr = zeros(nT, nEvents, nNeurons);
-                    prds = reshape(events'+t, [], 1);
+                    prds = reshape(events1'+t, [], 1);
                     prds = spiky.core.Intervals([prds-options.HalfWidth prds+options.HalfWidth]);
                     [prds, idcSort] = prds.sort();
                     idcSort2(idcSort) = 1:numel(idcSort);
@@ -289,7 +290,7 @@ classdef Spikes < spiky.core.Array
             peak = cell(1, n);
             offset = cell(1, n);
             peakFr = cell(1, n);
-            pb = spiky.plot.ProgressBar(n, "Performing Zeta test", Parallel=true);
+            pb = spiky.plot.ProgressBar(n, "Performing Zeta test");
             parfor ii = 1:n
                 [p1, s1, s2, s3] = spiky.utils.zetatest.zetatest(obj.Data{ii}, events, window, ...
                     nResample);

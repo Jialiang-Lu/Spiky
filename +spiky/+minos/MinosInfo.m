@@ -151,7 +151,7 @@ classdef MinosInfo
             t = obj.Sync.Sync.Inv(double(data.Timestamp)/1e7);
             [objs, ~, idcObj] = unique(data.Data(:, ["Id" "NameIndex"]), "rows", "stable");
             nObjs = height(objs);
-            pb = spiky.plot.ProgressBar(nObjs, "Calculating transforms", Parallel=true);
+            pb = spiky.plot.ProgressBar(nObjs, "Calculating transforms");
             names = strings(nObjs, 1);
             ids = zeros(nObjs, 1, "int32");
             tbls = cell(nObjs, 1);

@@ -646,7 +646,7 @@ classdef (Abstract) ArrayBase
         function obj = setData(obj, varargin)
             %SETDATA Set the Data properties.
             dataNames = obj.getDataNames();
-            for ii = 1:numel(dataNames)
+            for ii = 1:numel(varargin)
                 obj.(dataNames(ii)) = varargin{ii};
             end
         end
@@ -684,15 +684,16 @@ classdef (Abstract) ArrayBase
                     name = dataNames(ii);
                     p = obj.(name);
                     sz = size(p);
+                    idcDims1 = idcDims;
                     if n>1 
                         % If there are multiple data properties, allow singleton dimensions
                         for jj = 1:numel(idcDims)
                             if sz(jj)==1
-                                idcDims{jj} = 1;
+                                idcDims1{jj} = 1;
                             end
                         end
                     end
-                    obj.(name) = subsref(p, substruct('()', idcDims));
+                    obj.(name) = subsref(p, substruct('()', idcDims1));
                 end
             else
                 objNew = varargin{1};

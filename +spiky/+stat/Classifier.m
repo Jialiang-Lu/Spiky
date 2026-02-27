@@ -125,7 +125,7 @@ classdef Classifier < spiky.stat.GroupedStat
             nOuts = nargout;
             outs = repmat(cell(1, nOuts), obj.Length, obj.NGroups);
             pb = spiky.plot.ProgressBar(obj.Length*obj.NGroups, ...
-                "Predicting class labels", Parallel=true);
+                "Predicting class labels");
             parfor ii = 1:obj.Length*obj.NGroups
                 [~, idxGroup] = ind2sub([obj.Length, obj.NGroups], ii);
                 if obj.IsCrossValidated

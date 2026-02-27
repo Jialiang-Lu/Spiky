@@ -34,7 +34,7 @@ classdef DPCA < spiky.stat.Subspaces
                 stats struct % struct array of statistics
                 margNames (:, 1) string % names of marginalizations
                 groups (:, 1) = NaN(width(decoder), 1)
-                groupIndices cell = cell(height(groups), 1)
+                groupIndices = logical.empty(height(groups), 0)
             end
             assert(isequal(size(decoder), size(encoder), size(stats)), ...
                 "Decoder, Encoder, and Stats must have the same size.");

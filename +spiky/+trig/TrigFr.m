@@ -285,48 +285,96 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             sd = squeeze(std(data, 0, [1 2]));
         end
 
-        function [m, se] = getGroupMean(obj, cats)
+        function [m, se, order] = getGroupMean(obj, labels)
             %GETGROUPMEAN Get group mean and standard error of the firing rate
-            %   [m, se] = getGroupMean(obj, cats)
+            %   [m, se, order] = getGroupMean(obj, labels)
             %
             %   obj: triggered firing rate object
-            %   cats: categories of events
+            %   labels: labels for each event
             %
             %   m: mean firing rate for each category
             %   se: standard error of the mean for each category
+            %   order: order of categories in the 2d plane from the first two dimensions, 
+            %       nCats x nGroups 
 
             arguments
                 obj spiky.trig.TrigFr
-                cats (:, 1) = categorical(strings(obj.NEvents, 1))
+                labels (:, 1) = categorical(strings(obj.NEvents, 1))
             end
 
             data = permute(obj.Data, [2 1 3 4]);
-            % [m1, names] = groupsummary(data, cats, @mean);
-            names = unique(cats);
-            m1 = NaN(height(names), size(data, 2), size(data, 3), size(data, 4));
-            for ii = 1:height(names)
-                idc = cats==names(ii);
+            % [m1, cats] = groupsummary(data, cats, @mean);
+            cats = unique(labels);
+            m1 = NaN(height(cats), size(data, 2), size(data, 3), size(data, 4));
+            for ii = 1:height(cats)
+                idc = labels==cats(ii);
                 if any(idc)
                     m1(ii, :, :, :) = mean(data(idc, :, :, :), 1);
                 end
             end
             m = obj;
             m.Data = permute(m1, [2 1 3 4]);
-            m.Events = names;
+            m.Events = cats;
             if nargout>1
                 % [se1, ~] = groupsummary(data, cats, @std);
                 % se1 = se1./sqrt(groupcounts(cats));
-                se1 = NaN(height(names), size(data, 2), size(data, 3), size(data, 4));
-                for ii = 1:height(names)
-                    idc = cats==names(ii);
+                se1 = NaN(height(cats), size(data, 2), size(data, 3), size(data, 4));
+                for ii = 1:height(cats)
+                    idc = labels==cats(ii);
                     if any(idc)
                         se1(ii, :, :, :) = std(data(idc, :, :, :), 0, 1)./sqrt(sum(idc));
                     end
                 end
                 se = obj;
                 se.Data = permute(se1, [2 1 3 4]);
-                se.Events = names;
+                se.Events = cats;
             end
+            if nargout>2
+                [groups, idcGroupStart, idcGroups] = unique(obj.Neuron.Region);
+                assert(all(groupcounts(obj.Neuron.Region)>=2), "Some regions have fewer than 2 neurons");
+                nGroups = numel(groups);
+                order = categorical(NaN(height(cats), nGroups));
+                for ii = 1:nGroups
+                    m1 = squeeze(m.Data(1, :, idcGroupStart(ii)+(0:1)));
+                    m1 = m1-mean(m1, 1); % center
+                    ang = atan2(m1(:, 2), m1(:, 1));
+                    [~, idc] = sort(ang);
+                    order(:, ii) = cats(idc);
+                end
+            end
+        end
+
+        function d = getGroupDist(obj, labels, options)
+            %GETGROUPDIST Get Cohen's d between group means for each pair of categories
+            arguments
+                obj spiky.trig.TrigFr
+                labels (:, 1) = categorical(strings(obj.NEvents, 1))
+                options.IdcEvents = []
+            end
+            if ~isempty(options.IdcEvents)
+                obj = subsref(obj, substruct("()", {':', options.IdcEvents, ':', ':'}));
+                if numel(labels)~=width(obj.Data)
+                    labels = labels(options.IdcEvents);
+                end
+            end
+            [cats, ~, idcCats] = unique(labels);
+            nPerCat = groupcounts(idcCats);
+            [m, se] = obj.getGroupMean(labels);
+            m = m.Data;
+            sd = se.Data.*sqrt(nPerCat');
+            nCats = numel(cats);
+            idcPairs = nchoosek(1:nCats, 2);
+            idcPairs = [idcPairs; idcPairs(:, [2 1])];
+            nPairs = height(idcPairs);
+            sd1 = sd(:, idcPairs(:, 1), :, :);
+            sd2 = sd(:, idcPairs(:, 2), :, :);
+            nPerCat1 = nPerCat(idcPairs(:, 1));
+            nPerCat2 = nPerCat(idcPairs(:, 2));
+            sdPool = sqrt(((nPerCat1'-1).*sd1.^2+(nPerCat2'-1).*sd2.^2)./(nPerCat1'+nPerCat2'-2));
+            d1 = (m(:, idcPairs(:, 2), :, :)-m(:, idcPairs(:, 1), :, :))./sdPool;
+            d = obj;
+            d.Data = d1;
+            d.Events = compose("%s \x21d2 %s", cats(idcPairs(:, 1)), cats(idcPairs(:, 2)));
         end
 
         function [groupedFr, groupedFrTest] = group(obj, options)
@@ -509,7 +557,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             end
         end
 
-        function [h, hMean] = plotScatter(obj, cats, sz, c, mkr, options, plotOps)
+        function [h, hMean, hConnect] = plotScatter(obj, cats, sz, c, mkr, options, plotOps)
             %PLOTSCATTER Plot scatter plot of firing rate
             %
             %   h = plotScatter(obj, cats, sz, c, mkr, plotOps)
@@ -526,30 +574,33 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             %       SubSet: subset of categories to plot
             %       Subsample: two-element vector where the first value is the number of events in 
             %           each subsample and the second value is the number of subsamples, e.g. [10 5]
+            %       ConnectMean: if not empty, connect the mean points with lines, 
+            %           the value should be the categories for the mean points
             %       LineWidth, ...: options passed to scatter()
             %       Parent: parent axes for the plot
             %
             %   h: handle to the plot
-
+            %   hMean: handle to the mean plot
+            %   hConnect: handle to the connecting lines plot
             arguments
                 obj spiky.trig.TrigFr
                 cats categorical = categorical.empty
                 sz double = 10
-                c = "w"
+                c = lines(1)
                 mkr string = "o"
                 options.PlotMean logical = true
                 options.MeanOnly logical = false
-                options.IdcNeurons (1, 2) double = [1 2]
+                options.IdcNeurons double = [1 2]
                 options.IdcEvents = []
                 options.SubSet = []
                 options.Subsample double = []
+                options.ConnectMean categorical = []
                 options.Parent matlab.graphics.axis.Axes = gca
                 plotOps.?matlab.graphics.chart.primitive.Scatter
             end
-
-            if isempty(c)
-                c = lines(1);
-            end
+            nNeurons = numel(options.IdcNeurons);
+            assert(nNeurons==2 || nNeurons==3, ...
+                "IdcNeurons should have 2 or 3 elements");
             if ~isnumeric(c)
                 c = validatecolor(c, "multiple");
             end
@@ -601,27 +652,42 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 c2 = c(2, :);
             end
             h1 = gobjects(nCats, 1);
-            hold(options.Parent, "on");
             if ~options.MeanOnly
                 for ii = 1:nCats
+                    if ii>1
+                        hold(options.Parent, "on");
+                    end
                     data1 = data(idcGroups==ii, :);
                     if ~isempty(options.Subsample)
                         nSub = options.Subsample(2);
                         nEvents = options.Subsample(1);
-                        data1 = reshape(datasample(data1, nEvents*nSub, 1), nEvents, nSub, 2);
+                        data1 = reshape(datasample(data1, nEvents*nSub, 1), nEvents, nSub, nNeurons);
                         data1 = permute(mean(data1, 1), [2 3 1]);
                     end
-                    h1(ii) = scatter(options.Parent, data1(:, 1), data1(:, 2), sz(1), c1(ii, :), ...
-                        mkr(1), plotArgs{:});
+                    if width(data1)==2
+                        h1(ii) = scatter(options.Parent, data1(:, 1), data1(:, 2), sz(1), c1(ii, :), ...
+                            mkr(1), plotArgs{:});
+                    else
+                        h1(ii) = scatter3(options.Parent, data1(:, 1), data1(:, 2), data1(:, 3), sz(1), c1(ii, :), ...
+                            mkr(1), plotArgs{:});
+                    end
                 end
             end
+            m = groupsummary(data, cats, @mean);
             if options.PlotMean || options.MeanOnly
-                m = groupsummary(data, cats, @mean);
                 hMean1 = gobjects(nCats, 1);
                 for ii = 1:nCats
+                    if ii>1
+                        hold(options.Parent, "on");
+                    end
                     data1 = m(ii, :);
-                    hMean1(ii) = scatter(options.Parent, data1(:, 1), data1(:, 2), sz(2), c2(ii, :), ...
-                        mkr(2), plotArgs{:});
+                    if width(data1)==2
+                        hMean1(ii) = scatter(options.Parent, data1(:, 1), data1(:, 2), sz(2), c2(ii, :), ...
+                            mkr(2), plotArgs{:});
+                    else
+                        hMean1(ii) = scatter3(options.Parent, data1(:, 1), data1(:, 2), data1(:, 3), sz(2), c2(ii, :), ...
+                            mkr(2), plotArgs{:});
+                    end
                 end
             end
             if nCats>1
@@ -631,6 +697,15 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                     legend(hMean1, groups);
                 end
             end
+            if ~isempty(options.ConnectMean)
+                assert(numel(options.ConnectMean)==nCats, ...
+                    "The number of categories to connect must match the number of groups");
+                [~, idcConnect] = ismember(options.ConnectMean, groups);
+                idcConnect = [idcConnect(:); idcConnect(1)]; % connect in a loop
+                dataConnect = m(idcConnect, :);
+                hConnect1 = plot(options.Parent, dataConnect(:, 1), dataConnect(:, 2));
+                hConnect1.Annotation.LegendInformation.IconDisplayStyle = "off";
+            end
             xticks([]);
             yticks([]);
             hold(options.Parent, "off");
@@ -638,6 +713,9 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 h = h1;
                 if nargout>1
                     hMean = hMean1;
+                end
+                if nargout>2
+                    hConnect = hConnect1;
                 end
             end
         end
@@ -784,7 +862,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             counts = full(sum(G, 1))'; % K x 1
             sqrtCounts = sqrt(counts); % K x 1
             eta = zeros(nT, nNeuronGroups);
-            % pb = spiky.plot.ProgressBar(numel(eta), "Calculating variance explained", Parallel=false);
+            % pb = spiky.plot.ProgressBar(numel(eta), "Calculating variance explained");
             for ii = 1:numel(eta)
                 Rt = data{ii}; % nTrials x nNeurons
                 nNeurons = size(Rt, 2);
@@ -919,7 +997,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             nT1 = height(data1);
             nT2 = height(data2);
             data0 = zeros(nT1+nT2-1, numel(idc1), size(obj, 3));
-            pb = spiky.plot.ProgressBar(size(obj, 3), "Calculating cross-correlation", Parallel=true);
+            pb = spiky.plot.ProgressBar(size(obj, 3), "Calculating cross-correlation");
             parfor ii = 1:size(obj, 3)
                 d = zeros(nT1+nT2-1, numel(idc1));
                 for jj = 1:numel(idc1)
@@ -1226,18 +1304,41 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
         end
 
         function mdls = buildDecoder(obj, name, labels, options)
+            %BUILDDECODER Build decoders for the firing rate
+            %   mdls = buildDecoder(obj, name, labels, options)
+            %
+            %   obj: triggered firing rate object
+            %   name: name of the decoder condition
+            %   labels: labels of events for decoder training
+            %   Name-value arguments:
+            %       Type: type of decoder to build, can be "mean" or "svm"
+            %       IdcEvents: indices of events to use for training, if empty, use all events
+            %       SubSet: subset of labels categories to use for training, if empty, use all categories
+            %       KFold: number of folds for cross-validation, default is 5
+            %       Holdout: fraction of data to hold out for testing, default is 0.2, 
+            %           if equal to 1/KFold, it will use KFold cross-validation
+            %       GroupingVariables: observations with the same combination of group labels are in the same fold.
+            %       Shuffle: whether to shuffle the labels before training, default is false
+            %       RidgeFraction: fraction of total variance to use as ridge regularization for 
+            %           "mean" decoder, default is 0 (no regularization)
+            %       Coding: coding scheme for "svm" decoder, can be "onevsall" or "onevsone", default is "onevsall"
+            %       FitPosterior: whether to fit posterior probabilities for "svm" decoder, default is false
             arguments
                 obj spiky.trig.TrigFr
                 name (1, 1) categorical
                 labels (:, 1) categorical
-                options.Type (1, 1) string = "mean"
+                options.Type (1, 1) string {mustBeMember(options.Type, ["mean", "svm"])} = "mean"
                 options.IdcEvents = []
                 options.SubSet = []
                 options.KFold (1, 1) double = 5
                 options.Holdout (1, 1) double = 0.2
-                options.Center logical = false
+                options.GroupingVariables = []
+                options.Shuffle (1, 1) logical = false
+                options.RidgeFraction double = 1e-6
+                options.Coding string {mustBeMember(options.Coding, ["onevsall", "onevsone"])} = "onevsall"
+                options.FitPosterior logical = false
+                options.ShowProgress logical = true
             end
-            %% Preprocess data
             idcEvents = options.IdcEvents;
             if islogical(idcEvents)
                 idcEvents = find(idcEvents);
@@ -1246,8 +1347,12 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 idcEvents = 1:width(obj);
             end
             obj = subsref(obj, substruct("()", {':', idcEvents, ':'}));
-            if numel(labels)>=width(obj)
+            if numel(labels)>width(obj)
                 labels = labels(idcEvents);
+                labels = removecats(labels);
+            end
+            if numel(options.GroupingVariables)>width(obj)
+                options.GroupingVariables = options.GroupingVariables(idcEvents, :);
             end
             if ~isempty(options.SubSet)
                 idcEvents = ismember(labels, options.SubSet);
@@ -1259,48 +1364,76 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             cats = categories(labels, OutputType="categorical");
             nCats = numel(cats);
             if options.Holdout==1/options.KFold
-                cv = cvpartition(labels, KFold=options.KFold);
+                cv = cvpartition(labels, KFold=options.KFold, ...
+                    GroupingVariables=options.GroupingVariables);
                 testIdc = cv.test("all")';
             else
-                cv = cvpartition(labels, Holdout=options.Holdout);
+                if isempty(options.GroupingVariables)
+                    cv = cvpartition(labels, Holdout=options.Holdout);
+                else
+                    cv = cvpartition(numel(labels), KFold=round(1/options.Holdout), ...
+                        GroupingVariables=options.GroupingVariables);
+                end
                 testIdc = false(options.KFold, nEvents);
                 for ii = 1:options.KFold
-                    testIdc(ii, :) = cv.test;
+                    testIdc(ii, :) = cv.test(1)';
                     cv = repartition(cv);
                 end
             end
             nPartitions = height(testIdc);
-            [groupedFr, groupedFrTest] = obj.group(GroupTime=true, Permute=[3 2 1], Partition=testIdc);
-            dataTrain = groupedFr.Data; % nT x nGroups x nPartitions cell of nNeurons x nTrials
-            dataTest = groupedFrTest.Data;
-            labelTrain = cell(size(dataTrain));
-            labelTest = cell(size(dataTest));
+            groupedFr = obj.group(GroupTime=true, Permute=[3 2 1]);
+            data = groupedFr.Data; % nT x nGroups cell of nNeurons x nTrialsAll
             nGroups = width(groupedFr);
-            mdls = cell(nT, nGroups, nPartitions);
-            sz = size(mdls);
-            n = numel(mdls);
-            pb = spiky.plot.ProgressBar(n, "Building decoders "+string(name), Parallel=1);
+            mdls = cell(nT, nGroups);
+            weights = cell(size(mdls));
+            n = numel(data);
+            optionsFit = statset(UseParallel=true);
+            pb = spiky.plot.ProgressBar(n, "Building "+options.Type+" decoders "+string(name), ...
+                Visible=options.ShowProgress);
             parfor ii = 1:n
-                [idxT, idxG, idxP] = ind2sub(sz, ii);
-                X = dataTrain{ii}; % nNeurons x nTrials
-                y = labels(~testIdc(idxP, :)); % nTrials x 1
-                labelTrain{ii} = y;
-                labelTest{ii} = labels(testIdc(idxP, :));
-                switch options.Type
-                    case "mean"
-                        mu = mean(X, 2); % nNeurons x 1 overall mean
-                        Xc = X-mu; % nNeurons x nTrials centered data
-                        m = groupsummary(Xc', y, "mean")';
-                            % nCats x nNeurons mean response for each category
-                        mdls{ii} = spiky.stat.Coords(mu, m, 1:height(X), cats);
-                    otherwise
-                        error("Unsupported decoder type: "+options.Type)
+                [idxT, idxG] = ind2sub([nT, nGroups], ii);
+                XAll = data{ii}; % nNeurons x nTrialsAll
+                mdls1 = cell(nPartitions, 1);
+                whiten1 = cell(nPartitions, 1);
+                for jj = 1:nPartitions
+                    idcP = ~testIdc(jj, :);
+                    X = XAll(:, idcP); % nNeurons x nTrials
+                    y = labels(idcP); % nTrials x 1
+                    nTrials = width(X);
+                    if options.Shuffle
+                        y = y(randperm(numel(y)));
+                    end
+                    switch options.Type
+                        case "mean"
+                            mu = mean(X, 2); % nNeurons x 1 overall mean
+                            Xc = X-mu; % nNeurons x nTrials centered data
+                            [m, ~, counts] = groupsummary(Xc', y, "mean");
+                            m = m'; % nNeurons x nCats mean response for each category
+                            mdls1{jj} = spiky.stat.Coords(mu, m, 1:height(X), cats, counts);
+                            [~, idc] = ismember(y, cats);
+                            res = Xc-m(:, idc); % nNeurons x nTrials residuals
+                            w = res*res'/(nTrials-nCats); % nNeurons x nNeurons covariance of residuals
+                            w = w + options.RidgeFraction*trace(w)/size(w, 1)*eye(size(w)); 
+                                % add ridge regularization
+                            whiten1{jj} = chol(w, "lower"); % nNeurons x nNeurons whitening matrix
+                        case "svm"
+                            mdls1{jj} = fitcecoc(X, y, Learner="svm", ObservationsIn="columns", ...
+                                Coding=options.Coding, ...
+                                FitPosterior=options.FitPosterior, Options=optionsFit, ...
+                                Prior="uniform", ClassNames=cats).compact();
+                        otherwise
+                            error("Unsupported decoder type: "+options.Type)
+                    end
                 end
+                mdls{ii} = mdls1;
+                whiten{ii} = whiten1;
                 pb.step
             end
-            mdls = spiky.stat.Decoder(obj.Time, mdls, dataTrain, dataTest, labelTrain, labelTest, ...
+            mdls = permute(reshape(vertcat(mdls{:}), nPartitions, nT, nGroups), [2 3 1]);
+            whiten = permute(reshape(vertcat(whiten{:}), nPartitions, nT, nGroups), [2 3 1]);
+            mdls = spiky.stat.Decoder(obj.Time, mdls, data, {labels}, ...
                 groupedFr.Groups, groupedFr.GroupIndices, ...
-                {testIdc}, name, Type=options.Type);
+                {testIdc}, name, whiten, Type=options.Type);
         end
 
         function mdls = fitcecoc(obj, labels, options)
@@ -1886,7 +2019,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             %% Train event detector
             % optionsFit = statset(UseParallel=true);
             % mdls = cell(1, nGroups);
-            % pb = spiky.plot.ProgressBar(nGroups, "Training event detectors", Parallel=true);
+            % pb = spiky.plot.ProgressBar(nGroups, "Training event detectors");
             % parfor ii = 1:nGroups
             %     X = Xs{ii};
             %     mdls{ii} = fitcecoc(X', y, Coding=options.Coding, ObservationsIn="columns", ...
@@ -2033,7 +2166,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             b = cell(1, nNeurons, nFolds);
             fi = cell(1, nNeurons, nFolds);
             ops = statset(UseParallel=true);
-            pb = spiky.plot.ProgressBar(nNeurons*nFolds, "Fitting GLM", Parallel=true, ...
+            pb = spiky.plot.ProgressBar(nNeurons*nFolds, "Fitting GLM", ...
                 CloseOnFinish=false);
             parfor ii = 1:nNeurons*nFolds
                 [idxNeuron, idxFold] = ind2sub([nNeurons, nFolds], ii);
@@ -2200,7 +2333,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
 
             %% Group by brain region (neurons)
             [groupNames, ~, idcGroups] = unique(obj.Neuron.Region);
-            groupIndices = arrayfun(@(x) find(idcGroups==x), unique(idcGroups), UniformOutput=false);
+            groupIndices = full(sparse(idcGroups, 1:height(idcGroups), true));
             nGroups = numel(groupNames);
 
             %% Run dPCA per region, then combine W/V into full-neuron bases

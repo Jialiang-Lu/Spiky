@@ -2,13 +2,17 @@ classdef ProgressBar < handle
 
     properties (SetAccess = private)
         N double
+        Valid logical = false
         Message string
-        % Waitbar matlab.ui.Figure
-        Id double
+        Id string
         StartTime uint64
         Progress double
         DataQueue parallel.pool.DataQueue
         Options struct
+    end
+
+    properties (Dependent)
+        Waitbar
     end
 
     methods (Static)
@@ -27,67 +31,71 @@ classdef ProgressBar < handle
     methods
         function obj = ProgressBar(n, message, options)
             %PROGRESSBAR Create a new instance of ProgressBar
-
             arguments
                 n double {mustBePositive, mustBeInteger}
                 message string = ""
-                options.Parallel logical = false
+                options.Visible logical = true
                 options.CloseOnFinish logical = true
             end
 
             obj.N = n;
             obj.Message = message;
             obj.StartTime = tic;
-            % obj.Waitbar = waitbar(0, message);
-            f = waitbar(0, message);
-            f.UserData = spiky.plot.ProgressBar.nextId();
-            obj.Id = f.UserData;
             obj.Progress = 0;
             obj.Options = options;
-            if options.Parallel
-                obj.DataQueue = parallel.pool.DataQueue;
-                afterEach(obj.DataQueue, @obj.updateProgress);
+            if ~options.Visible || parallel.internal.pool.isPoolThreadWorker || ~isempty(getCurrentJob)
+                return
             end
+            f = waitbar(0, message, Color = [0.11 0.11 0.11], HandleVisibility="off", ...
+                Tag=string(spiky.plot.ProgressBar.nextId()), UserData=obj, DeleteFcn=@(~, ~) delete(obj));
+            % obj.Id = f.Tag;
+            obj.DataQueue = parallel.pool.DataQueue;
+            afterEach(obj.DataQueue, @obj.updateProgress);
+            obj.Valid = true;
+        end
+
+        function waitbar = get.Waitbar(obj)
+            %GET.WAITBAR Get the waitbar handle
+            if ~obj.Valid
+                waitbar = [];
+                return
+            end
+            waitbar = findall(groot, Type="Figure", UserData=obj);
         end
 
         function step(obj)
             %STEP Update the progress of the progress bar
-
-            if obj.Options.Parallel
-                send(obj.DataQueue, 0);
-            else
-                obj.updateProgress([]);
+            if ~obj.Valid
+                return
             end
+            send(obj.DataQueue, 0);
         end
 
         function delete(obj)
             %DELETE Delete the progress bar
-
-            % delete(obj.Waitbar);
             if ~parallel.internal.pool.isPoolThreadWorker && isempty(getCurrentJob)
-                delete(obj.getWaitbar());
+                delete(obj.Waitbar);
             end
-            % delete(obj.DataQueue);
-        end
-
-        function h = getWaitbar(obj)
-            %GETWAITBAR Get the waitbar handle
-
-            h = findall(groot, Type="Figure", UserData=obj.Id, Tag="TMWWaitbar");
+            if ~isempty(obj.DataQueue) && isvalid(obj.DataQueue)
+                send(obj.DataQueue, 1);
+                delete(obj.DataQueue);
+            end
         end
     end
 
     methods (Access = private)
-        function updateProgress(obj, ~)
+        function updateProgress(obj, flag)
             %UPDATEPROGRESS Update the progress of the progress bar
-
+            if ~obj.Valid
+                return
+            end
             obj.Progress = obj.Progress + 1;
             t = toc(obj.StartTime);
             tRest = t/obj.Progress*(obj.N-obj.Progress);
             % fprintf("%d\n", obj.Progress)
-            if obj.Progress == obj.N
+            if obj.Progress==obj.N || flag==1
                 if obj.Options.CloseOnFinish
-                    delete(obj.getWaitbar());
+                    delete(obj.Waitbar);
                     delete(obj.DataQueue);
                     delete(obj);
                     return
@@ -96,7 +104,8 @@ classdef ProgressBar < handle
             else
                 message = sprintf("%s\n%s remaining", obj.Message, duration(0, 0, tRest));
             end
-            waitbar(obj.Progress/obj.N, obj.getWaitbar(), message);
+            h = obj.Waitbar;
+            waitbar(obj.Progress/obj.N, h, message);
         end
     end
 end

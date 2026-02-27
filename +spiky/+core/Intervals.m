@@ -7,10 +7,12 @@ classdef Intervals < spiky.core.ArrayBase
 
     properties (Dependent)
         Length double
-        Duration double
-        ChunkDuration double
         Start double
         End double
+        Duration double
+        ChunkDuration double
+        LastGap double
+        NextGap double
     end
 
     methods (Static)
@@ -133,6 +135,14 @@ classdef Intervals < spiky.core.ArrayBase
             len = size(obj.Time, 1);
         end
 
+        function start = get.Start(obj)
+            start = obj.Time(:, 1);
+        end
+
+        function ed = get.End(obj)
+            ed = obj.Time(:, 2);
+        end
+
         function dur = get.Duration(obj)
             dur = sum(diff(obj.Time, 1, 2));
         end
@@ -141,12 +151,12 @@ classdef Intervals < spiky.core.ArrayBase
             dur = diff(obj.Time, 1, 2);
         end
 
-        function start = get.Start(obj)
-            start = obj.Time(:, 1);
+        function gap = get.LastGap(obj)
+            gap = [Inf; obj.Start(2:end)-obj.End(1:end-1)];
         end
 
-        function ed = get.End(obj)
-            ed = obj.Time(:, 2);
+        function gap = get.NextGap(obj)
+            gap = [obj.Start(2:end)-obj.End(1:end-1); Inf];
         end
 
         function obj = sel(obj, idc)
@@ -349,13 +359,63 @@ classdef Intervals < spiky.core.ArrayBase
             idcSeq = cumsum(isJump);
             nSeqs = numel(unique(idcSeq));
             nPerSeq = groupcounts(idcSeq);
-            offsets = repelem(cumsum([0; nPerSeq(1:end-1)]), nPerSeq);
+            offsets = repelem(cumsum([0; nPerSeq(1:end-1)]), nPerSeq, 1);
             idcInSeq = (1:length(idcSeq))'-offsets;
             seqLength = nPerSeq(idcSeq);
         end
 
-        function h = plot(obj, plotOps, options)
-            %PLOT Plot intervals
+        function obj = combineSequence(obj, maxGap, options)
+            %COMBINESEQUENCE Combine sequences of intervals with gap less than maxGap into one interval
+            arguments
+                obj spiky.core.Intervals
+                maxGap double
+                options.IdcJump = []
+            end
+            [~, idcInSeq, seqLength] = obj.findSequence(maxGap, IdcJump=options.IdcJump);
+            idcFirst = idcInSeq==1;
+            idcLast = idcInSeq==seqLength;
+            obj1 = subsref(obj, substruct("()", {idcFirst, ':', ':', ':', ':'}));
+            obj1.Time(:, 2) = obj.Time(idcLast, 2);
+            obj = obj1;
+        end
+
+        function h = plot(obj, values, plotOps, options)
+            %PLOT Plot intervals as lines
+            arguments
+                obj spiky.core.Intervals
+                values (:, 1) = ones(height(obj), 1)
+                plotOps.?matlab.graphics.chart.primitive.Line
+                options.Parent matlab.graphics.axis.Axes = gca
+            end
+            if isscalar(values)
+                values = repmat(values, height(obj), 1);
+            end
+            plotArgs = namedargs2cell(plotOps);
+            if ischar(values) || isstring(values) || iscategorical(values)
+                values = categorical(values);
+                yLabels = categories(values, OutputType="string");
+                values = double(categorical(values));
+            elseif isnumeric(values) || islogical(values)
+                yLabels = [];
+            else
+                error("Unsupported value type %s.", class(values))
+            end
+            x = obj.Time(:, [1 1 2 2])';
+            y = zeros(4, width(x));
+            y([2 3], :) = [values'; values'];
+            h1 = plot(options.Parent, x(:), y(:), plotArgs{:});
+            if ~isempty(yLabels)
+                yticks(options.Parent, 1:length(yLabels));
+                yticklabels(options.Parent, yLabels);
+            end
+            % ylim(options.Parent, [min(min(values), 0)-1 max(values)+1])
+            if nargout>0
+                h = h1;
+            end
+        end
+
+        function h = plotRegions(obj, plotOps, options)
+            %PLOTREGIONS Plot intervals as shaded regions
             arguments
                 obj spiky.core.Intervals
                 plotOps.?matlab.graphics.chart.decoration.ConstantRegion

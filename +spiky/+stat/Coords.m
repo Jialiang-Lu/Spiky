@@ -7,6 +7,7 @@ classdef Coords < spiky.core.Array
     properties
         Origin (:, 1) double
         BasisNames (:, 1)
+        BasisWeights (:, 1) double
     end
 
     properties (Dependent)
@@ -36,7 +37,7 @@ classdef Coords < spiky.core.Array
     end
 
     methods
-        function obj = Coords(origin, bases, dimNames, basisNames)
+        function obj = Coords(origin, bases, dimNames, basisNames, basisWeights)
             %COORDS Create a new instance of Coords
             %
             %   Coords(origin, bases, ...) creates a new instance of Coords
@@ -45,6 +46,7 @@ classdef Coords < spiky.core.Array
             %   bases: basis vectors
             %   dimNames: dimension names or objects
             %   basisNames: names of the basis vectors
+            %   basisWeights: weights of the basis vectors
             %
             %   obj: Coords object
             arguments
@@ -52,6 +54,7 @@ classdef Coords < spiky.core.Array
                 bases (:, :, :) double = double.empty(0, 0)
                 dimNames (:, 1) = zeros(height(origin), 1)
                 basisNames (:, 1) = categorical(NaN(width(bases), 1))
+                basisWeights (:, 1) double = ones(width(bases), 1)
             end
             assert(height(origin)==height(bases), ...
                 "The number of rows in bases must be the same as the length of origin");
@@ -61,6 +64,7 @@ classdef Coords < spiky.core.Array
             obj.Origin = origin;
             obj.DimNames = dimNames;
             obj.BasisNames = basisNames;
+            obj.BasisWeights = basisWeights;
         end
 
         function [data, proj] = project(obj, data, idcBases, options)

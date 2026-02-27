@@ -16,7 +16,7 @@ classdef Subspaces < spiky.stat.GroupedStat
                 time double = []
                 data cell = {} % spiky.stat.Coords
                 groups = []
-                groupIndices cell = {}
+                groupIndices = logical.empty(height(groups), 0)
             end
             obj@spiky.stat.GroupedStat(time, data, groups, groupIndices);
         end
@@ -124,7 +124,7 @@ classdef Subspaces < spiky.stat.GroupedStat
             else
                 idcT = 1:height(V);
             end
-            if nNeurons~=sum(cellfun(@numel, obj.GroupIndices))
+            if nNeurons~=width(obj.GroupIndices)
                 error("The number of neurons must be the same as the number of neurons in the Subspaces")
             end
             C = zeros(nT, nEvents, nBases*nGroups, nSamples);
