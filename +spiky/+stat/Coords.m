@@ -52,8 +52,8 @@ classdef Coords < spiky.core.Array
             arguments
                 origin (:, 1) double = double.empty(0, 1)
                 bases (:, :, :) double = double.empty(0, 0)
-                dimNames (:, 1) = zeros(height(origin), 1)
-                basisNames (:, 1) = categorical(NaN(width(bases), 1))
+                dimNames (:, 1) = (1:height(origin))'
+                basisNames (:, 1) = categorical((1:width(bases))')
                 basisWeights (:, 1) double = ones(width(bases), 1)
             end
             assert(height(origin)==height(bases), ...

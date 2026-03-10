@@ -117,7 +117,7 @@ classdef IntervalsTable < spiky.core.Intervals & spiky.core.Array
             out = obj.toEventsTable().interp(t, "previous", "extrap", optionArgs{:});
         end
 
-        function [h, hText] = plotStates(obj, idxVar, plotOps)
+        function [h, hText] = plotStates(obj, idxVar, plotOps, options)
             %PLOTSTATES Plot the states over time
             %   [h, hText] = PLOTSTATES(obj, idxVar, options)
             %
@@ -130,6 +130,8 @@ classdef IntervalsTable < spiky.core.Intervals & spiky.core.Array
                 obj spiky.core.IntervalsTable
                 idxVar (1, 1) = 1
                 plotOps.?matlab.graphics.chart.primitive.Line
+                options.Label logical = false
+                options.Parent matlab.graphics.axis.Axes = gca
             end
             if istable(obj.Data)
                 data = categorical(obj.Data{:, idxVar});
@@ -137,19 +139,34 @@ classdef IntervalsTable < spiky.core.Intervals & spiky.core.Array
                 data = categorical(obj.Data(:, idxVar));
             end
             data(ismissing(data)) = "_";
+            data = removecats(data);
             plotArgs = namedargs2cell(plotOps);
             labels = categories(data, OutputType="categorical");
             [~, idc] = ismember(data, labels);
             nLabels = numel(labels);
             x = obj.Time(:, [1 1 2 2])';
             y = zeros(4, width(x));
-            y([2 3], :) = [idc'; idc'];
-            h1 = plot(x(:), y(:), plotArgs{:});
-            yticks(1:nLabels);
-            yticklabels(labels);
-            ylim([0 nLabels+1])
+            if options.Label
+                y([2 3], :) = 1;
+            else
+                y([2 3], :) = [idc'; idc'];
+            end
+            h1 = plot(options.Parent, x(:), y(:), plotArgs{:});
+            if options.Label
+                hText1 = text(options.Parent, x(2, :), y(2, :), string(data), ...
+                HorizontalAlignment="left", VerticalAlignment="bottom");
+                yticks(options.Parent, []);
+                ylim(options.Parent, [0 1.5])
+            else
+                yticks(options.Parent, 1:nLabels);
+                yticklabels(options.Parent, labels);
+                ylim(options.Parent, [0 nLabels+1])
+            end
             if nargout>0
                 h = h1;
+            end
+            if nargout>1
+                hText = hText1;
             end
         end
     end

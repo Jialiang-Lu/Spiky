@@ -346,7 +346,7 @@ classdef EyeData
                 events table
                 type string
                 func = @(x) x
-                eye (1, 1) string {mustBeMember(eye, ["Left" "Right" "Either" "Both"])} = "Either"
+                eye (1, 1) string {mustBeMember(eye, ["Left" "Right" "Either" "Both"])} = "Both"
             end
             if ismember(eye, ["Either" "Both"])
                 intervals1 = spiky.minos.EyeData.extractIntervals(events, type, func, "Left");

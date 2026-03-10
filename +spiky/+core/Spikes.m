@@ -165,27 +165,27 @@ classdef Spikes < spiky.core.Array
             %       Kernel: smoothing kernel, "gaussian" or "box" (default: "gaussian")
             %       Normalize: if true, normalize the firing rate (default: false)
             %       Unit: "Hz" or "count" for the output unit (default: "Hz")
+            %       ValidIntervals: valid intervals specific for each event, values outside of the
+            %           intervals will be NaN (default: empty)
             %
-            %   obj: TrigFr object
+            %   fr: TrigFr object
 
             arguments
-                obj spiky.core.Spikes = spiky.core.Spikes
-                events = [] % (n, 1) double or spiky.core.Events
+                obj spiky.core.Spikes
+                events (:, 1) spiky.core.Events
                 t double {mustBeVector} = [0, 1]
                 options.HalfWidth double {mustBePositive} = 0.1
                 options.Kernel string {mustBeMember(options.Kernel, ["gaussian", "box"])} = "gaussian"
                 options.Normalize logical = false
                 options.Unit string {mustBeMember(options.Unit, ["Hz", "count"])} = "Hz"
+                options.ValidIntervals spiky.core.Intervals = spiky.core.Intervals.empty()
+                options.Eps double = 1e-4
             end
             if nargin==0 || isempty(obj)
                 fr = spiky.trig.TrigFr;
                 return
             end
-            if isa(events, "spiky.core.Events")
-                events1 = events.Time;
-            else
-                events1 = events(:);
-            end
+            events1 = events.Time;
             t = t(:);
             nEvents = numel(events1);
             nT = numel(t);
@@ -216,13 +216,20 @@ classdef Spikes < spiky.core.Array
                     tWide = (t(1)-wAdd*res:res:t(end)+wAdd*res)';
                     kernel = exp(-0.5.*(tWide-(tWide(1)+tWide(end))/2).^2./options.HalfWidth.^2)./...
                         (sqrt(2*pi)*options.HalfWidth)*res;
-                    fr = obj.trigFr(events, tWide, HalfWidth=res/2, Kernel="box", Unit=options.Unit);
+                    fr = obj.trigFr(events, tWide, HalfWidth=res/2, Kernel="box", Unit=options.Unit, ...
+                        ValidIntervals=[]);
                     fr.Data = convn(fr.Data, kernel, "same");
                     if options.Normalize
                         m = mean(fr.Data, [1 2]);
                         fr.Data = (fr.Data-m)./sqrt(m./res);
                     end
                     fr.Data = fr.Data(idcAdd, :, :);
+                    if ~isempty(options.ValidIntervals)
+                        tRange = options.ValidIntervals.Time'-events1';
+                        fValid = NaN(nT, nEvents);
+                        fValid(t>=tRange(1, :)-options.Eps & t<=tRange(2, :)+options.Eps) = 1;
+                        fr.Data = fr.Data.*fValid;
+                    end
                     fr.Start_ = t(1);
                     fr.Step_ = res;
                     fr.N_ = nT;
@@ -234,6 +241,12 @@ classdef Spikes < spiky.core.Array
             end
             if options.Unit=="Count"
                 fr = fr*res;
+            end
+            if ~isempty(options.ValidIntervals)
+                tRange = options.ValidIntervals.Time'-events1';
+                fValid = NaN(nT, nEvents);
+                fValid(t>=tRange(1, :)-options.Eps & t<=tRange(2, :)+options.Eps) = 1;
+                fr = fr.*fValid;
             end
             fr = spiky.trig.TrigFr(t(1), res, fr, events, t, obj.Neuron);
             fr.Options = options;
@@ -252,7 +265,7 @@ classdef Spikes < spiky.core.Array
             %       Unit: "Hz" or "count" for the output unit (default: "Hz")
             arguments
                 obj spiky.core.Spikes
-                events = [] % (n, 1) double or spiky.core.Events
+                events (:, 1) spiky.core.Events
                 window (1, 2) double = [0, 1]
                 options.Normalize logical = false
                 options.Unit string {mustBeMember(options.Unit, ["Hz", "count"])} = "Hz"
@@ -273,7 +286,7 @@ classdef Spikes < spiky.core.Array
             %   zeta: Zeta object with results of the Zeta test
             arguments
                 obj spiky.core.Spikes
-                events % (n, 1) double or spiky.core.Events
+                events (:, 1) spiky.core.Events
                 window (1, 1) double = 1
                 options.NumResample (1, 1) double = 100
             end

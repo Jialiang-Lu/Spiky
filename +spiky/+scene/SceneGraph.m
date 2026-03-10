@@ -41,8 +41,8 @@ classdef SceneGraph < spiky.core.IntervalsTable
             
             arguments
                 intervals (:, 2) double = double.empty
-                trialStart (:, 1) double = zeros(height(intervals), 1)
-                trialEnd (:, 1) double = zeros(height(intervals), 1)
+                trialStart (:, 1) int32 = zeros(height(intervals), 1, "int32")
+                trialEnd (:, 1) int32 = zeros(height(intervals), 1, "int32")
                 subject (:, 1) spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(intervals))
                 predicate (:, 1) spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(intervals))
                 object (:, 1) spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(intervals))
@@ -155,23 +155,22 @@ classdef SceneGraph < spiky.core.IntervalsTable
             nHumans = numel(names);
             n = height(per);
             t = per(:);
-            changes = zeros(n*2, nHumans);
-            for ii = 1:n
-                changes(ii, idcName(ii)) = 1; % Start of visibility
-                changes(ii+n, idcName(ii)) = -1; % End of visibility
-            end
+            changes = full([sparse(1:n, idcName, 1); sparse(1:n, idcName, -1)]);
+            trials = [data.TrialStart; data.TrialEnd];
             [t, idcT] = sort(t);
+            trials = trials(idcT);
             changes = changes(idcT, :);
             newFlags = cumsum(changes, 1);
             oldFlags = newFlags-changes;
             isAdd = sum(changes, 2)>0;
             oldCounts = sum(oldFlags, 2);
             newCounts = sum(newFlags, 2);
-            tt = spiky.core.EventsTable(t, table(isAdd, oldCounts, newCounts, ...
+            countInTrial = grouptransform(trials, trials, @(x) numel(x));
+            tt = spiky.core.EventsTable(t, table(trials, countInTrial, isAdd, oldCounts, newCounts, ...
                 spiky.utils.flagsdecode(oldFlags, names), ...
                 spiky.utils.flagsdecode(newFlags, names), ...
                 spiky.utils.flagsdecode(abs(changes), names), ...
-                VariableNames=["IsAdd", "OldCount", "NewCount", "OldName", "NewName", "Change"]));
+                VariableNames=["Trial" "CountInTrial" "IsAdd", "OldCount", "NewCount", "OldName", "NewName", "Change"]));
         end
 
         function tt = getVerbs(obj)

@@ -55,7 +55,7 @@ for ii = nLines:-1:1
     xData = [x(:, ii); flipud(x(:, ii))];
     yData = [y(:, ii)+e(:, ii); flipud(y(:, ii)-e(:, ii))];
     if nLines>1
-        c = cs(ii, :);
+        c = cs(mod(ii-1, height(cs))+1, :);
         hLine1(ii).Color = c;
     else
         c = hLine1(ii).Color;

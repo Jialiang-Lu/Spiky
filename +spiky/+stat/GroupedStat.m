@@ -13,7 +13,7 @@ classdef GroupedStat < spiky.core.EventsTable
         Conditions (:, 1) categorical % condition labels for each condition, nConditions x 1
         Partitions (:, 1) cell % cvpartition for each condition, nConditions x 1
         Chance double % chance level for the statistic
-        Shuffle cell % shuffled data, same size as Data
+        Shuffle % shuffled data, same size as Data
         P double % p values, same size as Data
     end
 
@@ -21,6 +21,7 @@ classdef GroupedStat < spiky.core.EventsTable
         NGroups double
         NPartitions double
         NConditions double
+        SigStar categorical
     end
 
     methods (Static)
@@ -48,6 +49,23 @@ classdef GroupedStat < spiky.core.EventsTable
             end
             dimLabelNames = {"Time", ["Groups"; "GroupIndices"], string.empty, ...
                 ["Conditions"; "Partitions"]};
+        end
+
+        function h = plots(objs, plotOps, options)
+            arguments (Repeating)
+                objs spiky.stat.GroupedStat
+            end
+            arguments
+                plotOps.?matlab.graphics.chart.primitive.Line
+                options.Percent logical = false
+                options.Clip double = []
+                options.Smooth double = 0
+                options.Chance double = []
+                options.Shuffle spiky.stat.GroupedStat = []
+                options.FaceAlpha double = .3
+                options.Parent matlab.graphics.axis.Axes = gca
+            end
+
         end
 
         function h = boxcharts(objs, plotOps, options)
@@ -107,7 +125,7 @@ classdef GroupedStat < spiky.core.EventsTable
                 conditions (:, 1) = categorical(strings(size(data, 4), 1))
                 options.Metric string = ""
                 options.Chance double = NaN
-                options.Shuffle cell = cell(size(data))
+                options.Shuffle = cell(size(data))
                 options.P double = NaN(size(data))
             end
             if isempty(time) && isempty(data) && isempty(groups)
@@ -155,6 +173,18 @@ classdef GroupedStat < spiky.core.EventsTable
             n = size(obj.Data, 4);
         end
 
+        function sigStar = get.SigStar(obj)
+            if isempty(obj.P) || all(isnan(obj.P(:)))
+                sigStar = categorical(NaN);
+            else
+                sigStar = categorical(strings(size(obj.P)));
+                sigStar(obj.P>=0.05 | isnan(obj.P)) = "";
+                sigStar(obj.P<0.05) = sprintf("\x2731");
+                sigStar(obj.P<0.01) = sprintf("\x2731\x2731");
+                sigStar(obj.P<0.001) = sprintf("\x2731\x2731\x2731");
+            end
+        end
+
         function obj = cond2time(obj)
             %COND2TIME Convert the condition dimension to time dimension
             obj.Time = round(double(string(obj.Conditions)), 3);
@@ -187,7 +217,7 @@ classdef GroupedStat < spiky.core.EventsTable
             obj = obj(:, idc, :);
         end
 
-        function [h, hError] = plot(obj, lineSpec, plotOps, options)
+        function [h, hError, hsSig] = plot(obj, lineSpec, plotOps, options)
             %PLOT Plot the GroupedStat
             %
             %   h = PLOT(obj, lineSpec, ...)
@@ -208,11 +238,16 @@ classdef GroupedStat < spiky.core.EventsTable
                 lineSpec string = "-"
                 plotOps.?matlab.graphics.chart.primitive.Line
                 options.Percent logical = false
+                options.SigLine logical = true
                 options.Clip double = []
                 options.Smooth double = 0
                 options.Chance double = []
                 options.Shuffle spiky.stat.GroupedStat = []
                 options.FaceAlpha double = .3
+                options.SigThreshold double = 0.05
+                options.SigLineWidth double = 5
+                options.OffsetPercent double = 2
+                options.HeightPercent double = 2
                 options.Parent matlab.graphics.axis.Axes = gca
             end
             nTrain = size(obj.Data, 4);
@@ -234,6 +269,8 @@ classdef GroupedStat < spiky.core.EventsTable
                 hErrors = gobjects(nPlot, 1);
                 clip = options.Clip;
                 options.Clip = [];
+                plotSigLine = options.SigLine;
+                options.SigLine = false;
                 for ii = 1:nPlot
                     if ii==1
                         options.Chance = [];
@@ -255,11 +292,21 @@ classdef GroupedStat < spiky.core.EventsTable
                     yl(2) = min(yl(2), clip(2));
                     ylim(options.Parent, yl);
                 end
+                plotSig = plotSigLine && ~isempty(obj.P) && ~isnan(obj.P(1));
+                if plotSig
+                    hs1 = spiky.plot.sigline(hs, squeeze(obj.P), Threshold=options.SigThreshold, ...
+                        Parent=options.Parent, ...
+                        OffsetPercent=options.OffsetPercent, HeightPercent=options.HeightPercent, ...
+                        LineWidth=options.SigLineWidth);
+                end
                 if nargout>0
                     h = hs;
-                    if nargout>1
-                        hError = hErrors;
-                    end
+                end
+                if nargout>1
+                    hError = hErrors;
+                end
+                if nargout>2 && plotSig
+                    hsSig = hs1;
                 end
                 return
             end
@@ -313,37 +360,54 @@ classdef GroupedStat < spiky.core.EventsTable
                 yl(2) = min(yl(2), options.Clip(2));
                 ylim(options.Parent, yl);
             end
+            plotSig = options.SigLine && ~isempty(obj.P) && ~isnan(obj.P(1));
+            if plotSig
+                hs1 = spiky.plot.sigline(h1, obj.P, Threshold=options.SigThreshold, Parent=options.Parent, ...
+                    OffsetPercent=options.OffsetPercent, HeightPercent=options.HeightPercent, ...
+                    LineWidth=options.SigLineWidth);
+            end
             if nargout>0
                 h = h1;
-                if nargout>1
-                    hError = hError1;
-                end
+            end
+            if nargout>1
+                hError = hError1;
+            end
+            if nargout>2 && plotSig
+                hsSig = hs1;
             end
         end
 
-        function h = imagesc(obj, plotOps, options)
+        function [h, hSig] = imagesc(obj, plotOps, options)
             arguments
                 obj spiky.stat.GroupedStat
                 plotOps.?matlab.graphics.primitive.Image
                 options.Parent matlab.graphics.axis.Axes = gca
                 options.Percent logical = false
                 options.Type {mustBeMember(options.Type, ["time", "condition"])} = "condition"
+                options.SigStar logical = true
             end
             assert(obj.NGroups==1, "imagesc can only be plotted for one group at a time.")
             data = obj.Data;
+            plotSig = options.SigStar && ~isempty(obj.P) && ~isnan(obj.P(1));
             switch options.Type
                 case "time"
                     assert(size(data, 4)==height(data), ...
                         "The number of conditions must be the same as the number of time points for time plot.")
                     x = obj.Time;
                     y = obj.Time;
-                    data = permute(data, [1 4 3 2]); % nT x nT x nPartitions
+                    data = permute(data, [1 4 3 2]); % nTTrain x nTTest x nPartitions
+                    if plotSig
+                        sigStar = permute(obj.SigStar, [1 4 3 2]);
+                    end
                 case "condition"
                     assert(size(data, 4)==size(data, 5), ...
                         "The number of test conditions must be the same as the number of train conditions for condition plot.")
-                    x = obj.Conditions;
-                    y = obj.Conditions;
-                    data = permute(data, [4 5 3 1 2]); % nConditions x nConditions x nPartitions
+                    x = removecats(obj.Conditions);
+                    y = removecats(obj.Conditions);
+                    data = permute(data, [4 5 3 1 2]); % nConditionsTrain x nConditionsTest x nPartitions
+                    if plotSig
+                        sigStar = permute(obj.SigStar, [4 5 3 1 2]);
+                    end
             end
             nComp = height(data);
             if iscell(data) % concatenate confusion
@@ -361,10 +425,17 @@ classdef GroupedStat < spiky.core.EventsTable
             plotArgs = namedargs2cell(plotOps);
             h1 = imagesc(options.Parent, x, y, data', plotArgs{:});
             box off
+            if plotSig
+                y1 = repmat(y, numel(x), 1);
+                x1 = repelem(x, numel(y), 1);
+                hSig1 = text(options.Parent, x1(:), y1(:), sigStar(:), HorizontalAlignment="center", ...
+                    VerticalAlignment="middle", FontSize=10, Color="k", ...
+                    BackgroundColor="none");
+            end
             if nCats>1
                 x = (1+nCats)/2:nCats:((nComp-1)*nCats+1+(nCats-1)/2);
                 xticks(options.Parent, x);
-                xticklabels(options.Parent, obj.Conditions);
+                xticklabels(options.Parent, removecats(obj.Conditions));
                 yticks(options.Parent, 1:nCats);
                 yticklabels(options.Parent, 1:nCats);
                 borders = nCats+0.5:nCats:(nComp-1)*nCats+0.5;
@@ -374,9 +445,12 @@ classdef GroupedStat < spiky.core.EventsTable
             if nargout>0
                 h = h1;
             end
+            if nargout>1 && plotSig
+                hSig = hSig1;
+            end
         end
 
-        function [h, hScatter] = boxchart(obj, plotOps, options)
+        function [h, hScatter, hSigLine, hSigText] = boxchart(obj, plotOps, options)
             %BOXCHART Plot the data as box charts
             %
             %   h = BOXCHART(obj, plotOps, options)
@@ -391,12 +465,17 @@ classdef GroupedStat < spiky.core.EventsTable
                 obj spiky.stat.GroupedStat
                 plotOps.?matlab.graphics.chart.primitive.BoxChart
                 options.Parent matlab.graphics.axis.Axes = gca
+                options.Target string {mustBeMember(options.Target, ["Data", "Shuffle"])} = "Data"
                 options.Percent logical = false
                 options.Chance double = []
-                options.Scatter logical = true
+                options.Scatter logical = false
+                options.SigStar logical = true
+                options.OffsetPercent double = 5
+                options.HeightPercent double = 1
             end
             assert(obj.NGroups==1, "Box chart can only be plotted for one group at a time.")
-            data = permute(obj.Data(1, :, :, :, :), [3 4 5 1 2]);
+            data = obj.(options.Target);
+            data = permute(data(1, :, :, :, :), [3 4 5 1 2]);
             if isempty(options.Chance) && ~isempty(obj.Chance)
                 options.Chance = obj.Chance;
             end
@@ -430,11 +509,20 @@ classdef GroupedStat < spiky.core.EventsTable
                 yline(options.Parent, options.Chance, "-", "Chance", LineWidth=1);
             end
             box off
+            plotSig = options.SigStar && ~isempty(obj.P) && ~isnan(obj.P(1));
+            if plotSig
+                [hSigLine1, hSigText1] = spiky.plot.sigstar(1:width(data), obj.P(:), OffsetPercent=options.OffsetPercent, ...
+                    HeightPercent=options.HeightPercent, Parent=options.Parent, SigOnly=true);
+            end
             if nargout>0
                 h = h1;
-                if nargout>1 && options.Scatter
-                    hScatter = h2;
-                end
+            end
+            if nargout>1 && options.Scatter
+                hScatter = h2;
+            end
+            if nargout>2 && plotSig
+                hSigLine = hSigLine1;
+                hSigText = hSigText1;
             end
         end
     end

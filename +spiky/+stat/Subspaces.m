@@ -1,6 +1,51 @@
 classdef Subspaces < spiky.stat.GroupedStat
     %SUBSPACES Class representing a set of subspaces
 
+    methods (Static)
+        function obj = fromDecoders(decoders)
+            arguments (Repeating)
+                decoders spiky.stat.Decoder
+            end
+            decoders = decoders(:);
+            szs = cellfun(@(d) size(d, 1:3), decoders, UniformOutput=false);
+            assert(isequal(szs{:}), ...
+                "All decoders must have the same size in the first 3 dimensions (time, groups, samples)");
+            nCs = cellfun(@(d) size(d, 4), decoders);
+            nCMax = max(nCs);
+            idxMax = find(nCs==nCMax, 1);
+            assert(all(ismember(nCs, [1 nCMax])), ...
+                "The number of conditions must be either 1 or the maximum across decoders");
+            nD = numel(decoders);
+            nC = round(ones(nD, 1)+(0:nCMax-1).*(nCs>1)); % nD x nCMax
+            [nT, nGroups, nSamples] = size(decoders{1}, 1:3);
+            data = cell(nT, nGroups, nSamples, nCMax);
+            n = nT*nGroups*nSamples*nCMax;
+            nNeurons = numel(decoders{1}.Data{1}.BinaryLearners{1}.Beta);
+            for ii = 1:n
+                try
+                    [idxT, idxG, idxS, idxC] = ind2sub([nT nGroups nSamples nCMax], ii);
+                    idcC = nC(:, idxC);
+                    nNeurons = sum(decoders{1}.GroupIndices(idxG, :));
+                    w = zeros(nNeurons, nD);
+                    b = zeros(nD, 1);
+                    for jj = 1:nD
+                        w(:, jj) = decoders{jj}.Data{idxT, idxG, idxS, idcC(jj)}.BinaryLearners{1}.Beta;
+                        b(jj) = decoders{jj}.Data{idxT, idxG, idxS, idcC(jj)}.BinaryLearners{1}.Bias;
+                    end
+                    wNorm = vecnorm(w, 2, 1)'; % nD x 1
+                    B = w./wNorm'; % nNeurons x nD unit basis vectors
+                    bNorm = b./wNorm; % nD x 1 normalized biases
+                    origin = -B*((B'*B)\bNorm); % nNeurons x 1 origin of the subspace
+                    data{idxT, idxG, idxS, idxC} = spiky.stat.Coords(origin, B);
+                catch
+                    data{idxT, idxG, idxS, idxC} = spiky.stat.Coords(zeros(nNeurons, 1), ones(nNeurons, nD));
+                end
+            end
+            obj = spiky.stat.Subspaces(decoders{1}.Time, data, decoders{1}.Groups, decoders{1}.GroupIndices);
+            obj.Conditions = decoders{idxMax}.Conditions;
+        end
+    end
+
     methods
         function obj = Subspaces(time, data, groups, groupIndices)
             %SUBSPACES Create a new instance of Subspaces
@@ -97,66 +142,40 @@ classdef Subspaces < spiky.stat.GroupedStat
             %   Name-value arguments:
             %       Individual: whether to project each basis vector individually
             %
-            %   data: projected data, nT x nEvents x (nBases x nGroups) x nSamples
+            %   data: projected data, nT x nEvents x (nBases x nGroups) x nPartitions x nConditions
             arguments
                 obj spiky.stat.Subspaces
-                data
+                data spiky.trig.TrigFr
                 idcDim double = 1:obj.Data{1}.NBases
                 options.Individual logical = false
             end
-            if isa(data, "spiky.core.EventsTable")
-                V = data.Data;
-            elseif isnumeric(data)
-                V = data;
+            groupedFr = data.group(GroupTime=true); % nT x nGroups of 1 x nEvents x nNeurons
+            [nT, nGroups] = size(groupedFr);
+            nEvents = width(groupedFr{1});
+            [~, ~, nPartitions, nConditions] = size(obj);
+            nBases = obj.Data{1}.NBases;
+            if height(obj)==1
+                idcT = ones(nT, 1);
+            elseif height(obj)==nT
+                idcT = 1:nT;
             else
-                error("Data must be a numeric array or a spiky.core.EventsTable")
+                error("The number of time points does not match the Subspaces")
             end
-            nT = size(V, 1);
-            nEvents = size(V, 2);
-            nNeurons = size(V, 3);
-            nBases = numel(idcDim);
-            nGroups = obj.NGroups;
-            nSamples = size(obj, 3);
-            if nT~=height(obj)
-                assert(height(obj)==1, "The number of time points must be the same as the "+...
-                    "number of time points in the Subspaces, or the Subspaces must have only one time point");
-                idcT = ones(height(V), 1);
-            else
-                idcT = 1:height(V);
+            proj = cell(nT, 1, nGroups, nPartitions, nConditions);
+            n = nT*nGroups*nPartitions*nConditions;
+            for ii = 1:n
+                [idxT, idxG, idxS, idxC] = ind2sub([nT nGroups nPartitions nConditions], ii);
+                coords = obj.Data{idcT(idxT), idxG, idxS, idxC};
+                v = permute(groupedFr{idxT, idxG}, [3 2 1]); % nNeurons x nEvents
+                v = coords.project(v, idcDim, Individual=options.Individual); % nBases x nEvents
+                proj{idxT, 1, idxG, idxS, idxC} = permute(v, [3 2 1]); % 1 x nEvents x nBases
             end
-            if nNeurons~=width(obj.GroupIndices)
-                error("The number of neurons must be the same as the number of neurons in the Subspaces")
-            end
-            C = zeros(nT, nEvents, nBases*nGroups, nSamples);
-            for ii = 1:nT
-                idxT = idcT(ii);
-                for jj = 1:nGroups
-                    for kk = 1:nSamples
-                        V1 = permute(V(ii, :, obj.GroupIndices(jj, :)), [3 2 1]);
-                        C1 = obj.Data{idxT, jj, kk}.project(V1, idcDim, Individual=options.Individual);
-                        C1 = permute(C1, [3 2 1]);
-                        C(ii, :, (1:nBases)+(jj-1)*nBases, kk) = C1;
-                    end
-                end
-            end
-            if isa(data, "spiky.core.EventsTable")
-                data.Data = C;
-                if isa(data, "spiky.core.Spikes")
-                    data.Neuron = spiky.core.Neuron.create(...
-                        data.Neuron.Session(1), obj.Groups, nBases);
-                    % ses = data.Neuron.Session(1);
-                    % data.Neuron = spiky.core.Neuron.zeros(nBases*nGroups);
-                    % data.Neuron.Session = repmat(ses, height(data.Neuron), 1);
-                    % data.Neuron.Region = categorical(repelem(string(obj.Groups), nBases, 1));
-                    % data.Neuron.Group = repelem((1:nGroups)', nBases, 1);
-                    % data.Neuron.Id = repmat((1:nBases)', nGroups, 1);
-                end
-                if isa(data, "spiky.trig.TrigFr")
-                    data.Samples = (1:nSamples)';
-                end
-            else
-                data = C;
-            end
+            proj = cell2mat(proj); % nT x nEvents x (nBases x nGroups) x nPartitions x nConditions
+            t = data.Time;
+            data = spiky.trig.TrigFr(0, 1, proj, data.Events, ...
+                data.Window, spiky.core.Neuron.create(data.Neuron.Session(1), obj.Groups, nBases), ...
+                (1:nPartitions)');
+            data.Time = t;
         end
 
         function projs = projectByPair(obj, data, cats1, cats2, options)

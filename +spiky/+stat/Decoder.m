@@ -68,7 +68,7 @@ classdef Decoder < spiky.stat.GroupedStat
             nTrials = width(X);
             nCats = mdl.NBases;
             XHat = mdl.Origin+mdl.Bases(:, idcY); % nNeurons x nTrials predicted response
-            if ~isempty(options.Whiten)
+            if ~isempty(options.Whiten) && ~isequal(options.Whiten, NaN)
                 X = options.Whiten\X; % whiten the data by the Mahalanobis weights
                 XHat = options.Whiten\XHat; % whiten the predicted response
                 basesUsed = options.Whiten\mdl.Bases; % whiten the decoder bases
@@ -161,13 +161,14 @@ classdef Decoder < spiky.stat.GroupedStat
                 mdl spiky.stat.Coords
                 X double
                 y categorical
-                options.Type string {mustBeMember(options.Type, ["nse" "r2" "varRatio" "cosine" "rdm" "corr"])} = "varRatio"
-                options.Whiten logical = false
+                options.Type string {mustBeMember(options.Type, ["sim" "nse" "r2" "varRatio" "cosine" "rdm" "corr"])} = "varRatio"
+                options.Whiten double = []
                 options.AllowRotation logical = true
                 options.AllowScaling logical = false
                 options.AllowReflection logical = false
                 options.AllowTranslation logical = true
                 options.RidgeFraction (1, 1) double {mustBeNonnegative} = 1e-6
+                options.NDims (1, 1) double {mustBePositive} = Inf
             end
             catsTrain = mdl.BasisNames;
             isValid = ismember(y, catsTrain);
@@ -179,14 +180,24 @@ classdef Decoder < spiky.stat.GroupedStat
             mTest = groupsummary(X', y, "mean")'; % nNeurons x nCats class means in test data
             nCats = numel(cats);
             nNeurons = height(X);
-            stat = NaN(nCats, 1);
-            transform = cell(nCats, 1);
-            d = NaN(nCats, 1);
-            for ii = 1:nCats
-                idcOthers = setdiff(1:nCats, ii);
+            if options.Type=="sim"
+                nLoop = 1; % fit between all classes in the training and test data together
+            else
+                nLoop = nCats; % fit each class in the test data using the other classes in the training and test data as reference
+            end
+            stat = NaN(nLoop, 1);
+            transform = cell(nLoop, 1);
+            d = NaN(nLoop, 1);
+            for ii = 1:nLoop
+                if options.Type=="sim"
+                    XThis = X; % nNeurons x nTrials all data
+                    idcOthers = 1:nCats;
+                else
+                    XThis = X(:, idcY==ii); % nNeurons x nTrials in this class
+                    idcOthers = setdiff(1:nCats, ii);
+                end
                 idcTrialOthers = ismember(idcY, idcOthers);
-                XThis = X(:, idcY==ii); % nNeurons x nTrials in this class
-                if options.Whiten
+                if isempty(options.Whiten)
                     XOther = X(:, idcTrialOthers); % nNeurons x nTrials in other classes
                     resOther = XOther-mTest(:, idcY(idcTrialOthers)); % nNeurons x nTrials residuals for other classes
                     WOther = resOther*resOther'/(width(XOther)-nCats+1); % nNeurons x nNeurons covariance of other classes
@@ -195,6 +206,11 @@ classdef Decoder < spiky.stat.GroupedStat
                     W = chol(WOther, "lower"); % nNeurons x nNeurons whitening matrix based on other classes
                     mwTrain = W\mTrain; % nNeurons x nCats whitened class means in training data
                     mwTest = W\mTest; % nNeurons x nCats whitened class means in test data
+                    XWThis = W\XThis; % nNeurons x nTrials whitened data for this class
+                elseif ~isequal(options.Whiten, NaN)
+                    W = options.Whiten; % nNeurons x nNeurons whitening matrix provided
+                    mwTrain = W\mTrain; % nNeurons x nCats whitened class means in training data
+                    mwTest = W\mTest; % nNeurons x nCats whitened class
                     XWThis = W\XThis; % nNeurons x nTrials whitened data for this class
                 else
                     mwTrain = mTrain; % nNeurons x nCats class means in training data
@@ -209,7 +225,6 @@ classdef Decoder < spiky.stat.GroupedStat
                 mcTrainOther = mTrainOther-muTrainOther; % nNeurons x nCats-1 centered other class means in training data
                 mcTestOther = mTestOther-muTestOther; % nNeurons x nCats-1 centered other class means in test data
                 mcTrainThis = mwTrain(:, ii)-muTrainOther; % nNeurons x 1 centered class mean for this class in training data
-                %%
                 if options.AllowTranslation
                     muTrainFit = muTrainOther;
                     muTestFit = muTestOther;
@@ -228,6 +243,7 @@ classdef Decoder < spiky.stat.GroupedStat
                     tol = max(size(trainFit))*eps(max(s));
                     rEff = sum(s>tol); % effective rank of translation-fit other class means in training data
                     rUse = max(1, min([rEff, max(1, nCats-2), width(u)]));
+                    rUse = min(rUse, options.NDims);
                     u = u(:, 1:rUse); % nNeurons x rUse orthonormal basis for translation-fit other class means in training data
                 end
                 DTrain = u'*trainFit; % rUse x nCats-1 coordinates of centered other class means in training data
@@ -254,6 +270,7 @@ classdef Decoder < spiky.stat.GroupedStat
                     else
                         b = 1;
                     end
+                    d(ii) = spiky.utils.rotationMetric(rD); % rotation metric
                     pU = u*u'; % projection onto subspace of translation-fit other class means in training data
                     rFull = u*rD*u'+(eye(nNeurons)-pU); 
                         % full rotation matrix that aligns translation-fit other class means in training data to those in test data
@@ -282,7 +299,7 @@ classdef Decoder < spiky.stat.GroupedStat
                         tr.c = bias'; % 1 x nNeurons regression translation vector
                         d(ii) = 0; % no rotation, so rotation metric is 0
                     else
-                        [~, ~, tr] = procrustes(DTest', DTrain', ...
+                        [stat(ii), ~, tr] = procrustes(DTest', DTrain', ...
                             Scaling=options.AllowScaling, ...
                             Reflection=options.AllowReflection);
                         tr.c = mean(tr.c, 1);
@@ -297,11 +314,18 @@ classdef Decoder < spiky.stat.GroupedStat
                         end
                     end
                 end
-                %%
                 transform{ii} = tr;
                 mcTestPred = tr.b.*tr.T'*mcTrainThis+tr.c'; % nNeurons x 1 predicted class mean for this class in test data
                 mTestPred = mcTestPred+muTestOther; % nNeurons x 1 predicted class mean for this class in test data
                 switch options.Type
+                    case "sim"
+                        if isnan(stat(ii))
+                            scaleTrain = sum((mcTrainOther-mean(mcTrainOther, 2)).^2, "all");
+                            mcPredOther = tr.b*tr.T'*mcTrainOther+tr.c'; % nNeurons x nCats
+                            dTestPred = mean(vecnorm(mcTestOther-mcPredOther, 2, 1).^2/scaleTrain);
+                            stat(ii) = dTestPred;
+                        end
+                        stat(ii) = 1-stat(ii); % convert from procrustes distance to similarity
                     case "nse"
                         stat(ii) = sum((mTestThis-mTestPred).^2, "all", "omitnan")/...
                             sum((mTestThis-muTestOther).^2, "all", "omitnan"); % normalized squared error for this class
@@ -359,6 +383,47 @@ classdef Decoder < spiky.stat.GroupedStat
 
             logDet = p * log(epsVal) + 2 * sum(log(diag(L)));
         end
+
+        function p = calcP(data, shuf, options)
+            arguments
+                data double
+                shuf double = []
+                options.Mu double = mean(shuf, 3)
+                options.Sigma double = std(shuf, 0, 3)./sqrt(size(data, 3))
+                options.Type string {mustBeMember(options.Type, ["empirical" "normal"])} = "empirical"
+                options.Side string {mustBeMember(options.Side, ["low" "high" "two"])} = "two"
+            end
+            m = mean(data, 3);
+            switch options.Type
+                case "empirical"
+                    cLow = sum(shuf<m, 3);
+                    cHigh = sum(shuf>m, 3);
+                    switch options.Side
+                        case "low"
+                            c = cLow;
+                        case "high"
+                            c = cHigh;
+                        case "two"
+                            mShuf = mean(shuf, 3);
+                            c = zeros(size(m));
+                            c(mShuf>=m) = cLow(mShuf>=m);
+                            c(mShuf<m) = cHigh(mShuf<m);
+                    end
+                    p = (c+1)./(size(shuf, 3)+1);
+                        % add 1 to numerator and denominator for continuity correction
+                case "normal"
+                    mu = options.Mu;
+                    sigma = options.Sigma;
+                    switch options.Side
+                        case "low"
+                            p = min(normcdf(m, mu, sigma), 0.5); 
+                        case "high"
+                            p = min(normcdf(m, mu, sigma, "upper"), 0.5);
+                        case "two"
+                            p = min(normcdf(m, mu, sigma), normcdf(m, mu, sigma, "upper"))*2;
+                    end
+            end
+        end
     end
 
     methods
@@ -399,10 +464,24 @@ classdef Decoder < spiky.stat.GroupedStat
             %           "procrustes": variance explained under procrustes alignment
             %           "accuracy": classification accuracy of the decoder model
             %           "confusion": confusion matrix of the decoder model
+            %       Model: external model to use for calculating statistics instead of the decoder 
+            %           models in obj.Data (default: [])
+            %       Whiten: whether to whiten the data by the Mahalanobis weights in obj.Whiten when 
+            %           calculating statistics, or which whitening matrix to use (default: "train", 
+            %           use the training data's whitening matrix; "test", use the test data's whitening 
+            %           matrix; "none", do not whiten; or a nNeurons x nNeurons whitening matrix to use for whitening)
             %       CrossTime: whether to perform cross-time decoding (default: false)
             %       CrossCondition: whether to perform cross-condition decoding (default: false)
             %       VarType: type of variance explained metric (default: "trace")
+            %       ProcrustesType: type of procrustes metric (default: "varRatio")
             %       RidgeFraction: fraction of ridge regularization to apply when calculating variance explained (default: 0)
+            %       NDims: number of dimensions to keep (default: Inf)
+            %       AllowRotation: whether to allow rotation in Procrustes alignment (default: true)
+            %       AllowScaling: whether to allow scaling in Procrustes alignment (default: false)
+            %       AllowReflection: whether to allow reflection in Procrustes alignment (default: false)
+            %       AllowTranslation: whether to allow translation in Procrustes alignment (default: true)
+            %       Shuffle: whether to shuffle labels for significance testing (default: false)
+            %       CalcP: whether to calculate p-values via permutation testing (default: false), S
             %
             %   stats: GroupedStat object containing the calculated statistics
             %   ...: additional output arguments containing relevant info for the calculated statistics
@@ -412,19 +491,21 @@ classdef Decoder < spiky.stat.GroupedStat
                 obj spiky.stat.Decoder
                 options.Metric (1, 1) string {mustBeMember(options.Metric, ...
                     ["varExplained" "procrustes" "accuracy" "confusion"])} = "varExplained"
-                options.Whiten logical = false
-                options.UseTrainWhiten logical = false
+                options.Model = []
+                options.Whiten string {mustBeMember(options.Whiten, ["none", "train", "test"])} = "train"
                 options.CrossTime logical = false
                 options.CrossCondition logical = false
                 options.VarType string {mustBeMember(options.VarType, ["trace", "max", "pillai", "wilks"])} = "trace"
                 options.ProcrustesType string {mustBeMember(options.ProcrustesType, ...
-                    ["nse" "r2" "varRatio" "cosine" "rdm" "corr"])} = "varRatio"
+                    ["sim" "nse" "r2" "varRatio" "cosine" "rdm" "corr"])} = "sim"
                 options.RidgeFraction (1, 1) double {mustBeNonnegative} = 1e-6
+                options.NDims (1, 1) double {mustBePositive} = Inf
                 options.AllowRotation logical = true
                 options.AllowScaling logical = false
                 options.AllowReflection logical = false
                 options.AllowTranslation logical = true
-                options.Shuffle logical = false
+                options.NShuffle double = 100;
+                options.CalcP logical = false
             end
             chance = NaN;
             switch options.Metric
@@ -440,8 +521,6 @@ classdef Decoder < spiky.stat.GroupedStat
             nPartitions = size(obj.Data, 3);
             nConditions = size(obj.Data, 4);
             if options.CrossTime
-                assert(nConditions==2, ...
-                    "Cross-time decoding is only implemented for 2 conditions")
                 nTrain = 1;
                 nTest = nT;
             elseif options.CrossCondition
@@ -452,6 +531,16 @@ classdef Decoder < spiky.stat.GroupedStat
                 nTest = 1;
             end
             stats = cell(nT, nGroups, nPartitions, nTrain);
+            if options.CalcP
+                nShuffle = options.NShuffle;
+                nShufflePerPart = ceil(nShuffle/nPartitions);
+                nShuffle = nShufflePerPart*nPartitions; % adjust nShuffle to be a multiple of nPartitions
+            else
+                nShuffle = nPartitions;
+                nShufflePerPart = 1;
+            end
+            shuf = cell(nT, nGroups, nPartitions, nTrain);
+            shufExtra = cell(nT, nGroups, nPartitions, nTrain);
             if options.Metric=="procrustes"
                 transforms = cell(nT, nGroups, nPartitions, nTrain);
                 d = cell(nT, nGroups, nPartitions, nTrain);
@@ -462,8 +551,21 @@ classdef Decoder < spiky.stat.GroupedStat
             end
             X = obj.X; % nT x nGroups x 1 x nConditions cell of nNeurons x nTrials
             y = obj.Y; % nConditions x 1 cell of nTrials x 1 categorical
+            if ~isempty(options.Model)
+                if isa(options.Model, "spiky.stat.Decoder")
+                    options.Model = options.Model.Data(1, :, 1, 1); % extract the model from the Decoder object
+                end
+                if ~iscell(options.Model)
+                    options.Model = {options.Model}; % convert to cell if not already
+                end
+                options.Model = options.Model(:)'; % ensure row vector
+                assert(numel(options.Model)==nGroups, "Number of models provided must match number of groups in Decoder object.")
+                mdls = repmat(options.Model, nT, 1, nPartitions, nTrain); 
+                    % use the provided models for all time points, partitions, and training conditions
+            end
             weights = obj.Whiten; % nT x nGroups x 1 x nConditions cell of nNeurons x nNeurons whitening matrices
             partitions = obj.Partitions; % nConditions x 1 cell of partition labels
+            pValues = NaN(nT, nGroups, 1, nTrain, nTest); % nT x nGroups x 1 x nTrain x nTest array of p-values for each statistic
             n = nT*nGroups*nPartitions*nTrain;
             sz = [nT, nGroups, nPartitions, nTrain];
             pb = spiky.plot.ProgressBar(n, "Calculating statistics "+options.Metric);
@@ -478,41 +580,74 @@ classdef Decoder < spiky.stat.GroupedStat
                     transform1 = cell(1, nTest);
                     d1 = NaN(1, nTest);
                 end
+                if options.CalcP
+                    shuf1 = NaN(1, 1, nShufflePerPart, 1, nTest);
+                    shufExtra1 = NaN(1, 1, nShufflePerPart, 1, nTest);
+                end
                 for jj = 1:nTest
                     if options.CrossTime
                         idxT = jj; % use model from time jj for testing
-                        idxC = 2; % use condition 2 for testing in cross-time decoding
+                        idxC = nTrain; % use last condition for testing in cross-time decoding
                     elseif options.CrossCondition
                         idxC = jj; % use condition jj for testing
                     end
-                    idcPTest = partitions{idxC}(idxP, :); % indices of trials in test partition
+                    idcPTest = partitions{idxC}(idxP, :) & ~isnan(X{idxT, idxG, 1, idxC}(1, :));
+                        % indices of trials in test partition
                     XTest = X{idxT, idxG, 1, idxC}(:, idcPTest); % nNeurons x nTrials
                     yTest = y{idxC}(idcPTest); % nTrials x 1 categorical
+                    if options.Whiten=="train"
+                        W = weights{idxT, idxG, 1, idxC}; % nNeurons x nNeurons whitening matrix
+                    elseif options.Whiten=="test"
+                        W = [];
+                    else
+                        W = NaN;
+                    end
                     switch options.Metric
                         case "varExplained"
-                            if options.Whiten
-                                W = weights{idxT, idxG, 1, idxC}; % nNeurons x nNeurons whitening matrix
-                            else
-                                W = [];
-                            end
                             stat1(jj) = spiky.stat.Decoder.varExplained(mdl, XTest, yTest, ...
                                 Type=options.VarType, RidgeFraction=options.RidgeFraction, ...
                                 Whiten=W);
-                        case "procrustes"
-                            if options.Shuffle
-                                [~, ~, idcY] = unique(yTest);
-                                nCats = numel(idcY);
-                                idcCats = randperm(nCats)';
-                                yTest = yTest(idcCats(idcY)); % shuffle class labels in test data
+                            if options.CalcP
+                                for kk = 1:nShufflePerPart
+                                    idc = randperm(length(yTest));
+                                    yTestShuf = yTest(idc);
+                                    shuf1(1, 1, kk, 1, jj) = spiky.stat.Decoder.varExplained(mdl, XTest, yTestShuf, ...
+                                        Type=options.VarType, RidgeFraction=options.RidgeFraction, ...
+                                        Whiten=W);
+                                end
                             end
+                        case "procrustes"
                             [stat1(jj), transform1{jj}, d1(jj)] = spiky.stat.Decoder.procrustes(mdl, XTest, yTest, ...
                                 Type=options.ProcrustesType, ...
-                                Whiten=options.Whiten, ...
+                                Whiten=W, ...
                                 AllowRotation=options.AllowRotation, ...
                                 AllowScaling=options.AllowScaling, ...
                                 AllowReflection=options.AllowReflection, ...
                                 AllowTranslation=options.AllowTranslation, ...
-                                RidgeFraction=options.RidgeFraction);
+                                RidgeFraction=options.RidgeFraction, ...
+                                NDims=options.NDims);
+                            if options.CalcP
+                                for kk = 1:nShufflePerPart
+                                    % [~, ~, idcY] = unique(yTest);
+                                    % nCats = numel(idcY);
+                                    % idcCats = randperm(nCats)';
+                                    % yTest = yTest(idcCats(idcY));
+                                    % idcTrain = randperm(mdl.NBases);
+                                    % mdl.Bases = mdl.Bases(:, idcTrain);
+                                    idc = randperm(length(yTest));
+                                    yTest = yTest(idc);
+                                    [shuf1(1, 1, kk, 1, jj), ~, shufExtra1(1, 1, kk, 1, jj)] = ...
+                                        spiky.stat.Decoder.procrustes(mdl, XTest, yTest, ...
+                                        Type=options.ProcrustesType, ...
+                                        Whiten=W, ...
+                                        AllowRotation=options.AllowRotation, ...
+                                        AllowScaling=options.AllowScaling, ...
+                                        AllowReflection=options.AllowReflection, ...
+                                        AllowTranslation=options.AllowTranslation, ...
+                                        RidgeFraction=options.RidgeFraction, ...
+                                        NDims=options.NDims);
+                                end
+                            end
                         case "accuracy"
                             if isa(mdl, "classreg.learning.classif.CompactClassificationECOC") || ...
                                 isa(mdl, "classreg.learning.classif.ClassificationECOC")
@@ -538,6 +673,10 @@ classdef Decoder < spiky.stat.GroupedStat
                     transforms{ii} = transform1;
                     d{ii} = d1;
                 end
+                if options.CalcP
+                    shuf{ii} = shuf1;
+                    shufExtra{ii} = shufExtra1;
+                end
                 pb.step
             end
             if options.Metric=="confusion"
@@ -555,18 +694,42 @@ classdef Decoder < spiky.stat.GroupedStat
             end
             stats = spiky.stat.GroupedStat(obj.Time, stats, obj.Groups, obj.GroupIndices, ...
                 partitions, conditions, Metric=options.Metric, Chance=chance);
-            varargout{1} = stats;
-            if options.Metric=="procrustes"
-                transforms = reshape(vertcat(transforms{:}), nT, nGroups, nPartitions, nTrain, nTest);
-                % transforms = cell2mat(transforms);
-                transforms = spiky.stat.GroupedStat(obj.Time, transforms, obj.Groups, obj.GroupIndices, ...
-                    partitions, conditions, Metric="procrustesTransform");
-                d = reshape(vertcat(d{:}), nT, nGroups, nPartitions, nTrain, nTest);
-                d = spiky.stat.GroupedStat(obj.Time, d, obj.Groups, obj.GroupIndices, ...
-                    partitions, conditions, Metric="rotationMetric");
-                varargout{2} = transforms;
-                varargout{3} = d;
+            if ~isempty(shuf{1})
+                shuf = cell2mat(shuf);
             end
+            if ~isempty(shufExtra{1})
+                shufExtra = cell2mat(shufExtra);
+            end
+            if options.CalcP && options.Metric~="accuracy"
+                stats.Shuffle = shuf;
+                stats.P = spiky.stat.Decoder.calcP(stats.Data, shuf, Side="high");
+                stats.Chance = mean(shuf, "all", "omitmissing");
+            end
+            switch options.Metric
+                case "accuracy"
+                    if options.CalcP
+                        m = mean(stats.Data, 3, "omitmissing");
+                        sigma = chance*(1-chance)/sqrt(nPartitions);
+                        stats.P = spiky.stat.Decoder.calcP(stats.Data, Mu=chance, Sigma=sigma, ...
+                            Type="normal", Side="high");
+                    end
+                case "procrustes"
+                    transforms = reshape(vertcat(transforms{:}), nT, nGroups, nPartitions, nTrain, nTest);
+                    % transforms = cell2mat(transforms);
+                    transforms = spiky.stat.GroupedStat(obj.Time, transforms, obj.Groups, obj.GroupIndices, ...
+                        partitions, conditions, Metric="procrustesTransform");
+                    d = reshape(vertcat(d{:}), nT, nGroups, nPartitions, nTrain, nTest);
+                    d = spiky.stat.GroupedStat(obj.Time, d, obj.Groups, obj.GroupIndices, ...
+                        partitions, conditions, Metric="rotationMetric");
+                    if options.CalcP
+                        d.Shuffle = shufExtra;
+                        d.P = spiky.stat.Decoder.calcP(d.Data, shufExtra, Side="two");
+                        d.Chance = mean(shufExtra, "all", "omitmissing");
+                    end
+                    varargout{2} = transforms;
+                    varargout{3} = d;
+            end
+            varargout{1} = stats;
         end
     end
 end

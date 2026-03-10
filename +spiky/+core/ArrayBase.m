@@ -688,7 +688,7 @@ classdef (Abstract) ArrayBase
                     if n>1 
                         % If there are multiple data properties, allow singleton dimensions
                         for jj = 1:numel(idcDims)
-                            if sz(jj)==1
+                            if numel(sz)<jj || sz(jj)==1
                                 idcDims1{jj} = 1;
                             end
                         end

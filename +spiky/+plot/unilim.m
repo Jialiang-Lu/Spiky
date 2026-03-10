@@ -21,7 +21,13 @@ if contains(ax, "x", IgnoreCase=true)
     updatelim(targets, "XLim");
 end
 if contains(ax, "y", IgnoreCase=true)
-    updatelim(targets, "YLim");
+    nYAxes = arrayfun(@(h) length(h.YAxis), targets);
+    if all(nYAxes==1)
+        updatelim(targets, "YLim", true);
+    else % multiple y axes, unify each of them separately
+        updatelim(arrayfun(@(h) h.YAxis(1), targets(nYAxes>=1)), "Limits", true);
+        updatelim(arrayfun(@(h) h.YAxis(2), targets(nYAxes>=2)), "Limits", true);
+    end
 end
 if contains(ax, "z", IgnoreCase=true)
     updatelim(targets, "ZLim");
@@ -31,9 +37,32 @@ if contains(ax, "c", IgnoreCase=true)
 end
 end
 
-function updatelim(ax, targetProp)
+function updatelim(ax, targetProp, isY)
+    arguments
+        ax
+        targetProp string
+        isY logical = false
+    end
     l = get(ax, targetProp);
     l = cell2mat(l);
-    l = [min(l, [], "all") max(l, [], "all")];
-    set(ax, targetProp, l);
+    lMax = [min(l, [], "all") max(l, [], "all")];
+    hasLine = false;
+    if isY
+        lInc = lMax(:, 2)-l(:, 2);
+        for ii = 1:numel(ax)
+            if isa(ax, "matlab.graphics.axis.Axes")
+                h = findobj(ax(ii), Tag="sigline");
+            else
+                h = findobj(ax(ii).Parent, Tag="sigline");
+            end
+            for jj = 1:numel(h)
+                h(jj).YData = h(jj).YData+lInc(ii);
+                hasLine = true;
+            end
+        end
+    end
+    if hasLine
+        lMax(:, 2) = lMax(:, 2)+(lMax(:, 2)-lMax(:, 1))*0.05; % add some padding if there are sig lines
+    end
+    set(ax, targetProp, lMax);
 end

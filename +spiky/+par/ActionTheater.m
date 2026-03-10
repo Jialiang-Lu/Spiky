@@ -201,6 +201,9 @@ classdef ActionTheater < spiky.par.Paradigm
                 % pb.step
             end
             nodesVis = spiky.scene.SceneNode(per, names, types, tr.Id, pos, rot, proj);
+            [~, idcPer] = sort(per(:, 1));
+            nodesVis = nodesVis(idcPer);
+            tr = tr(idcPer);
             if isVersion1
                 nodesAdj = spiky.scene.SceneNode;
             else
@@ -211,10 +214,16 @@ classdef ActionTheater < spiky.par.Paradigm
                 nodesAdj = spiky.scene.SceneNode(nodesVis.Time, tiAdj.ObjectName(idcAdjInVis), ...
                     "Adj", tiAdj.ObjectId(idcAdjInVis), nodesVis.Pos, nodesVis.Rot, nodesVis.Proj);
             end
-            [~, ~, idcStart] = itvTrials.haveEvents(nodesVis.Time(:, 1));
-            [~, ~, idcEnd] = itvTrials.haveEvents(nodesVis.Time(:, 2));
+            [~, idcHasStart, idcStart] = itvTrials.haveEvents(nodesVis.Time(:, 1));
+            [~, idcHasEnd, idcEnd] = itvTrials.haveEvents(nodesVis.Time(:, 2), Sorted=false);
+            trialStart = zeros(height(nodesVis), 1, "int32");
+            trialEnd = zeros(height(nodesVis), 1, "int32");
+            trialStart(idcHasStart) = int32(obj.Trials.Number(idcStart));
+            trialEnd(idcHasEnd) = int32(obj.Trials.Number(idcEnd));
+            trialStart(trialStart==0) = int32(obj.Trials.Number(1));
+            trialEnd(trialEnd==0) = int32(obj.Trials.Number(end));
             graphVis = spiky.scene.SceneGraph(nodesVis.Time, ...
-                obj.Trials.Number(idcStart), obj.Trials.Number(idcEnd), nodesVis, [], nodesAdj);
+                trialStart, trialEnd, nodesVis, [], nodesAdj);
             graphVis.Time = graphVis.Time+obj.Latency;
             %% Walk
             per = trials{:, ["Move" "Wait"]};
@@ -229,7 +238,7 @@ classdef ActionTheater < spiky.par.Paradigm
                 "Humanoid", trWalk.Id, posWalk, rotWalk, projWalk);
             nodesWalkVerb = spiky.scene.SceneNode(per, "Walk", ...
                 "Verb", 0, posWalk, rotWalk, projWalk);
-            [~, ~, idcEnd] = itvTrials.haveEvents(per(:, 2));
+            [~, ~, idcEnd] = itvTrials.haveEvents(per(:, 2), Sorted=false);
             graphWalk = spiky.scene.SceneGraph(per, obj.Trials.Number(idcEnd), ...
                 obj.Trials.Number(idcEnd), nodesWalk, nodesWalkVerb);
             %% Idle
@@ -317,10 +326,12 @@ classdef ActionTheater < spiky.par.Paradigm
                     tiActionAdj.Id, tiActionAdj.PredicatePos, tiActionAdj.PredicateRot, tiActionAdj.PredicateProj);
                 nodesObject = spiky.scene.SceneNode(per, tiActionAdj.ObjectName, "Object", ...
                     tiActionAdj.ObjectId, tiActionAdj.ObjectPos, tiActionAdj.ObjectRot, tiActionAdj.ObjectProj);
+                [~, idcObjectAdj] = ismember(tiActionAdj.ObjectId, graphVis.Subject.Id);
+                nodesObjectAdj = graphVis.Object(idcObjectAdj);
                 [~, ~, idcStart] = itvTrials.haveEvents(per(:, 1));
                 [~, ~, idcEnd] = itvTrials.haveEvents(per(:, 2));
                 graphActionAdj = spiky.scene.SceneGraph(per, obj.Trials.Number(idcStart), ...
-                    obj.Trials.Number(idcEnd), nodesSubject, nodesVerb, nodesObject);
+                    obj.Trials.Number(idcEnd), nodesSubject, nodesVerb, nodesObject, nodesObjectAdj);
             end
             %% Combine graphs and store in the object
             obj.TrialInfo = ti;
@@ -391,6 +402,17 @@ classdef ActionTheater < spiky.par.Paradigm
             fix.Data.ActionAdj = graphActionAdj.Predicate.Name;
             fix.Data.ActionAdjTarget = graphActionAdjTarget.Subject.Name;
             fix.Data.ActionAdjTargetAdj = graphActionAdjTarget.Object.Name;
+            isOther = fix.OtherId~=0;
+            graphActionAdjOther = obj.Graph(obj.Graph.IsActionAdj, :).interpById(...
+                fix.OtherId(isOther), fix.Start(isOther)+0.02);
+            graphActionAdjOtherTarget = obj.Graph(obj.Graph.IsAttribute & ...
+                obj.Graph.Subject.Type=="Object").interpById(graphActionAdjOther.Object.Id);
+            fix.Data.OtherActionAdj = categorical(NaN(nFix, 1));
+            fix.OtherActionAdj(isOther) = graphActionAdjOther.Predicate.Name;
+            fix.Data.OtherActionAdjTarget = categorical(NaN(nFix, 1));
+            fix.OtherActionAdjTarget(isOther) = graphActionAdjOtherTarget.Subject.Name;
+            fix.Data.OtherActionAdjTargetAdj = categorical(NaN(nFix, 1));
+            fix.OtherActionAdjTargetAdj(isOther) = graphActionAdjOtherTarget.Object.Name;
             %% Time after action start
             idcAction = find(~ismissing(fix.Action));
             trialsAction = unique(fix.Trial(idcAction));

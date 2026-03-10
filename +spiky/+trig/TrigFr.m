@@ -304,6 +304,11 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
 
             data = permute(obj.Data, [2 1 3 4]);
             % [m1, cats] = groupsummary(data, cats, @mean);
+            isMissing = ismissing(labels);
+            if any(isMissing)
+                data = data(~isMissing, :, :, :);
+                labels = labels(~isMissing);
+            end
             cats = unique(labels);
             m1 = NaN(height(cats), size(data, 2), size(data, 3), size(data, 4));
             for ii = 1:height(cats)
@@ -401,20 +406,21 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             nEvents = obj.NEvents;
             if isempty(options.Partition)
                 nSamples = 1;
-                testIndices = false(1, nEvents);
+                testIndices = false(1, nEvents); % 1 x nEvents
             elseif isnumeric(options.Partition) && isscalar(options.Partition)
                 nSamples = options.Partition;
                 cv = cvpartition(nEvents, KFold=nSamples);
-                testIndices = cv.test("all")';
+                testIndices = cv.test("all")'; % nSamples x nEvents
             elseif islogical(options.Partition)
                 nSamples = height(options.Partition);
-                testIndices = options.Partition;
+                testIndices = options.Partition; % nSamples x nEvents
             elseif isa(options.Partition, "cvpartition")
                 nSamples = options.Partition.NumTestSets;
-                testIndices = options.Partition.test("all")';
+                testIndices = options.Partition.test("all")'; % nSamples x nEvents
             else
                 error("Invalid partition option");
             end
+            % isValid = ~isnan(obj.Data(:, :, 1, 1)); % nT x nEvents
             if options.GroupTime
                 data = cell(height(obj), nGroups, nSamples);
                 if nargout>1
@@ -497,29 +503,36 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 lineSpec string = "-"
                 plotOps.?matlab.graphics.chart.primitive.Line
                 options.Grouping string {mustBeMember(options.Grouping, ["Cats", "Events", "Neurons"])} = "Cats"
+                options.IdcEvents = []
                 options.SubSet = unique(cats)
                 options.FaceAlpha double = 0
                 options.Parent matlab.graphics.axis.Axes = gca
             end
 
             n = obj.NEvents;
+            if ~isempty(options.IdcEvents)
+                obj = subsref(obj, substruct("()", {':', options.IdcEvents, ':', ':'}));
+                if numel(cats)>width(obj.Data)
+                    cats = cats(options.IdcEvents);
+                end
+            end
             idcEvents = ismember(cats, options.SubSet);
             cats = cats(idcEvents);
             switch options.Grouping
                 case "Cats"
-                    data = mean(obj.Data(:, idcEvents, :), 3)';
+                    data = mean(obj.Data(:, idcEvents, :), 3, "omitmissing")';
                 case "Events"
-                    data = mean(obj.Data(:, idcEvents, :), 3)';
+                    data = mean(obj.Data(:, idcEvents, :), 3, "omitmissing")';
                     cats = 1:height(data);
                     options.FaceAlpha = 0;
                 case "Neurons"
-                    data = mean(permute(obj.Data(:, idcEvents, :), [3 1 2]), 3);
+                    data = mean(permute(obj.Data(:, idcEvents, :), [3 1 2]), 3, "omitmissing");
                     cats = (1:height(data))';
                     options.FaceAlpha = 0;
             end
-            [m, names] = groupsummary(data, cats, @mean);
+            [m, names] = groupsummary(data, cats, @(x) mean(x, "omitmissing"));
             if options.FaceAlpha>0
-                [se, ~] = groupsummary(data, cats, @std);
+                [se, ~] = groupsummary(data, cats, @(x) std(x, "omitmissing"));
                 se = se./sqrt(groupcounts(cats));
             end
             if isempty(m)
@@ -541,7 +554,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 end
             else
                 if size(m, 1)>1
-                    legend(h1, names);
+                    legend(h1, string(names));
                 end
             end
             box off
@@ -645,7 +658,8 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 [idcGroups, groups] = findgroups(cats);
             end
             if nCats>1
-                c1 = lines(nCats);
+                c1 = colororder(options.Parent);
+                c1 = repmat(c1, ceil(nCats/size(c1, 1)), 1);
                 c2 = c1;
             else
                 c1 = c(1, :);
@@ -1327,17 +1341,21 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 obj spiky.trig.TrigFr
                 name (1, 1) categorical
                 labels (:, 1) categorical
-                options.Type (1, 1) string {mustBeMember(options.Type, ["mean", "svm"])} = "mean"
+                options.Type (1, 1) string {mustBeMember(options.Type, ["mean", "svm", "subspaces"])} = "mean"
                 options.IdcEvents = []
                 options.SubSet = []
                 options.KFold (1, 1) double = 5
                 options.Holdout (1, 1) double = 0.2
                 options.GroupingVariables = []
+                options.ExtraBalanceLabels (:, 1) categorical = categorical.empty
                 options.Shuffle (1, 1) logical = false
                 options.RidgeFraction double = 1e-6
                 options.Coding string {mustBeMember(options.Coding, ["onevsall", "onevsone"])} = "onevsall"
                 options.FitPosterior logical = false
-                options.ShowProgress logical = true
+                options.Reseed logical = true
+            end
+            if options.Reseed
+                rng(0); % for reproducibility
             end
             idcEvents = options.IdcEvents;
             if islogical(idcEvents)
@@ -1349,7 +1367,10 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             obj = subsref(obj, substruct("()", {':', idcEvents, ':'}));
             if numel(labels)>width(obj)
                 labels = labels(idcEvents);
-                labels = removecats(labels);
+            end
+            extraLabels = options.ExtraBalanceLabels;
+            if ~isempty(extraLabels) && numel(extraLabels)>width(obj)
+                extraLabels = extraLabels(idcEvents);
             end
             if numel(options.GroupingVariables)>width(obj)
                 options.GroupingVariables = options.GroupingVariables(idcEvents, :);
@@ -1359,11 +1380,27 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 obj = subsref(obj, substruct("()", {':', idcEvents, ':'}));
                 labels = labels(idcEvents);
             end
+            isMissing = ismissing(labels);
+            if any(isMissing)
+                labels = labels(~isMissing);
+                obj = subsref(obj, substruct("()", {':', ~isMissing, ':'}));
+                if ~isempty(extraLabels)
+                    extraLabels = extraLabels(~isMissing);
+                end
+            end
+            labels = removecats(labels);
+            if options.Shuffle
+                idcShuf = randperm(numel(labels));
+                labels = labels(idcShuf);
+                obj.Data = obj.Data(:, idcShuf, :);
+            end
             nT = height(obj);
             nEvents = width(obj);
             cats = categories(labels, OutputType="categorical");
             nCats = numel(cats);
-            if options.Holdout==1/options.KFold
+            if options.KFold==1 || options.Holdout==0
+                testIdc = false(1, nEvents);
+            elseif options.Holdout==1/options.KFold
                 cv = cvpartition(labels, KFold=options.KFold, ...
                     GroupingVariables=options.GroupingVariables);
                 testIdc = cv.test("all")';
@@ -1381,24 +1418,31 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 end
             end
             nPartitions = height(testIdc);
-            groupedFr = obj.group(GroupTime=true, Permute=[3 2 1]);
+            groupTime = options.Type~="subspaces";
+            groupedFr = obj.group(GroupTime=groupTime, Permute=[3 2 1]);
             data = groupedFr.Data; % nT x nGroups cell of nNeurons x nTrialsAll
             nGroups = width(groupedFr);
             mdls = cell(nT, nGroups);
             weights = cell(size(mdls));
+            t = obj.Time;
             n = numel(data);
             optionsFit = statset(UseParallel=true);
-            pb = spiky.plot.ProgressBar(n, "Building "+options.Type+" decoders "+string(name), ...
-                Visible=options.ShowProgress);
-            parfor ii = 1:n
-                [idxT, idxG] = ind2sub([nT, nGroups], ii);
+            pb = spiky.plot.ProgressBar(n, "Building "+options.Type+" decoders "+string(name));
+            for ii = 1:n
+                % [idxT, idxG] = ind2sub([nT, nGroups], ii);
                 XAll = data{ii}; % nNeurons x nTrialsAll
                 mdls1 = cell(nPartitions, 1);
                 whiten1 = cell(nPartitions, 1);
-                for jj = 1:nPartitions
-                    idcP = ~testIdc(jj, :);
-                    X = XAll(:, idcP); % nNeurons x nTrials
+                parfor jj = 1:nPartitions
+                    idcP = ~testIdc(jj, :) & ~isnan(XAll(1, :));
+                    X = XAll(:, idcP, :); % nNeurons x nTrials
                     y = labels(idcP); % nTrials x 1
+                    if ~isempty(extraLabels)
+                        y2 = extraLabels(idcP);
+                        [~, idcBal] = spiky.utils.balance(y.*y2, Count="max");
+                        X = X(:, idcBal, :);
+                        y = y(idcBal);
+                    end
                     nTrials = width(X);
                     if options.Shuffle
                         y = y(randperm(numel(y)));
@@ -1421,6 +1465,9 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                                 Coding=options.Coding, ...
                                 FitPosterior=options.FitPosterior, Options=optionsFit, ...
                                 Prior="uniform", ClassNames=cats).compact();
+                        case "subspaces"
+                            % fr1 = spiky.trig.TrigFr(t(1), t(2)-t(1), permute(X, [3 2 1]));
+                            % mdl = fr1.dpca(y)
                         otherwise
                             error("Unsupported decoder type: "+options.Type)
                     end
@@ -2211,6 +2258,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 vars table % event labels
             end
             arguments
+                options.IdcEvents = []
                 options.NComponents (1, 1) double {mustBeInteger, mustBePositive} = 10
                 options.CombinedParams cell = {}
                 options.Lambda (1, 1) double {mustBeNonnegative} = 1e-6
@@ -2223,11 +2271,16 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 options.OptimizeLambda (1, 1) logical = false
                 options.NumRep (1, 1) double {mustBeInteger, mustBeNonnegative} = 3
                 options.ExplainedVarianceSignalOnly (1, 1) logical = false
-                options.Partition = []
-                options.Plot (1, 1) logical = true
+                options.KFold double = 1
+                options.Holdout double = 0.1
+                options.Plot (1, 1) logical = false
             end
 
             %% Parse label name/value pairs
+            if ~isempty(options.IdcEvents)
+                obj = subsref(obj, substruct("()", {':', options.IdcEvents, ':'}));
+                vars = vars(options.IdcEvents, :);
+            end
             assert(height(vars)==obj.NEvents, ...
                 "Number of rows in vars must match number of events in obj");
             labelNames = string(vars.Properties.VariableNames(:));
@@ -2236,25 +2289,39 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             assert(all(cellfun(@(x) isvector(x) && numel(x)==obj.NEvents, labels)), ...
                 "Each label value must be a vector of length equal to number of events");
             nLabels = numel(labelNames);
+            isValid = all(spiky.utils.cellfun(@(x) ~ismissing(x), labels'), 2);
+            obj = subsref(obj, substruct("()", {':', isValid, ':'}));
+            labels = cellfun(@(x) x(isValid), labels, UniformOutput=false); % nLabels x 1 cell of nEvents x 1 categorical
+            nEvents = height(labels{1});
 
             %% Cross-validation
-            if ~isempty(options.Partition)
-                if isnumeric(options.Partition)
-                    options.Partition = cvpartition(labels{1}, KFold=options.Partition);
+            if options.KFold>1
+                if options.Holdout==1/options.KFold
+                    cv = cvpartition(labels{1}, KFold=options.KFold);
+                    testIdc = cv.test("all")';
+                else
+                    cv = cvpartition(labels{1}, Holdout=options.Holdout);
+                    testIdc = false(options.KFold, nEvents);
+                    for ii = 1:options.KFold
+                        testIdc(ii, :) = cv.test(1)';
+                        cv = repartition(cv);
+                    end
                 end
-                idcTraining = options.Partition.training("all");
-                dpcas = cell(options.Partition.NumTestSets, 1);
-                options1 = options;
-                options1.Partition = [];
-                optionArgs = namedargs2cell(options1);
-                for ii = 1:options.Partition.NumTestSets
-                    idc1 = idcTraining(:, ii);
+                dpcas = cell(options.KFold, 1);
+                nPartitions = options.KFold;
+                options.KFold = 1;
+                options.IdcEvents = [];
+                optionArgs = namedargs2cell(options);
+                pb = spiky.plot.ProgressBar(nPartitions, "Running dPCA for "+labelNames(1));
+                for ii = 1:nPartitions
+                    idc1 = ~testIdc(ii, :);
                     objTrain = subsref(obj, substruct("()", {':', idc1, ':'}));
                     varsTrain = vars(idc1, :);
                     dpcas{ii} = objTrain.dpca(varsTrain, optionArgs{:});
+                    pb.step
                 end
                 dpca = cat(3, dpcas{:});
-                dpca.Partition = options.Partition;
+                dpca.Partitions = {testIdc};
                 return
             end
 
