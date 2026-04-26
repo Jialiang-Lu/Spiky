@@ -1,12 +1,16 @@
 classdef Tuning2 < spiky.stat.Tuning
     %TUNING2 2D continuous tuning curve
+    %   First dimension: y-axis bins
+    %   Second dimension: x-axis bins
+    %   Third dimension: neurons
+    %   Fourth dimension: conditions (optional)
 
     properties
-        BinEdgesY (:, 1) double
+        BinEdgesX (:, 1) double
     end
 
     properties (Dependent)
-        BinEdgesX (:, 1) double
+        BinEdgesY (:, 1) double
         NBinsX double
         BinCentersX (:, 1) double
         NBinsY double
@@ -15,40 +19,45 @@ classdef Tuning2 < spiky.stat.Tuning
         ResY double
     end
 
-    methods
-        function obj = Tuning2(fr, pos, binEdgesX, binEdgesY)
-            %TUNING2 Construct a 2D tuning curve
+    methods (Static)
+        function dimLabelNames = getDimLabelNames()
+            %GETDIMLABELNAMES Get the names of the label arrays for each dimension.
+            %   Each label array has the same height as the corresponding dimension of Data.
+            %   Each cell in the output is a string array of property names.
+            %   This method should be overridden by subclasses if dimension label properties is added.
             %
-            %   obj = TUNING2(fr, pos, binEdgesX, binEdgesY)
-            %
-            %   fr: firing rate, either a matrix with the first dimension being time or a TrigFr
-            %   pos: position matrix nTime x 2
-            %   binEdgesX: bin edges for the x-axis
-            %   binEdgesY: bin edges for the y-axis
-            %
-            %   obj: tuning curve
-            arguments
-                fr
-                pos (:, 2)
-                binEdgesX (:, 1) double
-                binEdgesY (:, 1) double
+            %   dimLabelNames: dimension label names
+            arguments (Output)
+                dimLabelNames (:, 1) cell
             end
+            dimLabelNames = {"BinEdgesY"; "BinEdgesX"; ["Neuron"; "Fr"; "P"]; "Conditions"};
+        end
+    end
 
-            if isa(fr, "spiky.trig.TrigFr")
-                fr = permute(fr.Data, [2 3 1]);
-            elseif ~isnumeric(fr)
-                error("Invalid input for firing rate");
+    methods
+        function obj = Tuning2(fr, binEdgesX, binEdgesY, occupancy, options)
+            arguments
+                fr (:, :, :, :) double = []
+                binEdgesX (:, 1) double = 0
+                binEdgesY (:, 1) double = 0
+                occupancy (:, :, :) double = ones(height(fr), width(fr))
+                options.Neuron (:, 1) spiky.core.Neuron = spiky.core.Neuron.zeros(size(fr, 3))
+                options.Conditions (:, 1) = (1:size(fr, 4))'
+                options.Fr (:, 1) double = squeeze(mean(fr, [1 2], Weights=occupancy))
+                options.P (:, 1) double = NaN(size(fr, 3), 1)
             end
-            nNeurons = width(fr);
-            nBinsX = numel(binEdgesX)-1;
-            nBinsY = numel(binEdgesY)-1;
-            [data, ~, count] = groupsummary(fr, {pos(:, 1) pos(:, 2)}, {binEdgesX binEdgesY}, @mean, ...
-                IncludeEmptyGroups=true, IncludeMissingGroups=false);
-            count(isnan(count)) = 0;
-            obj.Data = reshape(data, nBinsY, nBinsX, nNeurons);
+            assert(isequal(height(fr), height(occupancy), numel(binEdgesY)-1), ...
+                "The number of rows in fr, occupancy, and binEdgesY must be consistent.");
+            assert(isequal(width(fr), width(occupancy), numel(binEdgesX)-1), ...
+                "The number of columns in fr, occupancy, and binEdgesX must be consistent.");
+            obj.Data = fr;
             obj.BinEdgesX = binEdgesX;
             obj.BinEdgesY = binEdgesY;
-            obj.Occupancy = reshape(count./sum(count), nBinsY, nBinsX);
+            obj.Occupancy = occupancy;
+            obj.Neuron = options.Neuron;
+            obj.Conditions = options.Conditions;
+            obj.Fr = options.Fr;
+            obj.P = options.P;
         end
 
         function obj = smooth(obj, sigma)
@@ -71,59 +80,19 @@ classdef Tuning2 < spiky.stat.Tuning
             obj.Occupancy = spiky.utils.imgaussfilt(obj.Occupancy, sigma);
         end
 
-        function [mi, p] = mutualInformation(obj, nShuffles)
-            %MUTUALINFORMATION Compute the mutual information between firing rate and position
-            %
-            %   [mi, p] = MUTUALINFORMATION(obj, nShuffles)
-            %
-            %   obj: tuning curve object
-            %   nShuffles: number of shuffles for significance testing (default: 1000)
-            %
-            %   mi: mutual information for each neuron
-            %   p: p-value for each neuron from permutation test
-            
+        function mi = mutualInfo(obj)
+            %MUTUALINFO Compute the mutual information between firing rate and position            
             arguments
                 obj spiky.stat.Tuning2
-                nShuffles (1, 1) double = 1000
             end
-            
-            data = obj.Data;          % Extract firing rate data (NBinsY x NBinsX x nNeurons)
-            occupancy = obj.Occupancy; % Extract occupancy map (NBinsY x NBinsX)
-            nNeurons = size(data, 3); % Number of neurons
-        
-            mi = zeros(nNeurons, 1); % Initialize mutual information array
-            p = zeros(nNeurons, 1);  % Initialize p-values array
-        
-            % Compute the probability distribution of occupancy
-            P_pos = occupancy; % Occupancy is already normalized to sum to 1
-        
-            % Compute mutual information for each neuron
-            pb = spiky.plot.ProgressBar(nNeurons, "Computing mutual information");
-            parfor ii = 1:nNeurons
-                % Probability of firing given position (normalize over spatial bins)
-                pRPos = data(:, :, ii) ./ sum(data(:, :, ii), "all", "omitnan");
-        
-                % Compute overall firing rate probability P(r)
-                pR = sum(pRPos .* P_pos, "all", "omitnan");
-        
-                % Compute mutual information
-                mi(ii) = sum(pRPos .* P_pos .* log2(pRPos ./ pR), "all", "omitnan");
-        
-                % Shuffle test for significance
-                shuffled_mi = zeros(nShuffles, 1);
-                for sh = 1:nShuffles
-                    dataSh = data(:, :, ii); % Copy original data
-                    dataSh = dataSh(randperm(numel(dataSh))); % Randomize firing rate bins
-                    dataSh = reshape(dataSh, size(data(:, :, ii))); % Reshape to original size
-                    pRPosSh = dataSh ./ sum(dataSh, "all", "omitnan");
-                    shuffled_mi(sh) = sum(pRPosSh .* P_pos .* ...
-                        log2(pRPosSh ./ pR), "all", "omitnan");
-                end
-                
-                % Compute p-value
-                p(ii) = mean(shuffled_mi >= mi(ii));
-                pb.step
-            end
+            data = obj.Data; % nBinsY x nBinsX x nNeurons x nConditions firing rate map
+            pP = obj.Occupancy./sum(obj.Occupancy, [1 2], "omitnan"); % nBinsY x nBinsX x nNeurons spatial probability
+            nNeurons = size(data, 3);
+            meanRate = sum(data.*pP, [1 2], "omitnan"); % 1 x 1 x nNeurons x nConditions mean firing rate
+            ratio = data./meanRate; % nBinsY x nBinsX x nNeurons x nConditions firing rate relative to mean
+            term = pP.*ratio.*log2(ratio); % nBinsY x nBinsX x nNeurons x nConditions contribution to mutual information
+            term(~isfinite(term)) = 0; % Handle 0*log(0) and Inf*log(Inf) cases
+            mi = squeeze(sum(term, [1 2], "omitnan")); % nNeurons x nConditions mutual information in bits/spike
         end
         
         function pos = predict(obj, fr)
@@ -223,36 +192,36 @@ classdef Tuning2 < spiky.stat.Tuning
             sd = std(errors, 'omitnan');
         end
 
-        function binEdgesX = get.BinEdgesX(obj)
-            binEdgesX = obj.BinEdges;
+        function binEdgesY = get.BinEdgesY(obj)
+            binEdgesY = obj.BinEdges;
         end
 
-        function obj = set.BinEdgesX(obj, binEdgesX)
-            obj.BinEdges = binEdgesX;
-        end
-
-        function nBinsX = get.NBinsX(obj)
-            nBinsX = obj.NBins;
-        end
-
-        function binCentersX = get.BinCentersX(obj)
-            binCentersX = obj.BinCenters;
+        function obj = set.BinEdgesY(obj, binEdgesY)
+            obj.BinEdges = binEdgesY;
         end
 
         function nBinsY = get.NBinsY(obj)
-            nBinsY = numel(obj.BinEdgesY) - 1;
+            nBinsY = obj.NBins;
         end
 
         function binCentersY = get.BinCentersY(obj)
-            binCentersY = (obj.BinEdgesY(1:end-1) + obj.BinEdgesY(2:end)) / 2;
+            binCentersY = obj.BinCenters;
         end
 
-        function resX = get.ResX(obj)
-            resX = obj.Res;
+        function nBinsX = get.NBinsX(obj)
+            nBinsX = numel(obj.BinEdgesX)-1;
+        end
+
+        function binCentersX = get.BinCentersX(obj)
+            binCentersX = (obj.BinEdgesX(1:end-1)+obj.BinEdgesX(2:end))/2;
         end
 
         function resY = get.ResY(obj)
-            resY = obj.BinEdgesY(2) - obj.BinEdgesY(1);
+            resY = obj.Res;
+        end
+
+        function resX = get.ResX(obj)
+            resX = obj.BinEdgesX(2)-obj.BinEdgesX(1);
         end
     end
 end

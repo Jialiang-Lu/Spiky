@@ -34,6 +34,43 @@ classdef Coords < spiky.core.Array
             end
             dimLabelNames = {["DimNames"; "Origin"]; "BasisNames"};
         end
+
+        function obj = meanCoords(objs, options)
+            %MEANCOORDS Compute the mean coordinate system across multiple Coords objects
+            %   obj = MEANCOORDS(objs, options)
+            %
+            %   objs: Coords objects to average
+            %   Name-value arguments:
+            %       Type: method to compute the mean basis ("stiefel", "grassmann", or "simple", default: "stiefel")
+            arguments (Repeating)
+                objs spiky.stat.Coords
+            end
+            arguments
+                options.Type string {mustBeMember(options.Type, ["stiefel" "grassmann" "simple"])} = "grassmann"
+            end
+            origin = mean(spiky.utils.cellfun(@(o) o.Origin, objs), 2);
+            bases = spiky.utils.cellfun(@(o) o.Bases, objs, Dim=3);
+            switch options.Type
+                case "stiefel"
+                    b = mean(bases, 3);
+                    [u, ~, v] = svd(b, "econ"); % The mean basis is not necessarily orthogonal, 
+                        % so we use SVD to find the closest orthogonal matrix
+                    bases = u*v'; % The resulting matrix is the closest orthogonal matrix to the mean basis
+                case "grassmann"
+                    [n, k, m] = size(bases);
+                    p = zeros(n, n); % Initialize the projection matrix
+                    for ii = 1:m
+                        b = bases(:, :, ii);
+                        p = p+b*b'; % Accumulate the projection matrices of each basis
+                    end
+                    p = p/m; % Average the projection matrix
+                    [bases, ~] = eigs(p, k); % Get the top k eigenvectors of the projection matrix
+                case "simple"
+                    bases = mean(bases, 3);
+            end
+            obj = spiky.stat.Coords(origin, bases, objs{1}.DimNames, objs{1}.BasisNames, ...
+                objs{1}.BasisWeights);
+        end
     end
 
     methods
@@ -121,23 +158,42 @@ classdef Coords < spiky.core.Array
             data = B*data+obj.Origin;
         end
 
-        function obj = pca(obj, nDims)
+        function obj = pca(obj, nDims, options)
             %PCA Reduce the basis dimensions using PCA
             %   obj = PCA(obj, nDims)
             %
             %   obj: Coords object
             %   nDims: number of dimensions to keep
+            %   Name-value arguments:
+            %       Type: whether to perform PCA on the dimensions ("dims") or the bases ("bases") (default: "bases")
             arguments
                 obj spiky.stat.Coords
                 nDims double {mustBePositive, mustBeInteger}
+                options.Type string {mustBeMember(options.Type, ["dims" "bases"])} = "bases"
             end
-            assert(nDims<=obj.NBases, ...
-                "nDims must be less than or equal to the number of bases");
-            [~, s, v] = svd(obj.Bases, "econ");
-            sv = diag(s);
-            explained = sv.^2/sum(sv.^2)*100;
-            obj.Bases = obj.Bases*v(:, 1:nDims);
-            obj.BasisNames = explained(1:nDims);
+            if options.Type=="bases"
+                assert(nDims<=obj.NBases, ...
+                    "nDims must be less than or equal to the number of bases");
+                % [~, s, v] = svd(obj.Bases, "econ");
+                % sv = diag(s);
+                % explained = sv.^2/sum(sv.^2)*100;
+                % obj.Bases = obj.Bases*v(:, 1:nDims);
+                % obj.BasisNames = explained(1:nDims);
+                [v, p, s] = pca(obj.Bases, NumComponents=nDims, Centered=false);
+                obj.Bases = p;
+                obj.BasisNames = s(1:nDims);
+            else
+                assert(nDims<=obj.NDims, ...
+                    "nDims must be less than or equal to the number of dimensions");
+                % [~, s, v] = svd(obj.Bases', "econ");
+                % sv = diag(s);
+                % explained = sv.^2/sum(sv.^2)*100;
+                % obj.Bases = v(:, 1:nDims);
+                % obj.BasisNames = explained(1:nDims);
+                [v, p, s] = pca(obj.Bases', NumComponents=nDims, Centered=false);
+                obj.Bases = v;
+                obj.BasisNames = s(1:nDims);
+            end
         end
 
         function obj = addPCA(obj, data, options)

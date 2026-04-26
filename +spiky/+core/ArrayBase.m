@@ -486,18 +486,19 @@ classdef (Abstract) ArrayBase
                     data = subsasgn(data, s(2:end), varargin{:});
                     obj = obj.subIndexData(s(1).subs, data);
                 case '.'
-                    if ~strcmp(s(1).subs, "VarNames") && ismember(s(1).subs, obj.VarNames)
-                        if isscalar(s)
+                    if isscalar(s)
+                        if (obj.IsStruct || obj.IsTable) && ~strcmp(s(1).subs, "VarNames") && ...
+                            ~any(isprop(obj, s(1).subs))
                             obj = obj.subIndexStruct(s(1).subs, varargin{:});
-                            return
+                        else
+                            obj = builtin("subsasgn", obj, s, varargin{:});
                         end
+                        return
+                    end
+                    if ~strcmp(s(1).subs, "VarNames") && ismember(s(1).subs, obj.VarNames)
                         data = obj.subIndexStruct(s(1).subs);
                         data = subsasgn(data, s(2:end), varargin{:});
                         obj = obj.subIndexStruct(s(1).subs, data);
-                        return
-                    end
-                    if isscalar(s)
-                        obj = builtin("subsasgn", obj, s, varargin{:});
                         return
                     end
                     obj1 = builtin("subsref", obj, s(1));
@@ -712,7 +713,17 @@ classdef (Abstract) ArrayBase
                                 (isa(pNew, "spiky.core.ArrayBase") || istable(pNew))
                             p = feval(class(pNew));
                         end
-                        p = subsasgn(p, substruct('()', idcDims), pNew);
+                        try
+                            p = subsasgn(p, substruct('()', idcDims), pNew);
+                        catch ME
+                            if strcmp(ME.identifier, "MATLAB:heterogeneousStrucAssignment")
+                                fns = setdiff(fieldnames(pNew), fieldnames(p));
+                                for jj = 1:numel(fns)
+                                    p(1).(fns{jj}) = [];
+                                end
+                                p = subsasgn(p, substruct('()', idcDims), pNew);
+                            end
+                        end
                     end
                     obj.(name) = p;
                 end

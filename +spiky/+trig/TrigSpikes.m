@@ -149,7 +149,7 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             end
         end
 
-        function [h, hLine] = plotRaster(obj, sz, c, cats, rowDim, plotOps, options)
+        function [h, hLine] = plotRaster(obj, sz, c, plotOps, options)
             %PLOTRASTER Plot raster of triggered spikes
             %
             %   h = plotRaster(obj, ...)
@@ -172,13 +172,15 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
                 obj spiky.trig.TrigSpikes
                 sz double {mustBePositive} = 5
                 c = "k"
-                cats categorical = categorical.empty
-                rowDim {mustBeMember(rowDim, ["neuron", "event"])} = "event"
                 plotOps.?matlab.graphics.chart.primitive.Scatter
+                options.RowDim {mustBeMember(options.RowDim, ["neuron", "event"])} = "event"
+                options.Cats categorical = categorical.empty
                 options.IdcEvents = []
                 options.SubSet = []
                 options.Parent matlab.graphics.axis.Axes = matlab.graphics.axis.Axes.empty
             end
+            cats = options.Cats;
+            rowDim = options.RowDim;
             if isempty(options.Parent)
                 options.Parent = gca;
             end

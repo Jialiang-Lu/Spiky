@@ -27,5 +27,17 @@ classdef Array < spiky.core.ArrayBase
             end
             obj.Data = data;
         end
+        
+        function obj = sel(obj, idcRow, idcCol)
+            %SEL Select a subset of the table data based on row and column indices.
+            arguments
+                obj spiky.core.Array
+                idcRow
+                idcCol
+            end
+            assert(istable(obj.Data), "Data must be a table to use sel method.");
+            obj = subsref(obj, substruct("()", {idcRow, ':'}));
+            obj.Data = obj.Data(:, idcCol);
+        end
     end
 end

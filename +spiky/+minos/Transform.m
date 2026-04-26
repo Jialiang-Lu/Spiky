@@ -167,11 +167,14 @@ classdef Transform < spiky.core.MappableObjArray
             end
         end
 
-        function pt = flatten(obj, bodyPart, fov)
+        function it = flatten(obj, bodyPart, fov, options)
+            %FLATTEN Flatten the Transform object into an IntervalsTable for the specified body part
             arguments
                 obj spiky.minos.Transform
                 bodyPart = "Root"
                 fov double = 60
+                options.KeepValid logical = true
+                options.Gaze spiky.core.EventsTable = spiky.core.EventsTable.empty
             end
             if isstring(bodyPart)
                 bodyPart = bodyPart(ismember(bodyPart, enumeration("spiky.minos.BodyPart")));
@@ -207,7 +210,20 @@ classdef Transform < spiky.core.MappableObjArray
                 rot(idcSort, :), proj(idcSort, :), ...
                 spiky.minos.EyeData.getGaze(proj(idcSort, :), fov), ...
                 VariableNames=["Index" "TimeIndex" "Trial" "Pos" "Rot" "Proj" "Ray"]);
-            pt = spiky.core.IntervalsTable(t(idcSort, :), data);
+            it = spiky.core.IntervalsTable(t(idcSort, :), data);
+            dur = mean(it.ChunkDuration);
+            it.Time = it.Start+[0 dur];
+            if options.KeepValid
+                idc = all(it.Proj(:, 1:2)>=0 & it.Proj(:, 1:2)<=1, 2);
+                it = it(idc, :);
+            end
+            if ~isempty(options.Gaze)
+                gaze = interp1(options.Gaze.Time, options.Gaze{:, :}, it.Start, ...
+                    "nearest");
+                it.Gaze = gaze./vecnorm(gaze, 2, 2);
+                fVec2Ang = @(v) atan2d(v(:, 1:2), v(:, 3));
+                it.Ang = fVec2Ang(it.Ray)-fVec2Ang(it.Gaze);
+            end
         end
     end
 

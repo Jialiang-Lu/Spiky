@@ -1,10 +1,6 @@
 classdef Paradigm < spiky.minos.Paradigm
     %PARADIGM represents a paradigm data structure for analysis
 
-    properties
-        Session spiky.ephys.Session % Session object
-    end
-
     methods
         function obj = Paradigm(minos, name)
             %PARADIGM represents a paradigm data structure for analysis
@@ -16,13 +12,13 @@ classdef Paradigm < spiky.minos.Paradigm
                 return
             end
             par = minos.Paradigms.(name);
-            obj.Name = par.Name;
-            obj.Intervals = par.Intervals;
-            obj.Trials = par.Trials;
-            obj.TrialInfo = par.TrialInfo;
-            obj.Vars = par.Vars;
-            obj.Session = minos.Session;
-            obj.Latency = par.Latency;
+            obj.Data.Name = name;
+            obj.Data.Intervals = par.Intervals;
+            obj.Data.Trials = par.Trials;
+            obj.Data.TrialInfo = par.TrialInfo;
+            obj.Data.Vars = par.Vars;
+            obj.Data.Latency = par.Latency;
+            obj.Data.Session = minos.Session;
         end
     end
 end

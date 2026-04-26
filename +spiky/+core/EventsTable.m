@@ -180,7 +180,7 @@ classdef EventsTable < spiky.core.Events & spiky.core.Array
         end
 
         function out = densify(obj, t, options)
-            %DENSIFY Densify the EventsTable to a regular time grid
+            %DENSIFY Densify the EventsTable to a time grid
             %
             %   out = densify(obj, t, options)
             %
@@ -203,9 +203,8 @@ classdef EventsTable < spiky.core.Events & spiky.core.Array
             end
             
             nT = length(t);
-            res = t(2)-t(1);
-            centers = (t(1:end-1)+t(2:end))/2;
-            prds = [[centers(1)-res/2; centers] [centers; centers(end)+res/2]];
+            edges = spiky.utils.center2edge(t);
+            prds = [edges(1:end-1) edges(2:end)];
             [~, idcObj, idcT] = obj.inIntervals(prds);
             if options.IgnoreContent
                 obj.Data = ones(height(obj.Data), 1);

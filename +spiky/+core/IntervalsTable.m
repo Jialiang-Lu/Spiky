@@ -46,7 +46,7 @@ classdef IntervalsTable < spiky.core.Intervals & spiky.core.Array
             obj.Data = data;
         end
 
-        function tt = toEventsTable(obj, mode)
+        function tt = toEventsTable(obj, mode, idcColumn)
             %TOTIMETABLE Convert to EventsTable
             %   tt = TOTIMETABLE(obj)
             %
@@ -56,12 +56,13 @@ classdef IntervalsTable < spiky.core.Intervals & spiky.core.Array
             arguments
                 obj spiky.core.IntervalsTable
                 mode string {mustBeMember(mode, ["change" "start" "end"])} = "change"
+                idcColumn = 1:width(obj.Data)
             end
             switch mode
                 case "start"
-                    tt = spiky.core.EventsTable(obj.Time(:, 1), obj.Data);
+                    tt = spiky.core.EventsTable(obj.Time(:, 1), obj.Data(:, idcColumn));
                 case "end"
-                    tt = spiky.core.EventsTable(obj.Time(:, 2), obj.Data);
+                    tt = spiky.core.EventsTable(obj.Time(:, 2), obj.Data(:, idcColumn));
                 case "change"
                     data = obj.Data;
                     isTable = istable(data);
@@ -162,6 +163,36 @@ classdef IntervalsTable < spiky.core.Intervals & spiky.core.Array
                 yticklabels(options.Parent, labels);
                 ylim(options.Parent, [0 nLabels+1])
             end
+            if nargout>0
+                h = h1;
+            end
+            if nargout>1
+                hText = hText1;
+            end
+        end
+
+        function [h, hText] = plotRegions(obj, idxVar, plotOps, options)
+            arguments
+                obj spiky.core.IntervalsTable
+                idxVar (1, 1) = 1
+                plotOps.?matlab.graphics.chart.decoration.ConstantRegion
+                options.Parent matlab.graphics.axis.Axes = gca
+            end
+            if istable(obj.Data)
+                data = string(obj.Data{:, idxVar});
+            else
+                data = string(obj.Data(:, idxVar));
+            end
+            plotArgs = namedargs2cell(plotOps);
+            h1 = plotRegions@spiky.core.Intervals(obj, plotArgs{:}, Parent=options.Parent);
+            % hText1 = xline(options.Parent, mean(obj.Time, 2), "-", num2cell(data), ...
+            %     LabelHorizontalAlignment="center", LabelVerticalAlignment="middle");
+            % set(hText1, "Alpha", 0);
+            yl = ylim(options.Parent);
+            yc = mean(yl);
+            hText1 = text(options.Parent, mean(obj.Time, 2), yc*ones(size(data)), data, ...
+                HorizontalAlignment="center", VerticalAlignment="middle");
+            set(hText1, "Rotation", 90);
             if nargout>0
                 h = h1;
             end

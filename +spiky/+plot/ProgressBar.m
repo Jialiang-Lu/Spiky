@@ -73,13 +73,12 @@ classdef ProgressBar < handle
 
         function delete(obj)
             %DELETE Delete the progress bar
-            if ~parallel.internal.pool.isPoolThreadWorker && isempty(getCurrentJob)
-                delete(obj.Waitbar);
-            end
-            if ~isempty(obj.DataQueue) && isvalid(obj.DataQueue)
-                send(obj.DataQueue, 1);
-                delete(obj.DataQueue);
-            end
+            % if ~parallel.internal.pool.isPoolThreadWorker && isempty(getCurrentJob)
+            %     delete(obj.Waitbar);
+            % end
+            % if ~isempty(obj.DataQueue) && isvalid(obj.DataQueue)
+            %     send(obj.DataQueue, 1);
+            % end
         end
     end
 
@@ -89,10 +88,10 @@ classdef ProgressBar < handle
             if ~obj.Valid
                 return
             end
-            obj.Progress = obj.Progress + 1;
+            obj.Progress = obj.Progress+1;
             t = toc(obj.StartTime);
             tRest = t/obj.Progress*(obj.N-obj.Progress);
-            % fprintf("%d\n", obj.Progress)
+            % fprintf("%d flag %d\n", obj.Progress, flag)
             if obj.Progress==obj.N || flag==1
                 if obj.Options.CloseOnFinish
                     delete(obj.Waitbar);

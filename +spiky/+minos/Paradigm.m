@@ -1,14 +1,13 @@
-classdef Paradigm
+classdef Paradigm < spiky.core.Array
     %PARADIGM represents paradigm data
-
-    properties
-        Name string
-        Latency double
-        Intervals spiky.core.Intervals
-        Trials spiky.core.EventsTable
-        TrialInfo spiky.core.EventsTable
-        Vars spiky.core.Parameter
-    end
+    %
+    %   Properties:
+    %       Name: name of the paradigm
+    %       Latency: latency of the events
+    %       Intervals: intervals of the paradigm
+    %       Trials: table of trials
+    %       TrialInfo: table of trial info
+    %       Vars: parameters of the paradigm
 
     methods (Static)
         function obj = load(fdir, intervals, func, photodiode)
@@ -120,12 +119,13 @@ classdef Paradigm
                 vars spiky.core.Parameter = spiky.core.Parameter
                 latency (:, 1) double = double.empty
             end
-            obj.Name = name;
-            obj.Intervals = intervals;
-            obj.Trials = trials;
-            obj.TrialInfo = trialInfo;
-            obj.Vars = vars;
-            obj.Latency = latency;
+            obj.Data = struct;
+            obj.Data.Name = name;
+            obj.Data.Intervals = intervals;
+            obj.Data.Trials = trials;
+            obj.Data.TrialInfo = trialInfo;
+            obj.Data.Vars = vars;
+            obj.Data.Latency = latency;
         end
 
         function trials = getTrials(obj, var, value)
@@ -144,18 +144,18 @@ classdef Paradigm
                 var string
                 value % value(s) or function handle
             end
-            n = height(obj.Trials);
+            n = height(obj.Data.Trials);
             if n==0 || isempty(var)
                 trials = spiky.core.EventsTable;
                 return
             end
             prds = cell(length(var), 1);
             for ii = length(var):-1:1
-                prds{ii} = obj.Vars.(var{ii}).getIntervals(value{ii});
+                prds{ii} = obj.Data.Vars.(var{ii}).getIntervals(value{ii});
             end
             intervals = spiky.core.Intervals.intersect(prds{:});
-            [~, idc1] = intervals.haveEvents(obj.Trials.Time);
-            trials = obj.Trials(idc1, :);
+            [~, idc1] = intervals.haveEvents(obj.Data.Trials.Time);
+            trials = obj.Data.Trials(idc1, :);
         end
     end
 

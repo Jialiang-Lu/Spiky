@@ -6,46 +6,18 @@ classdef TrigCounts < spiky.trig.TrigFr
     end
 
     methods
-        function obj = TrigCounts(spikes, events, window, options)
+        function obj = TrigCounts(start, step, fr, events, window, neuron, samples, options)
             arguments
-                spikes spiky.core.Spikes = spiky.core.Spikes
-                events = [] % (n, 1) double or spiky.core.Events
+                start double = NaN
+                step double = NaN
+                fr double = double.empty(0, 0, 0)
+                events (:, 1) = NaN(width(fr), 1)
                 window double {mustBeVector} = [0, 1]
+                neuron spiky.core.Neuron = spiky.core.Neuron
+                samples (:, 1) = NaN(size(fr, 4), 1)
                 options.Bernoulli logical = false % If true, counts are binary (0 or 1)
             end
-            if nargin==0 || isempty(spikes)
-                return
-            end
-            if isa(events, "spiky.core.Events")
-                events = events.Time;
-            end
-            events = events(:);
-            t = window(:);
-            nEvents = numel(events);
-            nT = numel(t);
-            res = t(2)-t(1);
-            nNeurons = numel(spikes);
-            counts = zeros(nT, nEvents, nNeurons);
-            prds = reshape(events'+t, [], 1);
-            prds = spiky.core.Intervals([prds-res/2 prds+res/2]);
-            [prds, idcSort] = prds.sort();
-            idcSort2(idcSort) = 1:numel(idcSort);
-            parfor ii = 1:nNeurons
-                [~, c] = spiky.mex.findInIntervals(spikes(ii).Time, prds.Time);
-                counts(:, :, ii) = reshape(c, nT, nEvents);
-            end
-            if options.Bernoulli
-                counts(counts>1) = 1;
-            end
-            obj.Start_ = t(1);
-            obj.Step_ = res;
-            obj.N_ = nT;
-            obj.Data = counts;
-            obj.EventDim = 2;
-            obj.Events_ = events;
-            obj.Window = window;
-            obj.Neuron = spikes.Neuron;
-            obj.Options = options;
+            obj@spiky.trig.TrigFr(start, step, fr, events, window, neuron, samples);
             obj.Bernoulli = options.Bernoulli;
         end
 

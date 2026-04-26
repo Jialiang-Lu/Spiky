@@ -159,11 +159,6 @@ classdef Intervals < spiky.core.ArrayBase
             gap = [obj.Start(2:end)-obj.End(1:end-1); Inf];
         end
 
-        function obj = sel(obj, idc)
-            %SEL Select intervals by index
-            obj.Time = obj.Time(idc, :);
-        end
-
         function [obj, idc] = sort(obj, direction)
             %SORT Sort intervals
             arguments
@@ -419,10 +414,7 @@ classdef Intervals < spiky.core.ArrayBase
             arguments
                 obj spiky.core.Intervals
                 plotOps.?matlab.graphics.chart.decoration.ConstantRegion
-                options.Parent matlab.graphics.axis.Axes = matlab.graphics.axis.Axes.empty
-            end
-            if isempty(options.Parent)
-                options.Parent = gca;
+                options.Parent matlab.graphics.axis.Axes = gca
             end
             plotArgs = namedargs2cell(plotOps);
             h1 = xregion(options.Parent, obj.Time(:, 1), obj.Time(:, 2), ...

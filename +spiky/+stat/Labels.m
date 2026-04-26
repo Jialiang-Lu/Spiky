@@ -30,43 +30,43 @@ classdef Labels < spiky.core.EventsTable
             dimLabelNames = {["Time"; "Trial"; "Offset"]; ["Name"; "IsEvent"; "Class"; "BaseIndex"]};
         end
 
-        function [data, isEvent] = preprocess(tt, t, mode)
+        function [data, isEvent] = preprocess(et, t, mode)
             %PREPROCESS Preprocess the input EventsTable for adding as labels
             %
-            %   [data, isEvent] = PREPROCESS(tt, t, mode)
+            %   [data, isEvent] = PREPROCESS(et, t, mode)
             %
-            %   tt: input EventsTable or IntervalsTable or numeric array
+            %   et: input EventsTable or IntervalsTable or numeric array
             %   t: time vector
             %   mode:
-            %       "event": tt is a EventsTable with event labels (default)
-            %       "state": tt is a EventsTable or IntervalsTable with state labels
-            %       "trigger": tt is a EventsTable where only the time points are taken as events
+            %       "event": et is a EventsTable with event labels (default)
+            %       "state": et is a EventsTable or IntervalsTable with state labels
+            %       "trigger": et is a EventsTable where only the time points are taken as events
             %
             %   data: preprocessed data
             %   isEvent: if the data represents events
             arguments
-                tt % EventsTable or IntervalsTable or numeric array
+                et % EventsTable or IntervalsTable or numeric array
                 t (:, 1) double
                 mode (1, 1) string {mustBeMember(mode, ["event" "state" "trigger"])} = "event"
             end
-            if isa(tt, "spiky.core.IntervalsTable")
+            if isa(et, "spiky.core.IntervalsTable")
                 mode = "state";
-                data = tt.interp(t);
+                data = et.interp(t);
                 isEvent = false;
-            elseif isa(tt, "spiky.core.EventsTable") && mode=="state"
-                data = tt.interp(t, "previous");
+            elseif isa(et, "spiky.core.EventsTable") && mode=="state"
+                data = et.interp(t, "previous");
                 isEvent = false;
-            elseif isa(tt, "spiky.core.EventsTable") && mode=="event"
-                data = tt.densify(t);
+            elseif isa(et, "spiky.core.EventsTable") && mode=="event"
+                data = et.densify(t);
                 isEvent = true;
-            elseif isa(tt, "spiky.core.EventsTable") && mode=="trigger"
-                tt.Data = true(height(tt), 1);
-                data = tt.densify(t);
+            elseif isa(et, "spiky.core.EventsTable") && mode=="trigger"
+                et.Data = true(height(et), 1);
+                data = et.densify(t);
                 isEvent = true;
-            elseif isnumeric(tt)
-                tt = spiky.core.EventsTable(tt, true(height(tt), 1));
+            elseif isnumeric(et)
+                et = spiky.core.EventsTable(et, true(height(et), 1));
                 mode = "trigger";
-                data = tt.densify(t);
+                data = et.densify(t);
                 isEvent = true;
             else
                 error("Input must be a EventsTable or IntervalsTable.");
@@ -130,26 +130,37 @@ classdef Labels < spiky.core.EventsTable
             end
         end
 
-        function obj = addLabel(obj, tt, options)
+        function obj = addLabel(obj, et, options)
             %ADDLABEL Add a single label to the Labels object
-            %   obj = ADDLABEL(obj, tt, options)
+            %   obj = ADDLABEL(obj, et, options)
             %
-            %   tt: EventsTable or IntervalsTable with labels
+            %   et: EventsTable or IntervalsTable with labels
             %   Name-Value pairs:
             %       Name: name of the label (default: "LabelN" where N is the next available index)
             %       Mode:
-            %           "event": tt is a EventsTable with event labels (default)
-            %           "state": tt is a EventsTable or IntervalsTable with state labels
-            %           "trigger": tt is a EventsTable where only the time points are taken as events
+            %           "event": et is a EventsTable with event labels (default)
+            %           "state": et is a EventsTable or IntervalsTable with state labels
+            %           "trigger": et is a EventsTable where only the time points are taken as events
+            %           "orig": et is a EventsTable with the same time vector as obj, 
+            %               and the data can be directly added as labels without preprocessing
             %       Categorize: if true, convert the label data to categorical (default: false)
             arguments
                 obj spiky.stat.Labels
-                tt % spiky.core.EventsTable or spiky.core.IntervalsTable
+                et % spiky.core.EventsTable or spiky.core.IntervalsTable
                 options.Name string = string.empty
-                options.Mode (1, 1) string {mustBeMember(options.Mode, ["event" "state" "trigger"])} = "event"
+                options.Mode (1, 1) string {mustBeMember(options.Mode, ["event" "state" "trigger" "orig"])} = "event"
                 options.Categorize (1, 1) logical = false
             end
-            [data, isEvent] = spiky.stat.Labels.preprocess(tt, obj.Time, options.Mode);
+            if options.Mode=="orig"
+                if isa(et, "spiky.core.Array")
+                    data = et.Data;
+                else
+                    data = et;
+                end
+                isEvent = true;
+            else
+                [data, isEvent] = spiky.stat.Labels.preprocess(et, obj.Time, options.Mode);
+            end
             if isempty(options.Name)
                 options.Name = sprintf("Label%d", width(obj.Data)+1);
             end
@@ -164,26 +175,26 @@ classdef Labels < spiky.core.EventsTable
             obj.BaseIndex = [obj.BaseIndex; 0];
         end
 
-        function obj = addExpandedLabel(obj, tt, bases, options)
+        function obj = addExpandedLabel(obj, et, bases, options)
             %ADDEXPANDEDLABEL Add an expanded label to the Labels object
-            %   obj = ADDEXPANDEDLABEL(obj, tt, bases)
+            %   obj = ADDEXPANDEDLABEL(obj, et, bases)
             %
-            %   tt: EventsTable or IntervalsTable with labels
+            %   et: EventsTable or IntervalsTable with labels
             %   bases: TimeCoords with basis functions
             %   Name-Value pairs:
             %       Name: name of the label
             %       Mode:
-            %           "event": tt is a EventsTable with event labels (default)
-            %           "state": tt is a EventsTable or IntervalsTable with state labels
-            %           "trigger": tt is a EventsTable where only the time points are taken as events
+            %           "event": et is a EventsTable with event labels (default)
+            %           "state": et is a EventsTable or IntervalsTable with state labels
+            %           "trigger": et is a EventsTable where only the time points are taken as events
             arguments
                 obj spiky.stat.Labels
-                tt % spiky.core.EventsTable or spiky.core.IntervalsTable
+                et % spiky.core.EventsTable or spiky.core.IntervalsTable
                 bases spiky.stat.TimeCoords = spiky.stat.TimeCoords
                 options.Name string
                 options.Mode (1, 1) string {mustBeMember(options.Mode, ["event" "state" "trigger"])} = "event"
             end
-            [data, isEvent] = spiky.stat.Labels.preprocess(tt, obj.Time, options.Mode);
+            [data, isEvent] = spiky.stat.Labels.preprocess(et, obj.Time, options.Mode);
             [data, classes] = spiky.utils.flagsencode(data);
             n = width(data);
             if isEvent && ~isempty(bases)

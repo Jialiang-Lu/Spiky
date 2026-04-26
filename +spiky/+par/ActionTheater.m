@@ -18,20 +18,20 @@ classdef ActionTheater < spiky.par.Paradigm
             %% Clean up the data and convert indices to names
             trHuman = tr(tr.IsHuman);
             intvlTrHuman = vertcat(trHuman.Interval);
-            trials = obj.Trials;
-            ti = obj.TrialInfo;
+            trials = obj.Data.Trials;
+            ti = obj.Data.TrialInfo;
             ti = ti(ismember(ti.Number, trials.Number), :);
             t1 = ti.Time(1);
             fGetVar = @(x) categorical(extractBefore(x.get(t1)', " "));
-            adjs = fGetVar(obj.Vars.Adjs);
-            actors = fGetVar(obj.Vars.Actors);
-            targets = fGetVar(obj.Vars.Targets);
-            singleActions = fGetVar(obj.Vars.SingleActions);
-            doubleActions = fGetVar(obj.Vars.Actions);
-            indirectActions = fGetVar(obj.Vars.IndirectActions);
-            actionAdjs = fGetVar(obj.Vars.ActionAdjs);
-            actionAdjTargets = fGetVar(obj.Vars.ActionAdjTargets);
-            actionAdjTargetAdjs = fGetVar(obj.Vars.ActionAdjTargetAdjs);
+            adjs = fGetVar(obj.Data.Vars.Adjs);
+            actors = fGetVar(obj.Data.Vars.Actors);
+            targets = fGetVar(obj.Data.Vars.Targets);
+            singleActions = fGetVar(obj.Data.Vars.SingleActions);
+            doubleActions = fGetVar(obj.Data.Vars.Actions);
+            indirectActions = fGetVar(obj.Data.Vars.IndirectActions);
+            actionAdjs = fGetVar(obj.Data.Vars.ActionAdjs);
+            actionAdjTargets = fGetVar(obj.Data.Vars.ActionAdjTargets);
+            actionAdjTargetAdjs = fGetVar(obj.Data.Vars.ActionAdjTargetAdjs);
             %% Preprocessing
             isVersion1 = ismember("Type", ti.VarNames);
             isVersion2 = ismember("SubjectType", ti.VarNames) && ismember("Human", ti.SubjectType);
@@ -56,7 +56,7 @@ classdef ActionTheater < spiky.par.Paradigm
                 tiAdj = strings(height(ti), 1);
                 tiAdj(~isAction) = adjs(ti.Adj(~isAction)+1);
                 try
-                    actions3 = extractBefore(obj.Vars.IndirectActions.get(t1)', " ");
+                    actions3 = extractBefore(obj.Data.Vars.IndirectActions.get(t1)', " ");
                     tiAction(ti.Type=="HumanHumanObject") = actions3(ti.Action(ti.Type=="HumanHumanObject")+1);
                 catch
                 end
@@ -71,6 +71,7 @@ classdef ActionTheater < spiky.par.Paradigm
                 tmp = categorical(strings(height(ti), 1));
                 %% Subject
                 isHuman = ti.SubjectType=="Human";
+                ti.SubjectType(isHuman) = "Humanoid";
                 tiSubjectName = tmp;
                 tiSubjectName(isHuman) = actors(ti.SubjectName(isHuman)+1);
                 tiSubjectName(~isHuman) = actionAdjTargets(ti.SubjectName(~isHuman)+1);
@@ -78,6 +79,7 @@ classdef ActionTheater < spiky.par.Paradigm
                 %% Object
                 isObjActor = ti.ObjectType=="Human";
                 isObjObject = ti.ObjectType=="Object";
+                ti.ObjectType(isObjActor) = "Humanoid";
                 isObjAdj = ti.ObjectType=="Adj";
                 tiObjectName = tmp;
                 tiObjectName(isObjActor) = actors(ti.ObjectName(isObjActor)+1);
@@ -170,7 +172,7 @@ classdef ActionTheater < spiky.par.Paradigm
                 ti.PredicateName = tiAction;
             end
             %% Visibility of each entity
-            itvTrials = spiky.core.Intervals(obj.Trials{:, ["Move" "End"]}); 
+            itvTrials = spiky.core.Intervals(obj.Data.Trials{:, ["Move" "End"]}); 
             itvTrials.Time(1) = 0; 
             itvTrials.Time(end) = Inf;
             vis = {tr.Visible}';
@@ -218,13 +220,13 @@ classdef ActionTheater < spiky.par.Paradigm
             [~, idcHasEnd, idcEnd] = itvTrials.haveEvents(nodesVis.Time(:, 2), Sorted=false);
             trialStart = zeros(height(nodesVis), 1, "int32");
             trialEnd = zeros(height(nodesVis), 1, "int32");
-            trialStart(idcHasStart) = int32(obj.Trials.Number(idcStart));
-            trialEnd(idcHasEnd) = int32(obj.Trials.Number(idcEnd));
-            trialStart(trialStart==0) = int32(obj.Trials.Number(1));
-            trialEnd(trialEnd==0) = int32(obj.Trials.Number(end));
+            trialStart(idcHasStart) = int32(obj.Data.Trials.Number(idcStart));
+            trialEnd(idcHasEnd) = int32(obj.Data.Trials.Number(idcEnd));
+            trialStart(trialStart==0) = int32(obj.Data.Trials.Number(1));
+            trialEnd(trialEnd==0) = int32(obj.Data.Trials.Number(end));
             graphVis = spiky.scene.SceneGraph(nodesVis.Time, ...
                 trialStart, trialEnd, nodesVis, [], nodesAdj);
-            graphVis.Time = graphVis.Time+obj.Latency;
+            graphVis.Time = graphVis.Time+obj.Data.Latency;
             %% Walk
             per = trials{:, ["Move" "Wait"]};
             tWalk = mean(per, 2);
@@ -239,8 +241,8 @@ classdef ActionTheater < spiky.par.Paradigm
             nodesWalkVerb = spiky.scene.SceneNode(per, "Walk", ...
                 "Verb", 0, posWalk, rotWalk, projWalk);
             [~, ~, idcEnd] = itvTrials.haveEvents(per(:, 2), Sorted=false);
-            graphWalk = spiky.scene.SceneGraph(per, obj.Trials.Number(idcEnd), ...
-                obj.Trials.Number(idcEnd), nodesWalk, nodesWalkVerb);
+            graphWalk = spiky.scene.SceneGraph(per, obj.Data.Trials.Number(idcEnd), ...
+                obj.Data.Trials.Number(idcEnd), nodesWalk, nodesWalkVerb);
             %% Idle
             if isVersion1
                 isIdle = ~ismissing(ti.Actor) & ti.Action=="Idle" & ti.Role=="Source";
@@ -263,8 +265,8 @@ classdef ActionTheater < spiky.par.Paradigm
                     tiIdle.SubjectPos, tiIdle.SubjectRot, tiIdle.SubjectProj);
             end
             [~, ~, idcStart] = itvTrials.haveEvents(per(:, 1));
-            graphIdle = spiky.scene.SceneGraph(per, obj.Trials.Number(idcStart), ...
-                obj.Trials.Number(idcStart), nodesSubject, nodesVerb);
+            graphIdle = spiky.scene.SceneGraph(per, obj.Data.Trials.Number(idcStart), ...
+                obj.Data.Trials.Number(idcStart), nodesSubject, nodesVerb);
             %% Action
             if isVersion1
                 idcSource = find(ti.Role=="Source" & isDoubleAction);
@@ -310,8 +312,8 @@ classdef ActionTheater < spiky.par.Paradigm
                     tiAction.DirectObjectProj(isIndirectAction, :));
             end
             [~, ~, idcStart] = itvTrials.haveEvents(per(:, 1));
-            graphAction = spiky.scene.SceneGraph(per, obj.Trials.Number(idcStart), ...
-                obj.Trials.Number(idcStart), nodesSubject, nodesVerb, nodesObject, nodesIndirect);
+            graphAction = spiky.scene.SceneGraph(per, obj.Data.Trials.Number(idcStart), ...
+                obj.Data.Trials.Number(idcStart), nodesSubject, nodesVerb, nodesObject, nodesIndirect);
             %% ActionAdj
             if isVersion1 || isVersion2
                 graphActionAdj = spiky.scene.SceneGraph;
@@ -330,17 +332,17 @@ classdef ActionTheater < spiky.par.Paradigm
                 nodesObjectAdj = graphVis.Object(idcObjectAdj);
                 [~, ~, idcStart] = itvTrials.haveEvents(per(:, 1));
                 [~, ~, idcEnd] = itvTrials.haveEvents(per(:, 2));
-                graphActionAdj = spiky.scene.SceneGraph(per, obj.Trials.Number(idcStart), ...
-                    obj.Trials.Number(idcEnd), nodesSubject, nodesVerb, nodesObject, nodesObjectAdj);
+                graphActionAdj = spiky.scene.SceneGraph(per, obj.Data.Trials.Number(idcStart), ...
+                    obj.Data.Trials.Number(idcEnd), nodesSubject, nodesVerb, nodesObject, nodesObjectAdj);
             end
             %% Combine graphs and store in the object
-            obj.TrialInfo = ti;
-            obj.Graph = [graphVis; graphWalk; graphAction; graphIdle; graphActionAdj];
-            obj.Graph = obj.Graph.sort();
+            obj.Data.TrialInfo = ti;
+            obj.Data.Graph = [graphVis; graphWalk; graphAction; graphIdle; graphActionAdj];
+            obj.Data.Graph = obj.Data.Graph.sort();
             %% Fixations
             fix = minos.Eye.FixationTargets;
-            fix = fix(fix.Start>=obj.Intervals.Time(1) & fix.End<=obj.Intervals.Time(end) & ...
-                fix.Trial>=obj.Trials.Number(1) & fix.Trial<=obj.Trials.Number(end), :);
+            fix = fix(fix.Start>=obj.Data.Intervals.Time(1) & fix.End<=obj.Data.Intervals.Time(end) & ...
+                fix.Trial>=obj.Data.Trials.Number(1) & fix.Trial<=obj.Data.Trials.Number(end), :);
             fix.Data.IsFace = ~ismissing(fix.Name) & fix.MinAngle<8 & ismember(fix.Part, ...
                 [spiky.minos.BodyPart.Head spiky.minos.BodyPart.UpperChest ...
                 spiky.minos.BodyPart.Hip ...
@@ -374,7 +376,7 @@ classdef ActionTheater < spiky.par.Paradigm
             prevSeqName(hasPrevSeq) = fix.Name(idcFirst(idcPrevSeq(hasPrevSeq)));
             fix.Data.PrevSeqName = prevSeqName;
             %% Find fixation role
-            graphVerb = obj.Graph(obj.Graph.IsVerb, :);
+            graphVerb = obj.Data.Graph(obj.Data.Graph.IsVerb, :);
             [~, idcFixVerb, idcVerbFix] = graphVerb.haveEvents(fix.Start);
             isFixSubject = fix.Id(idcFixVerb)==graphVerb.Subject.Id(idcVerbFix) | ...
                 ismember(graphVerb.Predicate.Name(idcVerbFix), ["Walk" "Idle"]);
@@ -396,17 +398,17 @@ classdef ActionTheater < spiky.par.Paradigm
             fix.Data.OtherActionRole = categorical(string(fix.Action)+string(fix.OtherRole));
             fix.Data.NActors = cellfun(@numel, fix.Names);
             %% Find fixated actionadj
-            graphActionAdj = obj.Graph(obj.Graph.IsActionAdj, :).interpById(fix.Id, fix.Start+0.02);
-            graphActionAdjTarget = obj.Graph(obj.Graph.IsAttribute & ...
-                obj.Graph.Subject.Type=="Object").interpById(graphActionAdj.Object.Id);
+            graphActionAdj = obj.Data.Graph(obj.Data.Graph.IsActionAdj, :).interpById(fix.Id, fix.Start+0.02);
+            graphActionAdjTarget = obj.Data.Graph(obj.Data.Graph.IsAttribute & ...
+                obj.Data.Graph.Subject.Type=="Object").interpById(graphActionAdj.Object.Id);
             fix.Data.ActionAdj = graphActionAdj.Predicate.Name;
             fix.Data.ActionAdjTarget = graphActionAdjTarget.Subject.Name;
             fix.Data.ActionAdjTargetAdj = graphActionAdjTarget.Object.Name;
             isOther = fix.OtherId~=0;
-            graphActionAdjOther = obj.Graph(obj.Graph.IsActionAdj, :).interpById(...
+            graphActionAdjOther = obj.Data.Graph(obj.Data.Graph.IsActionAdj, :).interpById(...
                 fix.OtherId(isOther), fix.Start(isOther)+0.02);
-            graphActionAdjOtherTarget = obj.Graph(obj.Graph.IsAttribute & ...
-                obj.Graph.Subject.Type=="Object").interpById(graphActionAdjOther.Object.Id);
+            graphActionAdjOtherTarget = obj.Data.Graph(obj.Data.Graph.IsAttribute & ...
+                obj.Data.Graph.Subject.Type=="Object").interpById(graphActionAdjOther.Object.Id);
             fix.Data.OtherActionAdj = categorical(NaN(nFix, 1));
             fix.OtherActionAdj(isOther) = graphActionAdjOther.Predicate.Name;
             fix.Data.OtherActionAdjTarget = categorical(NaN(nFix, 1));
@@ -470,7 +472,7 @@ classdef ActionTheater < spiky.par.Paradigm
             fix.RoleAfterAction(idcHandshake(idcSwap)) = "Object";
             fix.RoleAfterAction(idcHandshake(~idcSwap)) = "Subject";
             %%
-            obj.Fix = fix;
+            obj.Data.Fix = fix;
         end
 
         function fr = getActionFr(obj, spikes, t, options)
@@ -481,11 +483,11 @@ classdef ActionTheater < spiky.par.Paradigm
                 options.HalfWidth (1, 1) double = 0.15
                 options.MaxGap (1, 1) double = 0.3
             end
-            idcStart = obj.Fix.IdcInSeq==1;
-            idcEnd = obj.Fix.IdcInSeq==obj.Fix.SeqLength;
-            fixSeq = obj.Fix(idcStart, :);
-            fixSeq.Time(:, 2) = obj.Fix.Time(idcEnd, 2);
-            graphAction = obj.Graph.getActions();
+            idcStart = obj.Data.Fix.IdcInSeq==1;
+            idcEnd = obj.Data.Fix.IdcInSeq==obj.Data.Fix.SeqLength;
+            fixSeq = obj.Data.Fix(idcStart, :);
+            fixSeq.Time(:, 2) = obj.Data.Fix.Time(idcEnd, 2);
+            graphAction = obj.Data.Graph.getActions();
             nT = numel(t);
             nTrials = height(graphAction);
             itvCenter = graphAction.Start'+t;
@@ -528,30 +530,30 @@ classdef ActionTheater < spiky.par.Paradigm
             end
             labels = spiky.stat.Labels(t);
             %% Add counts and identity states
-            counts = obj.Graph.getCounts();
-            names = obj.Graph.getIdenties();
+            counts = obj.Data.Graph.getCounts();
+            names = obj.Data.Graph.getIdenties();
             labels = labels.addLabel(counts, Name="Count", Mode="state", Categorize=true);
             labels = labels.addLabel(names, Name="Name", Mode="state");
             %% Add transitions
-            trans = obj.Graph.getTransitions();
+            trans = obj.Data.Graph.getTransitions();
             labels = labels.addLabel(trans(trans.IsAdd, "Change"), Name="EnterStart", Mode="trigger");
             labels = labels.addLabel(trans(trans.IsAdd, "Change"), Name="EnterName");
             labels = labels.addLabel(trans(~trans.IsAdd, "Change"), Name="LeaveStart", Mode="trigger");
             labels = labels.addLabel(trans(~trans.IsAdd, "Change"), Name="LeaveName");
             %% Add verbs
-            verbs = obj.Graph.getVerbs();
+            verbs = obj.Data.Graph.getVerbs();
             % labels = labels.addLabel(verbs, Name="Verb", Mode="state");
             labels = labels.addLabel(verbs(verbs.Data~="Idle", :), Name="ActionStart", Mode="trigger");
             labels = labels.addLabel(verbs(verbs.Data~="Idle", :), Name="Action");
             %% Add action roles
-            actions = obj.Graph.Predicates.Name(obj.Graph.Predicates.Name~="Walk" & ...
-                obj.Graph.Predicates.Type=="Verb");
-            isAction = ismember(obj.Graph.Predicate.Name, actions);
-            ttSubjects = obj.Graph(isAction, "Subject").toEventsTable("start");
+            actions = obj.Data.Graph.Predicates.Name(obj.Data.Graph.Predicates.Name~="Walk" & ...
+                obj.Data.Graph.Predicates.Type=="Verb");
+            isAction = ismember(obj.Data.Graph.Predicate.Name, actions);
+            ttSubjects = obj.Data.Graph(isAction, "Subject").toEventsTable("start");
             ttSubjects.Data = ttSubjects.Subject.Name;
-            ttObjects = obj.Graph(isAction, "Object").toEventsTable("start");
+            ttObjects = obj.Data.Graph(isAction, "Object").toEventsTable("start");
             ttObjects.Data = ttObjects.Object.Name;
-            dataActions = obj.Graph.Predicate.Name(isAction);
+            dataActions = obj.Data.Graph.Predicate.Name(isAction);
             for ii = 1:numel(actions)
                 labels = labels.addLabel(ttSubjects(dataActions==actions(ii), :), ...
                     Name=string(actions(ii))+"SubjectName");
@@ -559,9 +561,9 @@ classdef ActionTheater < spiky.par.Paradigm
                     Name=string(actions(ii))+"ObjectName");
             end
             %% Add fixations
-            fix = obj.Fix(obj.Fix.IsFace, :);
+            fix = obj.Data.Fix(obj.Data.Fix.IsFace, :);
             fix.Data.ActionRole = categorical(string(fix.Verb)+string(fix.Role));
-            labels = labels.addLabel(obj.Fix.Start, Name="FixStart", Mode="trigger");
+            labels = labels.addLabel(obj.Data.Fix.Start, Name="FixStart", Mode="trigger");
             labels = labels.addLabel(fix(:, "Name"), Name="FixName");
             labels = labels.addLabel(fix(:, "OtherName"), Name="FixOtherName");
             % labels = labels.addLabel(fix(:, "Verb"), Name="FixVerb");
@@ -577,7 +579,7 @@ classdef ActionTheater < spiky.par.Paradigm
                 options.Alpha (1, 1) double = 1e-3
                 options.MaxEvents (1, 1) double = 2000
             end
-            fpth = obj.Session.getFpth("ActionTheater.Zeta.mat");
+            fpth = obj.Data.Session.getFpth("ActionTheater.Zeta.mat");
             if exist(fpth, "file") && ~options.Recalculate
                 tmp = load(fpth, "zetaTests");
                 zetaTests = tmp.zetaTests;
@@ -591,19 +593,19 @@ classdef ActionTheater < spiky.par.Paradigm
                 end
             else
                 zetaTests = struct();
-                idcVis = find(obj.Graph.IsVisibility);
+                idcVis = find(obj.Data.Graph.IsVisibility);
                 idcVis = idcVis(1:min(end, options.MaxEvents));
-                zetaTests.Enter = spikes.zeta(obj.Graph.Time(idcVis, 1), 1);
-                zetaTests.Leave = spikes.zeta(obj.Graph.Time(idcVis, 2), 1);
-                idcWalk = find(obj.Graph.IsVerb & obj.Graph.Predicate.Name=="Walk");
+                zetaTests.Enter = spikes.zeta(obj.Data.Graph.Time(idcVis, 1), 1);
+                zetaTests.Leave = spikes.zeta(obj.Data.Graph.Time(idcVis, 2), 1);
+                idcWalk = find(obj.Data.Graph.IsVerb & obj.Data.Graph.Predicate.Name=="Walk");
                 idcWalk = idcWalk(1:min(end, options.MaxEvents));
-                zetaTests.Walk = spikes.zeta(obj.Graph.Predicate.Time(idcWalk, 1), 1);
-                idcAction = find(obj.Graph.IsVerb & obj.Graph.Predicate.Name~="Walk");
+                zetaTests.Walk = spikes.zeta(obj.Data.Graph.Predicate.Time(idcWalk, 1), 1);
+                idcAction = find(obj.Data.Graph.IsVerb & obj.Data.Graph.Predicate.Name~="Walk");
                 idcAction = idcAction(1:min(end, options.MaxEvents));
-                zetaTests.Action = spikes.zeta(obj.Graph.Predicate.Time(idcAction, 1), 1);
-                idcFix = find(obj.Fix.IsFace);
+                zetaTests.Action = spikes.zeta(obj.Data.Graph.Predicate.Time(idcAction, 1), 1);
+                idcFix = find(obj.Data.Fix.IsFace);
                 idcFix = idcFix(1:min(end, options.MaxEvents));
-                zetaTests.Fix = spikes.zeta(obj.Fix.Time(idcFix), 1);
+                zetaTests.Fix = spikes.zeta(obj.Data.Fix.Time(idcFix), 1);
                 save(fpth, "zetaTests");
             end
             if nargout>1
@@ -628,8 +630,8 @@ classdef ActionTheater < spiky.par.Paradigm
                 spikes spiky.core.Spikes
                 res double = 0.05
             end
-            t1 = ceil(obj.Intervals.Time(1)/res)*res;
-            t = t1:res:obj.Intervals.Time(end);
+            t1 = ceil(obj.Data.Intervals.Time(1)/res)*res;
+            t = t1:res:obj.Data.Intervals.Time(end);
             trigCounts = spikes.trigCounts(t1, t);
         end
 
@@ -656,9 +658,9 @@ classdef ActionTheater < spiky.par.Paradigm
                 normalize logical = true
             end
             
-            t1 = ceil(obj.Intervals.Time(1)/res)*res;
-            t = t1:res:obj.Intervals.Time(end);
-            [t2, idcT] = obj.Intervals.haveEvents(t);
+            t1 = ceil(obj.Data.Intervals.Time(1)/res)*res;
+            t = t1:res:obj.Data.Intervals.Time(end);
+            [t2, idcT] = obj.Data.Intervals.haveEvents(t);
             parFr = spikes.trigFr(t1, t, HalfWidth=halfWidth, Kernel=kernel, Normalize=normalize);
             trigFr = parFr(idcT, :, :);
             trigFr.Data = permute(trigFr.Data, [2 1 3]);

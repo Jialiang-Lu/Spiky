@@ -73,6 +73,21 @@ classdef Spikes < spiky.core.Array
             end
         end
 
+        function [t, id] = flatten(obj, options)
+            %FLATTEN Flatten the cell array of spike times into a single vector
+            arguments
+                obj spiky.core.Spikes
+                options.Sort logical = true
+            end
+            nsSpikes = cellfun(@numel, obj.Data);
+            id = repelem((1:height(obj.Data))', nsSpikes);
+            t = cell2mat(obj.Data);
+            if options.Sort
+                [t, idSort] = sort(t);
+                id = id(idSort);
+            end
+        end
+
         function trigSpikes = trig(obj, events, window)
             %TRIG Trigger spikes by events
             %
@@ -134,7 +149,7 @@ classdef Spikes < spiky.core.Array
                 Kernel="box", Normalize=options.Normalize);
         end
 
-        function counts = trigCounts(obj, events, window, options)
+        function trigCounts = trigCounts(obj, events, window, options)
             %TRIGCOUNTS Trigger counts by events
             %
             %   events: event times
@@ -142,14 +157,35 @@ classdef Spikes < spiky.core.Array
             %   Name-value arguments:
             %       Bernoulli: if true, counts are binary (0 or 1)
             %
-            %   counts: triggered counts
+            %   trigCounts: triggered counts
             arguments
                 obj spiky.core.Spikes
-                events % (n, 1) double or spiky.core.Events
-                window double {mustBeVector}
+                events (:, 1) % (n, 1) double or spiky.core.Events
+                window (:, 1) double
                 options.Bernoulli logical = false % If true, counts are binary (0 or 1)
             end
-            counts = spiky.trig.TrigCounts(obj, events, window, Bernoulli=options.Bernoulli);
+            if isa(events, "spiky.core.Events")
+                events = events.Time;
+            end
+            t = window;
+            nEvents = numel(events);
+            nT = numel(t);
+            res = t(2)-t(1);
+            nNeurons = numel(obj.Data);
+            counts = zeros(nT, nEvents, nNeurons);
+            prds = reshape(events'+t, [], 1);
+            prds = spiky.core.Intervals([prds-res/2 prds+res/2]);
+            [prds, idcSort] = prds.sort();
+            idcSort2(idcSort) = 1:numel(idcSort);
+            parfor ii = 1:nNeurons
+                [~, c] = spiky.mex.findInIntervals(obj.Data{ii}, prds.Time);
+                counts(:, :, ii) = reshape(c, nT, nEvents);
+            end
+            if options.Bernoulli
+                counts(counts>1) = 1;
+            end
+            trigCounts = spiky.trig.TrigCounts(t(1), res, counts, events, window, obj.Neuron, ...
+                Bernoulli=options.Bernoulli);
         end
 
         function fr = trigFr(obj, events, t, options)
@@ -205,9 +241,9 @@ classdef Spikes < spiky.core.Array
                     parfor ii = 1:nNeurons
                         [~, c] = spiky.mex.findInIntervals(obj.Data{ii}, prds.Time);
                         c = c(idcSort2)./options.HalfWidth/2;
-                        if options.Normalize
-                            c = (c-mean(c))./sqrt(mean(c)./options.HalfWidth/2);
-                        end
+                        % if options.Normalize
+                        %     c = (c-mean(c))./sqrt(mean(c)./options.HalfWidth/2);
+                        % end
                         fr(:, :, ii) = reshape(c, nT, nEvents);
                     end
                 case "gaussian"
@@ -219,10 +255,10 @@ classdef Spikes < spiky.core.Array
                     fr = obj.trigFr(events, tWide, HalfWidth=res/2, Kernel="box", Unit=options.Unit, ...
                         ValidIntervals=[]);
                     fr.Data = convn(fr.Data, kernel, "same");
-                    if options.Normalize
-                        m = mean(fr.Data, [1 2]);
-                        fr.Data = (fr.Data-m)./sqrt(m./res);
-                    end
+                    % if options.Normalize
+                    %     m = mean(fr.Data, [1 2]);
+                    %     fr.Data = (fr.Data-m)./sqrt(m./res);
+                    % end
                     fr.Data = fr.Data(idcAdd, :, :);
                     if ~isempty(options.ValidIntervals)
                         tRange = options.ValidIntervals.Time'-events1';
@@ -235,6 +271,9 @@ classdef Spikes < spiky.core.Array
                     fr.N_ = nT;
                     fr.Window = t;
                     fr.Options = options;
+                    if options.Normalize
+                        fr.Data = (fr.Data-permute(fr.Mu, [2 3 1]))./permute(fr.Sigma, [2 3 1]);
+                    end
                     return
                 otherwise
                     error("Unknown kernel %s", options.Kernel);
@@ -250,6 +289,9 @@ classdef Spikes < spiky.core.Array
             end
             fr = spiky.trig.TrigFr(t(1), res, fr, events, t, obj.Neuron);
             fr.Options = options;
+            if options.Normalize
+                fr.Data = (fr.Data-permute(fr.Mu, [2 3 1]))./permute(fr.Sigma, [2 3 1]);
+            end
         end
 
         function fr = trigFrWindow(obj, events, window, options)
@@ -274,6 +316,84 @@ classdef Spikes < spiky.core.Array
             halfWidth = diff(window)/2;
             fr = obj.trigFr(events, t, HalfWidth=halfWidth, Kernel="box", ...
                 Normalize=options.Normalize, Unit=options.Unit);
+        end
+
+        function [t2, stat, t2Shuf] = tuning2(obj, intervals, pos, binEdgesX, binEdgesY, options)
+            %TUNING2 Compute 2D tuning curve
+            %   
+            arguments
+                obj spiky.core.Spikes
+                intervals (:, 2) spiky.core.Intervals
+                pos (:, 2) double
+                binEdgesX (:, 1) double
+                binEdgesY (:, 1) double
+                options.Latencies (:, 1) double = 0
+                options.Smooth (1, 1) double = 0
+                options.Shuffle (1, 1) double = 0
+                options.Metric string {mustBeMember(options.Metric, ["", "info"])} = ""
+            end
+            assert(height(intervals)==height(pos), "Intervals and pos must have the same number of rows");
+            nNeurons = height(obj);
+            [t, id] = obj.flatten();
+            nLatencies = numel(options.Latencies);
+            nX = numel(binEdgesX)-1;
+            nY = numel(binEdgesY)-1;
+            resX = mean(diff(binEdgesX));
+            resY = mean(diff(binEdgesY));
+            occ = spiky.utils.histcounts2(pos(:, 2), pos(:, 1), binEdgesY, binEdgesX, ...
+                intervals.ChunkDuration);
+            if options.Smooth>0
+                occ = imgaussfilt(occ, options.Smooth/resX);
+            end
+            fr = zeros(nY, nX, nNeurons, nLatencies);
+            pb = spiky.plot.ProgressBar(nLatencies, "Computing tuning2");
+            for ii = 1:nLatencies
+                tShift = t-options.Latencies(ii);
+                [~, idcT, idcItv] = intervals.haveEvents(tShift);
+                idShift = id(idcT);
+                posItv = pos(idcItv, :); % position at the time of spikes within intervals
+                c = spiky.utils.histcounts2(posItv(:, 2), posItv(:, 1), binEdgesY, binEdgesX, Ids=idShift);
+                    % nY x nX x nNeurons array of spike counts for each position bin and neuron
+                if options.Smooth>0
+                    for jj = 1:nNeurons
+                        c(:, :, jj) = imgaussfilt(c(:, :, jj), options.Smooth/resX);
+                    end
+                end
+                fr(:, :, :, ii) = c./occ; % divide by occupancy to get firing rate
+                pb.step
+            end
+            [~, idcT] = intervals.haveEvents(t);
+            id0 = id(idcT);
+            fr0 = accumarray(id0, 1, [nNeurons, 1]);
+            fr0 = fr0./intervals.Duration; % baseline firing rate for each neuron
+            t2 = spiky.stat.Tuning2(fr, binEdgesX, binEdgesY, occ, Neuron=obj.Neuron, ...
+                Conditions=options.Latencies, Fr=fr0);
+            switch options.Metric
+                case ""
+                    stat = [];
+                case "info"
+                    stat = t2.mutualInfo();
+            end
+            if options.Shuffle>0
+                nShuf = options.Shuffle;
+                t2Shuf = cell(nShuf, 1);
+                pb = spiky.plot.ProgressBar(nShuf, "Computing shuffled tuning2");
+                parfor ii = 1:nShuf
+                    idcShuf = randperm(height(pos));
+                    posShuf = pos(idcShuf, :);
+                    t2Shuf{ii} = obj.tuning2(intervals, posShuf, binEdgesX, binEdgesY, ...
+                        Latencies=0, Smooth=options.Smooth, Shuffle=0);
+                    pb.step
+                end
+                t2Shuf = cat(4, t2Shuf{:});
+                switch options.Metric
+                    case "info"
+                        statShuf = t2Shuf.mutualInfo();
+                        statShuf = permute(statShuf, [1 3 2]);
+                        p = mean(stat>statShuf, 3, "omitnan");
+                        t2.P = p;
+                end
+            end
         end
 
         function zeta = zeta(obj, events, window, options)

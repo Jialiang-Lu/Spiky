@@ -226,6 +226,9 @@ classdef EyeData
                         idc1 = find(transform(ii).Visible);
                         idc1 = idc1(1:end-1);
                         trT{ii} = transform(ii).Time([idc1 idc1+1]);
+                        if isequal(size(trT{ii}), [2 1])
+                            trT{ii} = trT{ii}';
+                        end
                         trIdc{ii} = ones(numel(idc1), 1).*ii;
                         trPos{ii} = transform(ii).Pos(idc1, :, :);
                         trProj{ii} = transform(ii).Proj(idc1, :, :);

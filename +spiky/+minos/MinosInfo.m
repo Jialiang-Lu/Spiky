@@ -44,7 +44,7 @@ classdef MinosInfo
                 events = info.EventGroups(1).Events;
             end
             events = events(events.Rising, :);
-            [sync, eventsSync] = events.syncWith(syncEvents, "probe1 to minos", ...
+            [sync, eventsSync] = events.syncWith(syncEvents, "probe1 to minos", 0.03, ...
                 allowStep=false, Plot=options.Plot);
             idcStart = find(startsWith(log.Data.Value, "Start Paradigm"));
             idcStop = find(startsWith(log.Data.Value, "Pause Paradigm"));

@@ -47,23 +47,39 @@ classdef Subspaces < spiky.stat.GroupedStat
     end
 
     methods
-        function obj = Subspaces(time, data, groups, groupIndices)
+        function obj = Subspaces(time, data, groups, groupIndices, partitions, conditions)
             %SUBSPACES Create a new instance of Subspaces
-            %   Subspaces(time, data, groups, groupIndices)
+            %   Subspaces(time, data, groups, groupIndices, partitions, conditions)
             %
             %   time: time points
             %   data: coordinates
             %   groups: groups
             %   groupIndices: indices of the groups
+            %   partitions: partitions
+            %   conditions: conditions
             %
             %   obj: Subspaces object
             arguments
                 time double = []
                 data cell = {} % spiky.stat.Coords
-                groups = []
+                groups (:, 1) = NaN(width(data), 1)
                 groupIndices = logical.empty(height(groups), 0)
+                partitions (:, 1) = cell(size(data, 4), 1)
+                conditions (:, 1) = categorical(strings(size(data, 4), 1))
             end
-            obj@spiky.stat.GroupedStat(time, data, groups, groupIndices);
+            obj@spiky.stat.GroupedStat(time, data, groups, groupIndices, partitions, conditions);
+        end
+
+        function obj = mean(obj, options)
+            %MEAN Compute the mean of the subspaces across samples
+            arguments
+                obj spiky.stat.Subspaces
+                options.Type string {mustBeMember(options.Type, ["stiefel" "grassmann" "simple"])} = "grassmann"
+            end
+            data1 = cellfun(@(c) spiky.stat.Coords.meanCoords(c{:}, Type=options.Type), num2cell(obj.Data, 3), ...
+                UniformOutput=false);
+            obj = subsref(obj, substruct("()", {':', ':', 1, ':'}));
+            obj.Data = data1;
         end
 
         function obj = addBasis(obj, data, options)
@@ -222,18 +238,21 @@ classdef Subspaces < spiky.stat.GroupedStat
             end
         end
 
-        function obj = pca(obj, nDims)
+        function obj = pca(obj, nDims, options)
             %PCA Perform PCA on the subspaces
             %
             %   obj = PCA(obj, nDims)
             %
             %   obj: Subspaces object with PCA applied
             %   nDims: number of dimensions to keep
+            %   Name-value arguments:
+            %       Type: whether to perform PCA on the dimensions ("dims") or the bases ("bases") (default: "bases")
             arguments
                 obj spiky.stat.Subspaces
                 nDims double
+                options.Type string {mustBeMember(options.Type, ["dims" "bases"])} = "bases"
             end
-            data1 = cellfun(@(x) x.pca(nDims), obj.Data, UniformOutput=false);
+            data1 = cellfun(@(x) x.pca(nDims, Type=options.Type), obj.Data, UniformOutput=false);
             obj.Data = data1;
         end
 
@@ -365,6 +384,34 @@ classdef Subspaces < spiky.stat.GroupedStat
             optionsCell = namedargs2cell(options);
             sim = cellfun(@(x, y) x.getSimilarity(y, idcDims, optionsCell{:}), ...
                 obj.Data, other.Data);
+        end
+
+        function h = plotScatter(obj, sz, plotOps, options)
+            arguments
+                obj spiky.stat.Subspaces
+                sz double = 50
+                plotOps.?matlab.graphics.chart.primitive.Scatter
+                options.Parent matlab.graphics.axis.Axes = gca
+            end
+            plotArgs = namedargs2cell(plotOps);
+            basisNames = obj.Data{1}.BasisNames;
+            data = spiky.utils.cellfun(@(x) x.Data, obj.Data(1, 1, :, 1, 1));
+            data = permute(data, [3 2 1]);
+            [~, nCats, ~] = size(data);
+            cs = lines(nCats);
+            holdState = options.Parent.NextPlot;
+            h1 = gobjects(nCats, 1);
+            for ii = 1:nCats
+                if ii>1
+                    options.Parent.NextPlot = "add";
+                end
+                h1(ii) = scatter(options.Parent, data(:, ii, 1), data(:, ii, 2), sz, cs(ii, :), ...
+                    "filled", "DisplayName", string(basisNames(ii)), plotArgs{:});
+            end
+            options.Parent.NextPlot = holdState;
+            if nargout>0
+                h = h1;
+            end
         end
     end
 end

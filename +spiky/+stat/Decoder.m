@@ -453,6 +453,41 @@ classdef Decoder < spiky.stat.GroupedStat
             type = obj.Type_;
         end
 
+        function obj = splitConditions(obj, conditions, cats)
+            arguments
+                obj spiky.stat.Decoder
+                conditions (:, 1) categorical
+                cats (:, 1) categorical
+            end
+            assert(isa(obj.Data{1}, "spiky.stat.Coords"), "Data must be spiky.stat.Coords")
+            assert(isequal(numel(conditions), numel(cats), obj.Data{1}.NBases), ...
+                "conditions, cats, and number of decoder bases must match")
+            [conds, ~, idcCond] = unique(conditions, "stable");
+            nConds = numel(conds);
+            objs = cell(nConds, 1);
+            for ii = 1:nConds
+                idc1 = idcCond==ii;
+                cats1 = cats(idc1);
+                objs{ii} = obj;
+                objs{ii}.Data = cellfun(@(d) spiky.stat.Coords(d.Origin, d.Bases(:, idc1), d.DimNames, cats1), ...
+                    obj.Data, UniformOutput=false);
+                objs{ii}.Y{1} = obj.Y{1}(:, idc1); 
+            end
+            obj = cat(4, objs{:});
+            obj.Conditions = conds;
+        end
+
+        function ss = getSubspaces(obj, nDims)
+            arguments
+                obj spiky.stat.Decoder
+                nDims (1, 1) double {mustBePositive}
+            end
+            assert(isa(obj.Data{1}, "spiky.stat.Coords"), "Data must be spiky.stat.Coords")
+            ss = spiky.stat.Subspaces(obj.Time, obj.Data, obj.Groups, obj.GroupIndices);
+            ss.Conditions = obj.Conditions;
+            ss = ss.pca(nDims, Type="dims");
+        end
+
         function varargout = getStats(obj, options)
             %GETSTATS Get statistics related to the decoder models.
             %   [stats, ...] = GETSTATS(obj, options)
@@ -490,7 +525,7 @@ classdef Decoder < spiky.stat.GroupedStat
             arguments
                 obj spiky.stat.Decoder
                 options.Metric (1, 1) string {mustBeMember(options.Metric, ...
-                    ["varExplained" "procrustes" "accuracy" "confusion"])} = "varExplained"
+                    ["varExplained" "procrustes" "accuracy" "confusion" "proj"])} = "varExplained"
                 options.Model = []
                 options.Whiten string {mustBeMember(options.Whiten, ["none", "train", "test"])} = "train"
                 options.CrossTime logical = false
@@ -515,11 +550,16 @@ classdef Decoder < spiky.stat.GroupedStat
                 case "accuracy"
                     assert(obj.Type=="svm")
                     chance = 1/numel(obj.Data{1}.ClassNames);
+                    options.Whiten = "train";
+                case "proj"
+                    options.NDims = min(options.NDims, 4);
             end
             nT = height(obj.Data);
             nGroups = width(obj.Data);
             nPartitions = size(obj.Data, 3);
             nConditions = size(obj.Data, 4);
+            isCompareMdl = ismember(options.Metric, "proj");
+            isCellMode = ismember(options.Metric, ["confusion" "proj"]);
             if options.CrossTime
                 nTrain = 1;
                 nTest = nT;
@@ -545,9 +585,23 @@ classdef Decoder < spiky.stat.GroupedStat
                 transforms = cell(nT, nGroups, nPartitions, nTrain);
                 d = cell(nT, nGroups, nPartitions, nTrain);
             end
-            mdls = obj.Data; % nT x nGroups x nPartitions x nConditions cell of decoder models
+            n = nT*nGroups*nPartitions*nTrain;
+            mdls = obj.Data; % nT x nGroups x nPartitions x nTrain cell of decoder models
             if options.CrossTime
                 mdls = mdls(:, :, :, 1); % use the first condition's models for cross-time decoding
+            end
+            mdls2 = cell(nT, nGroups, nPartitions, nTrain);
+            if isCompareMdl
+                for ii = 1:n
+                    [idxT, idxG, idxP, ~] = ind2sub([nT, nGroups, nPartitions, nTrain], ii);
+                    if options.CrossTime
+                        mdls2{ii} = obj.Data(:, idxG, idxP, 1);
+                    elseif options.CrossCondition
+                        mdls2{ii} = obj.Data(idxT, idxG, idxP, :);
+                    else
+                        mdls2{ii} = obj.Data(idxT, idxG, idxP, 1);
+                    end
+                end
             end
             X = obj.X; % nT x nGroups x 1 x nConditions cell of nNeurons x nTrials
             y = obj.Y; % nConditions x 1 cell of nTrials x 1 categorical
@@ -566,14 +620,16 @@ classdef Decoder < spiky.stat.GroupedStat
             weights = obj.Whiten; % nT x nGroups x 1 x nConditions cell of nNeurons x nNeurons whitening matrices
             partitions = obj.Partitions; % nConditions x 1 cell of partition labels
             pValues = NaN(nT, nGroups, 1, nTrain, nTest); % nT x nGroups x 1 x nTrain x nTest array of p-values for each statistic
-            n = nT*nGroups*nPartitions*nTrain;
             sz = [nT, nGroups, nPartitions, nTrain];
             pb = spiky.plot.ProgressBar(n, "Calculating statistics "+options.Metric);
             parfor ii = 1:n
                 [idxT, idxG, idxP, idxC] = ind2sub(sz, ii);
                 mdl = mdls{ii};
+                if isCompareMdl
+                    mdlsTest = mdls2{ii}; % nTest x 1 cell of models to compare to for this model
+                end
                 stat1 = NaN(1, 1, 1, 1, nTest);
-                if options.Metric=="confusion"
+                if isCellMode
                     stat1 = cell(1, nTest);
                 end
                 if options.Metric=="procrustes"
@@ -649,6 +705,9 @@ classdef Decoder < spiky.stat.GroupedStat
                                 end
                             end
                         case "accuracy"
+                            if ~isempty(W)
+                                XTest = W.project(XTest, Individual=true);
+                            end
                             if isa(mdl, "classreg.learning.classif.CompactClassificationECOC") || ...
                                 isa(mdl, "classreg.learning.classif.ClassificationECOC")
                                 XTest = XTest';
@@ -666,6 +725,12 @@ classdef Decoder < spiky.stat.GroupedStat
                             c = confusionmat(yTest, yPred, Order=cats);
                             c = c./sum(c, 2); % normalize by true class counts to get conditional probabilities
                             stat1{jj} = c; % confusion matrix for this test condition
+                        case "proj"
+                            mdlTest = mdlsTest{jj};
+                            c = mdl.pca(options.NDims, Type="dims"); % nNeurons x nDims PCA projection matrix for this model
+                            p = c.project(mdlTest.Bases); % nDims x nCats
+                            stat1{jj} = spiky.stat.Coords(zeros(height(p), 1), p, 1:height(p), ...
+                                mdlTest.BasisNames);
                     end
                 end
                 stats{ii} = stat1;
@@ -679,7 +744,7 @@ classdef Decoder < spiky.stat.GroupedStat
                 end
                 pb.step
             end
-            if options.Metric=="confusion"
+            if isCellMode
                 stats = reshape(vertcat(stats{:}), nT, nGroups, nPartitions, nTrain, nTest);
             else
                 stats = cell2mat(stats); % nT x nGroups x nPartitions x nTrain x nTest
@@ -728,6 +793,9 @@ classdef Decoder < spiky.stat.GroupedStat
                     end
                     varargout{2} = transforms;
                     varargout{3} = d;
+                case "proj"
+                    stats = spiky.stat.Subspaces(stats.Time, stats.Data, stats.Groups, stats.GroupIndices, ...
+                        stats.Partitions, stats.Conditions);
             end
             varargout{1} = stats;
         end
