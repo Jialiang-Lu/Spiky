@@ -1,4 +1,4 @@
-classdef Subspaces < spiky.stat.GroupedStat
+classdef Subspaces < spiky.stat.Decoder
     %SUBSPACES Class representing a set of subspaces
 
     methods (Static)
@@ -47,27 +47,25 @@ classdef Subspaces < spiky.stat.GroupedStat
     end
 
     methods
-        function obj = Subspaces(time, data, groups, groupIndices, partitions, conditions)
+        function obj = Subspaces(time, data, ...
+                groups, groupIndices, partitions, conditions, weights, options)
             %SUBSPACES Create a new instance of Subspaces
-            %   Subspaces(time, data, groups, groupIndices, partitions, conditions)
-            %
-            %   time: time points
-            %   data: coordinates
-            %   groups: groups
-            %   groupIndices: indices of the groups
-            %   partitions: partitions
-            %   conditions: conditions
-            %
-            %   obj: Subspaces object
             arguments
                 time double = []
-                data cell = {} % spiky.stat.Coords
+                data = []
                 groups (:, 1) = NaN(width(data), 1)
                 groupIndices = logical.empty(height(groups), 0)
                 partitions (:, 1) = cell(size(data, 4), 1)
                 conditions (:, 1) = categorical(strings(size(data, 4), 1))
+                weights cell = cell(size(data))
+                options.X cell = cell(size(data))
+                options.Y cell = cell(size(data, 4), 1)
+                options.Type (1, 1) string = "subspaces"
+                options.DataTest cell = cell(size(data))
             end
-            obj@spiky.stat.GroupedStat(time, data, groups, groupIndices, partitions, conditions);
+            obj@spiky.stat.Decoder(time, data, options.X, options.Y, ...
+                groups, groupIndices, partitions, conditions, weights, Type=options.Type, ...
+                DataTest=options.DataTest);
         end
 
         function obj = mean(obj, options)
@@ -78,7 +76,10 @@ classdef Subspaces < spiky.stat.GroupedStat
             end
             data1 = cellfun(@(c) spiky.stat.Coords.meanCoords(c{:}, Type=options.Type), num2cell(obj.Data, 3), ...
                 UniformOutput=false);
-            obj = subsref(obj, substruct("()", {':', ':', 1, ':'}));
+            % obj = subsref(obj, substruct("()", {':', ':', 1, ':'}));
+            sz = size(obj.Data);
+            sz(3) = 1;
+            obj = obj.resize(sz);
             obj.Data = data1;
         end
 
@@ -361,7 +362,7 @@ classdef Subspaces < spiky.stat.GroupedStat
             %   sim = GETSIMILARITY(obj, other, idcDims, options)
             %
             %   obj: Subspaces object
-            %   other: another Subspaces object. If not provided, calculates similarity acroos
+            %   other: another Subspaces object. If not provided, calculates similarity across
             %       different samples in the same Subspaces object
             %   idcDims: indices of the bases to use for similarity calculation
             %       (default: all bases)
@@ -386,31 +387,66 @@ classdef Subspaces < spiky.stat.GroupedStat
                 obj.Data, other.Data);
         end
 
-        function h = plotScatter(obj, sz, plotOps, options)
+        function [h, hMean, hConnect] = plotScatter(obj, sz, plotOps, options)
             arguments
                 obj spiky.stat.Subspaces
                 sz double = 50
                 plotOps.?matlab.graphics.chart.primitive.Scatter
                 options.Parent matlab.graphics.axis.Axes = gca
+                options.ConnectMean = []
             end
             plotArgs = namedargs2cell(plotOps);
             basisNames = obj.Data{1}.BasisNames;
-            data = spiky.utils.cellfun(@(x) x.Data, obj.Data(1, 1, :, 1, 1));
-            data = permute(data, [3 2 1]);
+            data = spiky.utils.cellfun(@(x) x.Data, obj.Data(1, 1, :, 1, 1)); % nDims x nCats x nSamples
+            data = permute(data, [3 2 1]); % nSamples x nCats x nDims
             [~, nCats, ~] = size(data);
             cs = lines(nCats);
             holdState = options.Parent.NextPlot;
             h1 = gobjects(nCats, 1);
             for ii = 1:nCats
                 if ii>1
-                    options.Parent.NextPlot = "add";
+                    hold(options.Parent, "on");
                 end
-                h1(ii) = scatter(options.Parent, data(:, ii, 1), data(:, ii, 2), sz, cs(ii, :), ...
+                h1(ii) = scatter(options.Parent, data(:, ii, 1), data(:, ii, 2), sz(1), cs(ii, :), ...
                     "filled", "DisplayName", string(basisNames(ii)), plotArgs{:});
+            end
+            if numel(sz)==2
+                m = mean(data, 1);
+                hMean1 = gobjects(nCats, 1);
+                hold(options.Parent, "on");
+                for ii = 1:nCats
+                    hMean1(ii) = scatter(options.Parent, m(1, ii, 1), m(1, ii, 2), sz(2), cs(ii, :), ...
+                        "filled", plotArgs{:});
+                    hMean1(ii).Annotation.LegendInformation.IconDisplayStyle = "off";
+                end
+                if ~isempty(options.ConnectMean)
+                    if isnumeric(options.ConnectMean)
+                        idcConnect = options.ConnectMean;
+                    elseif iscategorical(options.ConnectMean)
+                        [~, idcConnect] = ismember(options.ConnectMean, basisNames);
+                    else
+                        error("ConnectMean must be numeric or categorical")
+                    end
+                    idcConnect = [idcConnect(:); idcConnect(1)]; % connect in a loop
+                    dataConnect = m(1, idcConnect, :);
+                    hConnect1 = plot(options.Parent, dataConnect(1, :, 1), dataConnect(1, :, 2), "k");
+                    hConnect1.Annotation.LegendInformation.IconDisplayStyle = "off";
+                else
+                    hConnect1 = gobjects(0, 1);
+                end
+            else
+                hMean1 = gobjects(0, 1);
+                hConnect1 = gobjects(0, 1);
             end
             options.Parent.NextPlot = holdState;
             if nargout>0
                 h = h1;
+            end
+            if nargout>1
+                hMean = hMean1;
+            end
+            if nargout>2
+                hConnect = hConnect1;
             end
         end
     end

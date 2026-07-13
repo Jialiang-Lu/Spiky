@@ -4,6 +4,7 @@ classdef ActionTheater < spiky.par.Paradigm
     properties
         Graph spiky.scene.SceneGraph % Scene graph representing the actions and interactions
         Fix spiky.core.IntervalsTable % Fixations during the paradigm
+        FixSeq spiky.core.IntervalsTable % Sequences of fixations
     end
 
     methods
@@ -348,9 +349,17 @@ classdef ActionTheater < spiky.par.Paradigm
                 spiky.minos.BodyPart.Hip ...
                 spiky.minos.BodyPart.LeftArm spiky.minos.BodyPart.RightArm ...
                 spiky.minos.BodyPart.LeftHand spiky.minos.BodyPart.RightHand]);
-            fix = fix(fix.IsFace, :);
+            fix.Data = removevars(fix.Data, ["Gaze" "Proj" "TargetPos" "TargetProj"]);
             nFix = height(fix);
+            %% Remove invalid fixations
+            % fix = fix(fix.IsFace, :);
+            fix.Id(~fix.IsFace) = 0;
+            fix.Name(~fix.IsFace) = missing;
+            fix.OtherId(~fix.IsFace) = 0;
+            fix.OtherName(~fix.IsFace) = missing;
+            fix.Part(~fix.IsFace) = spiky.minos.BodyPart.Root;
             %% Fixation sequences
+            fix.Data.NActors = cellfun(@numel, fix.Names);
             idcNameGroup = findgroups(fix.Id);
             isNameChange = [true; diff(idcNameGroup)~=0];
             idcSeq = zeros(nFix, 1);
@@ -358,7 +367,7 @@ classdef ActionTheater < spiky.par.Paradigm
             seqLength = zeros(nFix, 1);
             for ii = 1:max(idcNameGroup)
                 idc1 = idcNameGroup==ii;
-                [idcSeq(idc1), idcInSeq(idc1), seqLength(idc1)] = fix(idc1, :).findSequence(0.15, ...
+                [idcSeq(idc1), idcInSeq(idc1), seqLength(idc1)] = fix(idc1, :).findSequence(0.3, ...
                     IdcJump=isNameChange(idc1));
             end
             idcSeq = categorical(fix.Id).*categorical(idcSeq);
@@ -367,9 +376,15 @@ classdef ActionTheater < spiky.par.Paradigm
             fix.Data.IdcInSeq = idcInSeq;
             fix.Data.SeqLength = seqLength;
             %% Find prev fixation
+            hasPrevFix = find(fix.Start(2:end)-fix.End(1:end-1)<0.3)+1;
             prevName = categorical(NaN(nFix, 1));
             prevName(2:end) = fix.Name(1:end-1);
+            prevName(~hasPrevFix) = missing;
             fix.Data.PrevName = prevName;
+            prevId = zeros(nFix, 1, "int32");
+            prevId(2:end) = fix.Id(1:end-1);
+            prevId(~hasPrevFix) = 0;
+            fix.Data.PrevId = prevId;
             prevSeqName = categorical(NaN(nFix, 1));
             idcFirst = find(idcInSeq==1);
             [hasPrevSeq, idcPrevSeq] = ismember(idcSeq-1, idcSeq(idcFirst));
@@ -377,26 +392,30 @@ classdef ActionTheater < spiky.par.Paradigm
             fix.Data.PrevSeqName = prevSeqName;
             %% Find fixation role
             graphVerb = obj.Data.Graph(obj.Data.Graph.IsVerb, :);
-            [~, idcFixVerb, idcVerbFix] = graphVerb.haveEvents(fix.Start);
-            isFixSubject = fix.Id(idcFixVerb)==graphVerb.Subject.Id(idcVerbFix) | ...
-                ismember(graphVerb.Predicate.Name(idcVerbFix), ["Walk" "Idle"]);
-            isFixObject = fix.Id(idcFixVerb)==graphVerb.Object.Id(idcVerbFix);
+            [~, idcFixVerb, idcVerbFix] = graphVerb.haveEvents((fix.Start+fix.End)/2);
+            % isValidVerb = ismember(idcFixVerb, find(fix.IsFace));
+            % idcFixVerb = idcFixVerb(isValidVerb);
+            % idcVerbFix = idcVerbFix(isValidVerb);
+            isFixSubject = fix.Id(idcFixVerb)==graphVerb.Subject.Id(idcVerbFix) & fix.Id(idcFixVerb)~=0;
+            isFixObject = fix.Id(idcFixVerb)==graphVerb.Object.Id(idcVerbFix) & fix.Id(idcFixVerb)~=0;
             fix.Data.Role = categorical(NaN(nFix, 1));
             fix.Role(idcFixVerb(isFixSubject)) = "Subject";
             fix.Role(idcFixVerb(isFixObject)) = "Object";
             isAction = graphVerb.Predicate.Type(idcVerbFix)=="Action" & ...
-                ~ismember(graphVerb.Predicate.Name(idcVerbFix), ["Walk" "Idle"]);
+                ~ismember(graphVerb.Predicate.Name(idcVerbFix), ["Walk" "Wait"]);
             fix.Data.OtherRole = categorical(NaN(nFix, 1));
             fix.OtherRole(idcFixVerb(isAction & isFixSubject)) = "Object";
             fix.OtherRole(idcFixVerb(isAction & isFixObject)) = "Subject";
             fix.Data.Verb = categorical(NaN(nFix, 1));
             fix.Verb(idcFixVerb) = graphVerb.Predicate.Name(idcVerbFix);
             fix.Data.Action = fix.Verb;
-            fix.Action(ismember(fix.Action, ["Walk" "Idle"])) = missing;
+            fix.Action(ismember(fix.Action, ["Walk" "Wait" "Idle"])) = missing;
+            fix.Role(ismissing(fix.Action)) = missing;
             fix.Verb(ismissing(fix.Verb)) = "Wait";
             fix.Data.ActionRole = categorical(string(fix.Action)+string(fix.Role));
+            fix.Data.VerbRole = fix.ActionRole;
+            fix.VerbRole(ismember(fix.Action, "Idle")) = "IdleSubject";
             fix.Data.OtherActionRole = categorical(string(fix.Action)+string(fix.OtherRole));
-            fix.Data.NActors = cellfun(@numel, fix.Names);
             %% Find fixated actionadj
             graphActionAdj = obj.Data.Graph(obj.Data.Graph.IsActionAdj, :).interpById(fix.Id, fix.Start+0.02);
             graphActionAdjTarget = obj.Data.Graph(obj.Data.Graph.IsAttribute & ...
@@ -453,26 +472,34 @@ classdef ActionTheater < spiky.par.Paradigm
             fix.Data.RoleAfterAction = roleAfterAction;
             fix.Data.ActionBeforeAction = actionBeforeAction;
             fix.Data.ActionAfterAction = actionAfterAction;
-            %% Randomize role for handshake
-            idcHandshake = find(fix.Action=="HandShake");
-            nHandshake = numel(idcHandshake);
-            idcSwap = rand(nHandshake, 1)<0.5;
-            fix.Role(idcHandshake(idcSwap)) = "Object";
-            fix.Role(idcHandshake(~idcSwap)) = "Subject";
-            fix.ActionRole(idcHandshake(idcSwap)) = "HandShakeObject";
-            fix.ActionRole(idcHandshake(~idcSwap)) = "HandShakeSubject";
-            idcHandshake = find(fix.ActionBeforeAction=="HandShake");
-            nHandshake = numel(idcHandshake);
-            idcSwap = rand(nHandshake, 1)<0.5;
-            fix.RoleBeforeAction(idcHandshake(idcSwap)) = "Object";
-            fix.RoleBeforeAction(idcHandshake(~idcSwap)) = "Subject";
-            idcHandshake = find(fix.ActionAfterAction=="HandShake");
-            nHandshake = numel(idcHandshake);
-            idcSwap = rand(nHandshake, 1)<0.5;
-            fix.RoleAfterAction(idcHandshake(idcSwap)) = "Object";
-            fix.RoleAfterAction(idcHandshake(~idcSwap)) = "Subject";
+            %% Randomize role for systematic actions (HandShake)
+            idcSym = find(ismember(fix.Action, ["HandShake"]));
+            nSym = numel(idcSym);
+            if nSym>0
+                idcSwap = rand(nSym, 1)<0.5;
+                fix.Role(idcSym(idcSwap)) = "Object";
+                fix.Role(idcSym(~idcSwap)) = "Subject";
+                fix.OtherRole(idcSym(idcSwap)) = "Subject";
+                fix.OtherRole(idcSym(~idcSwap)) = "Object";
+                fix.ActionRole = categorical(string(fix.Action)+string(fix.Role));
+                fix.OtherActionRole = categorical(string(fix.Action)+string(fix.OtherRole));
+                idcSym = find(ismember(fix.ActionBeforeAction, ["HandShake"]));
+                nSym = numel(idcSym);
+                idcSwap = rand(nSym, 1)<0.5;
+                fix.RoleBeforeAction(idcSym(idcSwap)) = "Object";
+                fix.RoleBeforeAction(idcSym(~idcSwap)) = "Subject";
+                idcSym = find(ismember(fix.ActionAfterAction, ["HandShake"]));
+                nSym = numel(idcSym);
+                idcSwap = rand(nSym, 1)<0.5;
+                fix.RoleAfterAction(idcSym(idcSwap)) = "Object";
+                fix.RoleAfterAction(idcSym(~idcSwap)) = "Subject";
+            end
             %%
             obj.Data.Fix = fix;
+            %% Fixation sequences
+            fixSeq = fix(fix.IdcInSeq==1, :);
+            fixSeq.Time(:, 2) = fix(fix.IdcInSeq==fix.SeqLength, :).End;
+            obj.Data.FixSeq = fixSeq;
         end
 
         function fr = getActionFr(obj, spikes, t, options)
@@ -520,6 +547,43 @@ classdef ActionTheater < spiky.par.Paradigm
             et = spiky.core.EventsTable(itvCenter(idcValid), tbl);
             fr = spikes.trigFr(et, 0, HalfWidth=options.HalfWidth, ...
                 Kernel="box", Normalize=true);
+        end
+
+        function et = getActionView(obj, window)
+            arguments
+                obj spiky.par.ActionTheater
+                window (1, :) double = -0.3:0.1:1.8
+            end
+            graphAction = obj.Data.Graph.getActions();
+            fix = obj.Data.FixSeq;
+            nPoints = numel(window);
+            nTrials = height(graphAction);
+            n = nPoints*nTrials;
+            idcInTrial = repelem((1:nTrials)', nPoints, 1);
+            t = graphAction.Start+window;
+            t = t';
+            t = t(:);
+            tbl = table();
+            tbl.Trial = graphAction.TrialStart(idcInTrial);
+            tbl.TrialTime = repmat(window', nTrials, 1);
+            tbl.Action = graphAction.Predicate.Name(idcInTrial);
+            tbl.Subject = graphAction.Subject.Name(idcInTrial);
+            tbl.SubjectId = graphAction.Subject.Id(idcInTrial);
+            tbl.Object = graphAction.Object.Name(idcInTrial);
+            tbl.ObjectId = graphAction.Object.Id(idcInTrial);
+            [~, idcInFix, idcFix] = fix.haveEvents(t);
+            isValid = fix.Id(idcFix)==tbl.SubjectId(idcInFix) | ...
+                fix.Id(idcFix)==tbl.ObjectId(idcInFix);
+            idcInFix = idcInFix(isValid);
+            idcFix = idcFix(isValid);
+            tbl.FixName = categorical(NaN(n, 1));
+            tbl.FixName(idcInFix) = fix.Name(idcFix);
+            tbl.FixId = zeros(n, 1, "int32");
+            tbl.FixId(idcInFix) = fix.Id(idcFix);
+            tbl.FixRole = categorical(NaN(n, 1));
+            tbl.FixRole(tbl.FixId==tbl.SubjectId) = "Subject";
+            tbl.FixRole(tbl.FixId==tbl.ObjectId) = "Object";
+            et = spiky.core.EventsTable(t, tbl);
         end
 
         function labels = getLabels(obj, t)

@@ -35,7 +35,6 @@ classdef (Abstract) ArrayBase
     methods
         function obj = apply(obj, fun, varargin)
             %APPLY Apply a function to the data
-            %
             %   obj = apply(obj, fun, varargin)
             %   fun: function handle
             %   varargin: additional arguments passed to fun
@@ -45,7 +44,6 @@ classdef (Abstract) ArrayBase
 
         function obj = sum(obj, varargin)
             %SUM Compute the sum of the signal
-            %
             %   obj = sum(obj, varargin)
             %   varargin: additional arguments passed to sum
 
@@ -56,7 +54,6 @@ classdef (Abstract) ArrayBase
 
         function obj = max(obj, varargin)
             %MAX Compute the maximum of the signal
-            %
             %   obj = max(obj, varargin)
             %   varargin: additional arguments passed to max
 
@@ -70,7 +67,6 @@ classdef (Abstract) ArrayBase
 
         function obj = min(obj, varargin)
             %MIN Compute the minimum of the signal
-            %
             %   obj = min(obj, varargin)
             %   varargin: additional arguments passed to min
 
@@ -84,18 +80,53 @@ classdef (Abstract) ArrayBase
 
         function obj = mean(obj, varargin)
             %MEAN Compute the mean of the signal
-            %
             %   obj = mean(obj, varargin)
             %   varargin: additional arguments passed to mean
 
-            data = mean(obj.getData(), varargin{:});
+            data = obj.getData();
+            if isnumeric(data)
+                data = mean(data, varargin{:});
+            elseif iscell(data)
+                if ~isempty(varargin) && strcmp(varargin{1}, "all")
+                    dim = 1:ndims(data);
+                    varargin = varargin(2:end);
+                elseif isempty(varargin) || ~isnumeric(varargin{1})
+                    dim = 1;
+                else
+                    dim = varargin{1};
+                    varargin = varargin(2:end);
+                end
+                data = num2cell(data, dim);
+                data = cellfun(@(c) mean(cat(8, c{:}), 8, varargin{:}), data, UniformOutput=false);
+            else
+                error("Mean is not supported for data of type '%s'.", class(data));
+            end
+            obj = obj.resize(size(data));
+            obj = obj.setData(data);
+        end
+
+        function obj = std(obj, varargin)
+            %STD Compute the standard deviation of the signal
+            %   obj = std(obj, varargin)
+            %   varargin: additional arguments passed to std
+
+            data = std(obj.getData(), varargin{:});
+            obj = obj.resize(size(data));
+            obj = obj.setData(data);
+        end
+
+        function obj = var(obj, varargin)
+            %VAR Compute the variance of the signal
+            %   obj = var(obj, varargin)
+            %   varargin: additional arguments passed to var
+
+            data = var(obj.getData(), varargin{:});
             obj = obj.resize(size(data));
             obj = obj.setData(data);
         end
 
         function obj = median(obj, varargin)
             %MEDIAN Compute the median of the signal
-            %
             %   obj = median(obj, varargin)
             %   varargin: additional arguments passed to median
 
@@ -106,7 +137,6 @@ classdef (Abstract) ArrayBase
 
         function obj = uminus(obj)
             %UMINUS Negate the signal
-            %
             %   obj = uminus(obj)
 
             obj = obj.setData(-obj.getData());
@@ -114,7 +144,6 @@ classdef (Abstract) ArrayBase
 
         function obj = plus(obj, obj2)
             %PLUS Add two signals
-            %
             %   obj = plus(obj, obj2)
             %   obj2: Lfp object
 
@@ -126,7 +155,6 @@ classdef (Abstract) ArrayBase
 
         function obj = minus(obj, obj2)
             %MINUS Subtract two signals
-            %
             %   obj = minus(obj, obj2)
             %   obj2: Lfp object
 
@@ -138,7 +166,6 @@ classdef (Abstract) ArrayBase
 
         function obj = times(obj, obj2)
             %TIMES Multiply two signals
-            %
             %   obj = times(obj, obj2)
             %   obj2: Lfp object
 
@@ -150,7 +177,6 @@ classdef (Abstract) ArrayBase
 
         function obj = rdivide(obj, obj2)
             %RDIVIDE Divide two signals
-            %
             %   obj = rdivide(obj, obj2)
             %   obj2: Lfp object
 
@@ -162,7 +188,6 @@ classdef (Abstract) ArrayBase
 
         function obj = ldivide(obj, obj2)
             %LDIVIDE Divide two signals
-            %
             %   obj = ldivide(obj, obj2)
             %   obj2: Lfp object
 
@@ -174,7 +199,6 @@ classdef (Abstract) ArrayBase
 
         function obj = gt(obj, obj2)
             %GT Greater than comparison
-            %
             %   obj = gt(obj, obj2)
             %   obj2: Lfp object
 
@@ -186,7 +210,6 @@ classdef (Abstract) ArrayBase
 
         function obj = ge(obj, obj2)
             %GE Greater than or equal comparison
-            %
             %   obj = ge(obj, obj2)
             %   obj2: Lfp object
 
@@ -198,7 +221,6 @@ classdef (Abstract) ArrayBase
 
         function obj = lt(obj, obj2)
             %LT Less than comparison
-            %
             %   obj = lt(obj, obj2)
             %   obj2: Lfp object
 
@@ -210,7 +232,6 @@ classdef (Abstract) ArrayBase
 
         function obj = le(obj, obj2)
             %LE Less than or equal comparison
-            %
             %   obj = le(obj, obj2)
             %   obj2: Lfp object
 
@@ -222,7 +243,6 @@ classdef (Abstract) ArrayBase
 
         function obj = eq(obj, obj2)
             %EQ Equal comparison
-            %
             %   obj = eq(obj, obj2)
             %   obj2: Lfp object
 
@@ -234,7 +254,6 @@ classdef (Abstract) ArrayBase
 
         function obj = ne(obj, obj2)
             %NE Not equal comparison
-            %
             %   obj = ne(obj, obj2)
             %   obj2: Lfp object
 
@@ -246,7 +265,6 @@ classdef (Abstract) ArrayBase
 
         function obj = and(obj, obj2)
             %AND Logical AND
-            %
             %   obj = and(obj, obj2)
             %   obj2: Lfp object
 
@@ -258,7 +276,6 @@ classdef (Abstract) ArrayBase
 
         function obj = or(obj, obj2)
             %OR Logical OR
-            %
             %   obj = or(obj, obj2)
             %   obj2: Lfp object
 
@@ -268,9 +285,19 @@ classdef (Abstract) ArrayBase
             obj = obj.setData(obj.getData() | obj2);
         end
 
+        function obj = zscore(obj, dim)
+            %ZSCORE Compute the z-score of the signal
+            arguments
+                obj spiky.core.ArrayBase
+                dim (1, :) double {mustBePositive, mustBeInteger} = 1:ndims(obj.getData())
+            end
+            data = obj.getData();
+            data = (data-mean(data, dim, "omitmissing"))./std(data, 0, dim, "omitmissing");
+            obj = obj.setData(data);
+        end
+
         function [obj, idc] = sort(obj, varargin)
             %SORT Sort the data
-            %
             %   [obj, idc] = sort(obj, varargin)
             %   varargin: additional arguments passed to sort
 
@@ -298,13 +325,62 @@ classdef (Abstract) ArrayBase
 
         function [obj, idc] = sortrows(obj, varargin)
             %SORTRows Sort the data along the first dimension
-            %
             %   [obj, idc] = sortrows(obj, varargin)
             %   varargin: additional arguments passed to sortrows
 
             data = obj.getData();
             [~, idc] = sortrows(data, varargin{:});
             obj = subsref(obj, substruct('()', {idc, ':'}));
+        end
+
+        function obj = gatheralong(obj, dim1, dim2, idc2)
+            %GATHERALONG Gather elements along dim1 according to indices along dim2
+            %   obj = gatheralong(obj, dim1, dim2, idc2)
+            %
+            %   dim1: dimension to gather along
+            %   dim2: dimension of the indices, the output will have size(obj, dim2)==1
+            %   idc2: indices along dim2 to gather, must be a vector of length size(obj, dim1)
+            %       with values in the range [1, size(obj, dim2)]
+            arguments
+                obj spiky.core.ArrayBase
+                dim1 (1, 1) double {mustBePositive, mustBeInteger}
+                dim2 (1, 1) double {mustBePositive, mustBeInteger}
+                idc2 (:, 1) double {mustBePositive, mustBeInteger}
+            end
+            sz = size(obj);
+            nDims = length(sz);
+            sz1 = sz(dim1);
+            sz2 = sz(dim2);
+            assert(dim1<=nDims);
+            assert(dim2<=nDims);
+            assert(length(idc2)==sz1);
+            assert(all(idc2>=1 & idc2<=sz2));
+            idcDims = repmat({':'}, sz1, nDims);
+            idcDims(:, dim1) = num2cell(1:sz1);
+            idcDims(:, dim2) = num2cell(idc2);
+            objs = cell(sz1, 1);
+            for ii = 1:sz1
+                objs{ii} = subsref(obj, substruct('()', idcDims(ii, :)));
+            end
+            obj = cat(dim1, objs{:});
+        end
+
+        function obj = cellfun(obj, fun, options)
+            %CELLFUN Apply a function to each cell of the data if it is a cell array
+            %   obj = cellfun(obj, fun, ...)
+            arguments
+                obj spiky.core.ArrayBase
+                fun function_handle
+                options.UniformOutput logical = true
+            end
+            data = obj.getData();
+            assert(iscell(data), "Data must be a cell array to use cellfun.");
+            if ~options.UniformOutput
+                data = cellfun(fun, data, UniformOutput=false);
+            else
+                data = spiky.utils.cellfun(fun, data);
+            end
+            obj = obj.setData(data);
         end
 
         function varargout = size(obj, varargin)
@@ -749,15 +825,20 @@ classdef (Abstract) ArrayBase
                         continue
                     end
                     p = obj.(name);
-                    if isequal(p, []) || ~any(size(p))
+                    if (isequal(p, []) || ~any(size(p))) && ~isempty(varargin)
                         clear p
+                        c = {idx, ':', ':', ':', ':'};
+                    elseif istable(p)
+                        c = {idx, ':'};
+                    else
+                        c = {idx, ':', ':', ':', ':'};
                     end
                     if isempty(varargin)
-                        obj.(name) = subsref(p, substruct('()', {idx, ':', ':', ':', ':'}));
+                        obj.(name) = subsref(p, substruct('()', c));
                     elseif isequal(objNew, [])
-                        obj.(name) = subsasgn(p, substruct('()', {idx, ':', ':', ':', ':'}), []);
+                        obj.(name) = subsasgn(p, substruct('()', c), []);
                     else
-                        obj.(name) = subsasgn(p, substruct('()', {idx, ':', ':', ':', ':'}), objNew.(name));
+                        obj.(name) = subsasgn(p, substruct('()', c), objNew.(name));
                     end
                 end
             end

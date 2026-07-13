@@ -49,6 +49,21 @@ classdef Transform < spiky.core.MappableObjArray
             obj.Id = id;
         end
 
+        function obj = offset(obj, timeOffset)
+            %OFFSET Offset the time of the transform by the given amount
+            %
+            %   obj = OFFSET(obj, timeOffset)
+            %
+            %   timeOffset: time offset to apply to the transform (in seconds)
+            arguments
+                obj spiky.minos.Transform
+                timeOffset double
+            end
+            for ii = 1:numel(obj.Array)
+                obj.Array{ii}.Time = obj.Array{ii}.Time+timeOffset;
+            end
+        end
+
         function [obj, indices] = interp(obj, time, method)
             %INTERP Interpolate the data to the given time points
             %
@@ -211,8 +226,9 @@ classdef Transform < spiky.core.MappableObjArray
                 spiky.minos.EyeData.getGaze(proj(idcSort, :), fov), ...
                 VariableNames=["Index" "TimeIndex" "Trial" "Pos" "Rot" "Proj" "Ray"]);
             it = spiky.core.IntervalsTable(t(idcSort, :), data);
-            dur = mean(it.ChunkDuration);
-            it.Time = it.Start+[0 dur];
+            % dur = mean(it.ChunkDuration);
+            % it.Time = it.Start+[0 dur];
+            it.End(it.ChunkDuration>0.2) = it.Start(it.ChunkDuration>0.2)+0.2;
             if options.KeepValid
                 idc = all(it.Proj(:, 1:2)>=0 & it.Proj(:, 1:2)<=1, 2);
                 it = it(idc, :);

@@ -41,8 +41,8 @@ classdef Neuron < spiky.core.Array
             nNeurons = sum(nNeuronsPerRegion);
             obj = spiky.core.Neuron.zeros(nNeurons);
             obj.Data.Session = repmat(session, nNeurons, 1);
-            obj.Data.Region = repelem(regions, nNeuronsPerRegion);
-            obj.Data.Group = repelem((1:numel(regions))', nNeuronsPerRegion);
+            obj.Data.Region = repelem(regions, nNeuronsPerRegion, 1);
+            obj.Data.Group = repelem((1:numel(regions))', nNeuronsPerRegion, 1);
             obj.Data.Id = grouptransform(obj.Data.Group, obj.Data.Group, @(x) (1:numel(x))');
         end
     end
@@ -63,8 +63,18 @@ classdef Neuron < spiky.core.Array
                 ChInGroup=chInGroup, Label=label, Amplitude=amplitude);
         end
 
-        function str = string(obj)
-            str = compose("%s_%s_%d_%d", obj.Data.Session.Name, obj.Data.Region, obj.Data.Group, obj.Data.Id);
+        function str = string(obj, options)
+            arguments
+                obj spiky.core.Neuron
+                options.Shorten logical = false
+            end
+            if ~options.Shorten
+                str = compose("%s_%s_%d_%d", obj.Data.Session.Name, obj.Data.Region, obj.Data.Group, obj.Data.Id);
+            else
+                str = compose("%s_%s_%s_%d_%d", extractBetween(string(obj.Data.Session.Name), 8, 13), ...
+                    extractBetween(string(obj.Data.Session.Name), 15, 15), ...
+                    obj.Data.Region, obj.Data.Group, obj.Data.Id);
+            end
         end
 
         function out = eq(obj, other)

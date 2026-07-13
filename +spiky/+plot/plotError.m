@@ -52,8 +52,9 @@ if nLines>1
     cs = colororder();
 end
 for ii = nLines:-1:1
-    xData = [x(:, ii); flipud(x(:, ii))];
-    yData = [y(:, ii)+e(:, ii); flipud(y(:, ii)-e(:, ii))];
+    isValid = ~isnan(y(:, ii));
+    xData = [x(isValid, ii); flipud(x(isValid, ii))];
+    yData = [y(isValid, ii)+e(isValid, ii); flipud(y(isValid, ii)-e(isValid, ii))];
     if nLines>1
         c = cs(mod(ii-1, height(cs))+1, :);
         hLine1(ii).Color = c;
@@ -61,6 +62,7 @@ for ii = nLines:-1:1
         c = hLine1(ii).Color;
     end
     hError1(ii) = patch(xData, yData, c, FaceAlpha=options.FaceAlpha, EdgeColor="none");
+    hError1(ii).Annotation.LegendInformation.IconDisplayStyle = "off";
 end
 box off
 

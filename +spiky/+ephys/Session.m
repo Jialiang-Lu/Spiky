@@ -102,6 +102,9 @@ classdef Session < spiky.core.ArrayBase
                 idcKeep = ismember(spikes.Neuron.Region, options.RegionSubset);
                 spikes = spikes(idcKeep, :);
                 spikes.Neuron.Region = removecats(spikes.Neuron.Region);
+                options.RegionSubset = options.RegionSubset(ismember(options.RegionSubset, ...
+                    categories(spikes.Neuron.Region, OutputType="string")));
+                spikes.Neuron.Region = reordercats(spikes.Neuron.Region, options.RegionSubset);
             end
         end
 

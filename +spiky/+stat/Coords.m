@@ -35,9 +35,44 @@ classdef Coords < spiky.core.Array
             dimLabelNames = {["DimNames"; "Origin"]; "BasisNames"};
         end
 
+        function objs = align(objs, dim)
+            %ALIGN Align the bases of multiple Coords objects by flipping the signs of the bases
+            %   objs = align(objs)
+            arguments
+                objs cell % cell array of Coords objects to align
+                dim double {mustBeInteger, mustBePositive} % dimension along which to align
+            end
+            % n = numel(objs);
+            % for ii = 2:n
+            %     s = sign(dot(objs{1}.Bases, objs{ii}.Bases)); % 1 x NBases
+            %     objs{ii}.Bases = objs{ii}.Bases.*s; % Flip the bases
+            % end
+            assert(dim<=ndims(objs));
+            n = numel(objs);
+            sz = size(objs);
+            idc = 1:n;
+            sub = cell(1, ndims(objs));
+            [sub{:}] = ind2sub(sz, idc);
+            idcDim = sub{dim};
+            nValid = sum(idcDim>1);
+            if nValid==0
+                return
+            end
+            sub{dim} = ones(size(idc));
+            idcRef = sub2ind(sz, sub{:});
+            idc = idc(idcDim>1);
+            idcRef = idcRef(idcDim>1);
+            for ii = 1:numel(idc)
+                idx = idc(ii);
+                idxRef = idcRef(ii);
+                s = sign(dot(objs{idxRef}.Bases, objs{idx}.Bases));
+                objs{idx}.Bases = objs{idx}.Bases.*s; % Flip the bases
+            end
+        end
+
         function obj = meanCoords(objs, options)
             %MEANCOORDS Compute the mean coordinate system across multiple Coords objects
-            %   obj = MEANCOORDS(objs, options)
+            %   obj = meanCoords(..., options)
             %
             %   objs: Coords objects to average
             %   Name-value arguments:
@@ -179,7 +214,7 @@ classdef Coords < spiky.core.Array
                 % explained = sv.^2/sum(sv.^2)*100;
                 % obj.Bases = obj.Bases*v(:, 1:nDims);
                 % obj.BasisNames = explained(1:nDims);
-                [v, p, s] = pca(obj.Bases, NumComponents=nDims, Centered=false);
+                [v, p, s] = pca(obj.Bases, NumComponents=nDims, Centered=true);
                 obj.Bases = p;
                 obj.BasisNames = s(1:nDims);
             else
@@ -190,7 +225,8 @@ classdef Coords < spiky.core.Array
                 % explained = sv.^2/sum(sv.^2)*100;
                 % obj.Bases = v(:, 1:nDims);
                 % obj.BasisNames = explained(1:nDims);
-                [v, p, s] = pca(obj.Bases', NumComponents=nDims, Centered=false);
+                obj.Origin = mean(obj.Bases, 2);
+                [v, p, s] = pca(obj.Bases', NumComponents=nDims, Centered=true);
                 obj.Bases = v;
                 obj.BasisNames = s(1:nDims);
             end
@@ -223,7 +259,7 @@ classdef Coords < spiky.core.Array
 
         function sim = getSimilarity(obj, other, idcDims, options)
             %GETSIMILARITY Get the similarity between two coordinate systems
-            %   sim = GETSIMILARITY(obj, other, idcDims, options)
+            %   sim = GETSIMILARITY(obj, other, idcDims, ...)
             %
             %   obj: Coords object
             %   other: another Coords object
@@ -234,7 +270,8 @@ classdef Coords < spiky.core.Array
                 obj spiky.stat.Coords
                 other spiky.stat.Coords
                 idcDims double = 1:obj.NBases
-                options.Metric string {mustBeMember(options.Metric, ["projection" "nuclear"])} = "projection"
+                options.Metric string {mustBeMember(options.Metric, ...
+                    ["projection" "nuclear" "angle"])} = "projection"
             end
             assert(obj.NDims==other.NDims, ...
                 "The number of dimensions in the two coordinate systems must be the same");
@@ -249,6 +286,9 @@ classdef Coords < spiky.core.Array
                     sim = sum(diag(S).^2)/nDims;
                 case "nuclear"
                     sim = sum(diag(S))/nDims;
+                case "angle"
+                    S = min(max(S, -1), 1); % Numerical safety
+                    sim = acosd(S(1)); % Convert to angles in degrees
             end
         end
 

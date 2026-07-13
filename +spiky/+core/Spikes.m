@@ -80,7 +80,7 @@ classdef Spikes < spiky.core.Array
                 options.Sort logical = true
             end
             nsSpikes = cellfun(@numel, obj.Data);
-            id = repelem((1:height(obj.Data))', nsSpikes);
+            id = repelem((1:height(obj.Data))', nsSpikes, 1);
             t = cell2mat(obj.Data);
             if options.Sort
                 [t, idSort] = sort(t);
@@ -318,7 +318,7 @@ classdef Spikes < spiky.core.Array
                 Normalize=options.Normalize, Unit=options.Unit);
         end
 
-        function [t2, stat, t2Shuf] = tuning2(obj, intervals, pos, binEdgesX, binEdgesY, options)
+        function [t2, t2Shuf] = tuning2(obj, intervals, pos, binEdgesX, binEdgesY, options)
             %TUNING2 Compute 2D tuning curve
             %   
             arguments
@@ -328,14 +328,17 @@ classdef Spikes < spiky.core.Array
                 binEdgesX (:, 1) double
                 binEdgesY (:, 1) double
                 options.Latencies (:, 1) double = 0
+                options.MinOccupancy double = 0.2
                 options.Smooth (1, 1) double = 0
                 options.Shuffle (1, 1) double = 0
                 options.Metric string {mustBeMember(options.Metric, ["", "info"])} = ""
             end
             assert(height(intervals)==height(pos), "Intervals and pos must have the same number of rows");
+            tInt = intervals.Time;
             nNeurons = height(obj);
             [t, id] = obj.flatten();
             nLatencies = numel(options.Latencies);
+            nPos = height(pos);
             nX = numel(binEdgesX)-1;
             nY = numel(binEdgesY)-1;
             resX = mean(diff(binEdgesX));
@@ -345,13 +348,20 @@ classdef Spikes < spiky.core.Array
             if options.Smooth>0
                 occ = imgaussfilt(occ, options.Smooth/resX);
             end
+            occ(occ<options.MinOccupancy) = NaN;
             fr = zeros(nY, nX, nNeurons, nLatencies);
             pb = spiky.plot.ProgressBar(nLatencies, "Computing tuning2");
-            for ii = 1:nLatencies
+            parfor ii = 1:nLatencies
+                if options.Shuffle==-1
+                    idcShuf = randperm(nPos);
+                    pos1 = pos(idcShuf, :);
+                else
+                    pos1 = pos;
+                end
                 tShift = t-options.Latencies(ii);
-                [~, idcT, idcItv] = intervals.haveEvents(tShift);
+                [~, idcT, idcItv] = spiky.core.Events(tShift).inIntervals(tInt);
                 idShift = id(idcT);
-                posItv = pos(idcItv, :); % position at the time of spikes within intervals
+                posItv = pos1(idcItv, :); % position at the time of spikes within intervals
                 c = spiky.utils.histcounts2(posItv(:, 2), posItv(:, 1), binEdgesY, binEdgesX, Ids=idShift);
                     % nY x nX x nNeurons array of spike counts for each position bin and neuron
                 if options.Smooth>0
@@ -362,37 +372,40 @@ classdef Spikes < spiky.core.Array
                 fr(:, :, :, ii) = c./occ; % divide by occupancy to get firing rate
                 pb.step
             end
-            [~, idcT] = intervals.haveEvents(t);
+            [~, idcT] = spiky.core.Events(t).inIntervals(tInt);
             id0 = id(idcT);
             fr0 = accumarray(id0, 1, [nNeurons, 1]);
             fr0 = fr0./intervals.Duration; % baseline firing rate for each neuron
             t2 = spiky.stat.Tuning2(fr, binEdgesX, binEdgesY, occ, Neuron=obj.Neuron, ...
                 Conditions=options.Latencies, Fr=fr0);
             switch options.Metric
-                case ""
-                    stat = [];
                 case "info"
                     stat = t2.mutualInfo();
+                    t2.Stats.Info = stat;
             end
             if options.Shuffle>0
                 nShuf = options.Shuffle;
-                t2Shuf = cell(nShuf, 1);
-                pb = spiky.plot.ProgressBar(nShuf, "Computing shuffled tuning2");
-                parfor ii = 1:nShuf
-                    idcShuf = randperm(height(pos));
-                    posShuf = pos(idcShuf, :);
-                    t2Shuf{ii} = obj.tuning2(intervals, posShuf, binEdgesX, binEdgesY, ...
-                        Latencies=0, Smooth=options.Smooth, Shuffle=0);
-                    pb.step
-                end
-                t2Shuf = cat(4, t2Shuf{:});
+                % t2Shuf = cell(nShuf, 1);
+                % pb = spiky.plot.ProgressBar(nShuf, "Computing shuffled tuning2");
+                % parfor ii = 1:nShuf
+                %     idcShuf = randperm(height(pos));
+                %     posShuf = pos(idcShuf, :);
+                %     t2Shuf{ii} = obj.tuning2(intervals, posShuf, binEdgesX, binEdgesY, ...
+                %         Latencies=0, Smooth=options.Smooth, Shuffle=0);
+                %     pb.step
+                % end
+                % t2Shuf = cat(4, t2Shuf{:});
+                t2Shuf = obj.tuning2(intervals, pos, binEdgesX, binEdgesY, ...
+                    Latencies=zeros(nShuf, 1), Smooth=options.Smooth, Shuffle=-1);
                 switch options.Metric
                     case "info"
                         statShuf = t2Shuf.mutualInfo();
                         statShuf = permute(statShuf, [1 3 2]);
-                        p = mean(stat>statShuf, 3, "omitnan");
+                        p = (sum(statShuf>stat, 3, "omitnan")+1)./(nShuf+1);
                         t2.P = p;
                 end
+            else
+                t2Shuf = [];
             end
         end
 

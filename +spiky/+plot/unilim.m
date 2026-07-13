@@ -14,6 +14,9 @@ end
 if isempty(targets)
     targets = findall(gcf, "Type", "Axes");
 end
+if isscalar(targets) || isempty(targets)
+    return
+end
 if ax=="all"
     ax = "xyzc";
 end
@@ -46,23 +49,23 @@ function updatelim(ax, targetProp, isY)
     l = get(ax, targetProp);
     l = cell2mat(l);
     lMax = [min(l, [], "all") max(l, [], "all")];
-    hasLine = false;
-    if isY
-        lInc = lMax(:, 2)-l(:, 2);
-        for ii = 1:numel(ax)
-            if isa(ax, "matlab.graphics.axis.Axes")
-                h = findobj(ax(ii), Tag="sigline");
-            else
-                h = findobj(ax(ii).Parent, Tag="sigline");
-            end
-            for jj = 1:numel(h)
-                h(jj).YData = h(jj).YData+lInc(ii);
-                hasLine = true;
-            end
-        end
-    end
-    if hasLine
-        lMax(:, 2) = lMax(:, 2)+(lMax(:, 2)-lMax(:, 1))*0.05; % add some padding if there are sig lines
-    end
+    % hasLine = false;
+    % if isY
+    %     lInc = lMax(:, 2)-l(:, 2);
+    %     for ii = 1:numel(ax)
+    %         if isa(ax, "matlab.graphics.axis.Axes")
+    %             h = findobj(ax(ii), Tag="sigline");
+    %         else
+    %             h = findobj(ax(ii).Parent, Tag="sigline");
+    %         end
+    %         for jj = 1:numel(h)
+    %             h(jj).YData = h(jj).YData+lInc(ii);
+    %             hasLine = true;
+    %         end
+    %     end
+    % end
+    % if hasLine
+    %     lMax(:, 2) = lMax(:, 2)+(lMax(:, 2)-lMax(:, 1))*0.05; % add some padding if there are sig lines
+    % end
     set(ax, targetProp, lMax);
 end

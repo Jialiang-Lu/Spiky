@@ -7,7 +7,7 @@ arguments
     options.Theme string {mustBeMember(options.Theme, ["auto" "both" "dark" "light"])} = "auto"
     options.Save string = string.empty
     options.ContentType string = "image"
-    options.Resolution double = 200
+    options.Resolution double = 400
     options.Append logical = false
     options.BackgroudColor = "current"
 end
@@ -77,6 +77,9 @@ if ~isempty(options.Save)
         options.Theme = ["dark" "light"];
     end
     [fdir, fn, fext] = fileparts(options.Save);
+    if ~exist(fdir, "dir")
+        mkdir(fdir)
+    end
     for ii = 1:length(options.Theme)
         if length(options.Theme)>1
             fpth = fullfile(fdir, sprintf("%s_%s%s", fn, options.Theme(ii), fext));

@@ -35,6 +35,12 @@ classdef Array < spiky.core.ArrayBase
                 idcRow
                 idcCol
             end
+            if isstring(idcRow) && isequal(idcRow, ":")
+                idcRow = ':';
+            end
+            if isstring(idcCol) && isequal(idcCol, ":")
+                idcCol = ':';
+            end
             assert(istable(obj.Data), "Data must be a table to use sel method.");
             obj = subsref(obj, substruct("()", {idcRow, ':'}));
             obj.Data = obj.Data(:, idcCol);

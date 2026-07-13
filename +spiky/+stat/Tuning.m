@@ -1,4 +1,4 @@
-classdef Tuning < spiky.core.Array & spiky.core.Spikes
+classdef Tuning < spiky.stat.NeuronStat
     %TUNING 1D continuous tuning curve
     %   First dimension: bins
     %   Second dimension: neurons
@@ -7,9 +7,7 @@ classdef Tuning < spiky.core.Array & spiky.core.Spikes
     properties
         BinEdges (:, 1) double
         Occupancy double
-        Conditions (:, 1)
         Fr (:, 1) double
-        P double
     end
 
     properties (Dependent)
@@ -30,7 +28,7 @@ classdef Tuning < spiky.core.Array & spiky.core.Spikes
             arguments (Output)
                 dimLabelNames (:, 1) cell
             end
-            dimLabelNames = {"BinEdges"; ["Neuron"; "Fr"; "P"]; "Conditions"};
+            dimLabelNames = {"BinEdges"; ["Neuron"; "Fr"; "P"; "Stats"]; "Conditions"};
         end
 
         function dataNames = getDataNames()
@@ -67,6 +65,8 @@ classdef Tuning < spiky.core.Array & spiky.core.Spikes
             obj.Conditions = options.Conditions;
             obj.Fr = options.Fr;
             obj.P = options.P;
+            obj.Type = "Tuning";
+            obj.Stats = table(Size=[length(options.Neuron) 0]);
         end
 
         function nBins = get.NBins(obj)

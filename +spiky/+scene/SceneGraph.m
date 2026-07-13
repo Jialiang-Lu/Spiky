@@ -184,10 +184,14 @@ classdef SceneGraph < spiky.core.IntervalsTable
             tt.Data(ismissing(tt.Data)) = "Idle";
         end
 
-        function obj = getActions(obj)
+        function obj = getActions(obj, options)
             %GETACTIONS Get the actions (direct and indirect verbs) in the scene graph
-            %   obj = getActions(obj)
-            idc = obj.IsVerb & ~ismember(obj.Data.Predicate.Name, ["Idle" "Walk"]);
+            %   obj = getActions(obj, ...)
+            arguments
+                obj spiky.scene.SceneGraph
+                options.Exclude string = ["Idle" "Walk"]
+            end
+            idc = obj.IsVerb & ~ismember(obj.Data.Predicate.Name, options.Exclude);
             obj.Data = obj.Data(idc, :);
             obj.Time = obj.Time(idc, :);
             obj.Data.SubjectLeft = obj.Data.Subject.Pos(:, 1)<obj.Data.Object.Pos(:, 1);

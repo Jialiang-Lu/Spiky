@@ -217,22 +217,28 @@ classdef Events < spiky.core.ArrayBase
             elseif ~isnumeric(intervals) || size(intervals, 2)~=2
                 error("Intervals must be spiky.core.Intervals or Nx2 numeric array.");
             end
+            n = height(intervals);
             if options.Sorted
                 % Use faster method for sorted events
                 [idcStart, counts] = spiky.mex.findInIntervals(ts, intervals, options.RightClose);
-                n = sum(counts);
-                idc = zeros(n, 1);
-                idcIntervals = zeros(n, 1);
-                acc = 0;
-                for ii = 1:size(intervals, 1)
-                    count = counts(ii);
-                    if count==0
-                        continue
-                    end
-                    idc(acc+1:acc+count) = idcStart(ii):idcStart(ii)+count-1;
-                    idcIntervals(acc+1:acc+count) = ii;
-                    acc = acc+count;
+                if sum(counts)>0
+                    idcIntervals = repelem((1:n)', counts);
+                    acc = repelem(cumsum([0; counts(1:end-1)]), counts);
+                    idc = (0:sum(counts)-1)'-acc+repelem(idcStart, counts);
+                else
+                    idc = [];
+                    idcIntervals = [];
                 end
+                % acc = 0;
+                % for ii = 1:size(intervals, 1)
+                %     count = counts(ii);
+                %     if count==0
+                %         continue
+                %     end
+                %     idc(acc+1:acc+count) = idcStart(ii):idcStart(ii)+count-1;
+                %     idcIntervals(acc+1:acc+count) = ii;
+                %     acc = acc+count;
+                % end
             else
                 % Unsorted events, use slower method
                 if options.RightClose

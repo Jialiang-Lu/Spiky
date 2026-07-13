@@ -139,8 +139,16 @@ classdef Intervals < spiky.core.ArrayBase
             start = obj.Time(:, 1);
         end
 
+        function obj = set.Start(obj, start)
+            obj.Time(:, 1) = start;
+        end
+
         function ed = get.End(obj)
             ed = obj.Time(:, 2);
+        end
+
+        function obj = set.End(obj, ed)
+            obj.Time(:, 2) = ed;
         end
 
         function dur = get.Duration(obj)

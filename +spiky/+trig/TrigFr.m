@@ -288,7 +288,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 fr double = double.empty(0, 0, 0)
                 events (:, 1) = NaN(width(fr), 1)
                 window double {mustBeVector} = [0, 1]
-                neuron spiky.core.Neuron = spiky.core.Neuron
+                neuron spiky.core.Neuron = spiky.core.Neuron.zeros(size(fr, 3))
                 samples (:, 1) = NaN(size(fr, 4), 1)
             end
             obj.Start_ = start;
@@ -342,7 +342,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 labels (:, 1) = categorical(strings(obj.NEvents, 1))
             end
 
-            data = permute(obj.Data, [2 1 3 4]);
+            data = permute(obj.Data, [2 1 3 4]); % nEvents x nT x nNeurons x nSamples
             % [m1, cats] = groupsummary(data, cats, @mean);
             isMissing = ismissing(labels);
             if any(isMissing)
@@ -419,7 +419,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             d1 = (m(:, idcPairs(:, 2), :, :)-m(:, idcPairs(:, 1), :, :))./sdPool;
             d = obj;
             d.Data = d1;
-            d.Events = compose("%s \x21d2 %s", cats(idcPairs(:, 1)), cats(idcPairs(:, 2)));
+            d.Events = compose("%s ⇒ %s", cats(idcPairs(:, 1)), cats(idcPairs(:, 2)));
         end
 
         function [groupedFr, groupedFrTest] = group(obj, options)
@@ -502,18 +502,34 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             end
         end
 
-        function obj = flatten(obj)
+        function obj = flatten(obj, dim)
             %FLATTEN Flatten the triggered firing rate object to 1D
             %   obj = flatten(obj)
             %
             %   obj: flattened triggered firing rate object
+            %   dim: dimension along which to flatten
 
-            data = reshape(obj.Data, height(obj.Data)*width(obj.Data), 1, ...
-                size(obj.Data, 3), size(obj.Data, 4));
-            t = reshape(obj.Time(:)+obj.Events(:)', [], 1);
-            obj.Time = t;
-            obj.Data = data;
-            obj.Events = 0;
+            arguments
+                obj spiky.trig.TrigFr
+                dim (1, 1) double {mustBeMember(dim, 1:2)} = 1
+            end
+
+            events = obj.Events;
+            if isa(events, "spiky.core.Events")
+                events = events.Time;
+            end
+            t = reshape(obj.Time(:)+events', [], 1);
+            if dim==1
+                obj.Time = t;
+                obj.Data = reshape(obj.Data, height(obj.Data)*width(obj.Data), 1, ...
+                    size(obj.Data, 3), size(obj.Data, 4));
+                obj.Events = 0;
+            else
+                obj.Time = 0;
+                obj.Data = reshape(obj.Data, 1, height(obj.Data)*width(obj.Data), ...
+                    size(obj.Data, 3), size(obj.Data, 4));
+                obj.Events = t;
+            end
         end
 
         function [h, hError] = plotFr(obj, cats, lineSpec, plotOps, options)
@@ -573,7 +589,8 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             [m, names] = groupsummary(data, cats, @(x) mean(x, "omitmissing"));
             if options.FaceAlpha>0
                 [se, ~] = groupsummary(data, cats, @(x) std(x, "omitmissing"));
-                se = se./sqrt(groupcounts(cats));
+                nValid = groupsummary(data, cats, @(x) sum(~isnan(x)));
+                se = se./sqrt(nValid);
             end
             if isempty(m)
                 error("No data to plot")
@@ -865,6 +882,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             end
             xticks([]);
             yticks([]);
+            zticks([]);
             hold(options.Parent, "off");
             if nargout>0
                 h = h1;
@@ -953,7 +971,22 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             end
         end
 
-        function eta = varExplained(obj, cats, options)
+        % function ve = varExplained(obj, labels)
+        %     %VAREXPLAINED Get variance explained by the group means for each category
+        %     arguments
+        %         obj spiky.trig.TrigFr
+        %         labels (:, 1) = categorical(strings(obj.NEvents, 1))
+        %     end
+        %     m = obj.getGroupMean(labels); % nT x nCats x nNeurons x nSamples
+        %     c = groupcounts(labels)'; % 1 x nCats
+        %     ssTotal = sum(obj.Data.^2, 3, "omitmissing"); % nT x 1 x nNeurons x nSamples
+        %     ssExplained = sum(m.Data.^2.*c, 3, "omitmissing"); % nT x 1 x nNeurons x nSamples
+        %     ve = obj;
+        %     ve.Data = ssExplained./ssTotal; % nT x 1 x nNeurons x nSamples
+        %     ve.Events = NaN;
+        % end
+
+        function [eta, f] = varExplained(obj, cats, options)
             %VAREXPLAINED Calculate variance explained by the categories
             %   eta = varExplained(obj, cats, ...)
             %
@@ -969,16 +1002,21 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             arguments
                 obj spiky.trig.TrigFr
                 cats (:, 1) categorical
-                options.Type string {mustBeMember(options.Type, ["trace", "max", "pillai" "wilks"])} = "trace"
+                options.Type string {mustBeMember(options.Type, ["trace" "max" "pillai" "wilks" "neuron"])} = "trace"
                 options.Ridge double = []
                 options.RidgeFraction double = 0
                 options.IdcEvents = []
                 options.SubSet = []
                 options.Balance string {mustBeMember(options.Balance, ["none", "min", "max"])} = "none"
+                options.CalcP logical = false
             end
             %% Preprocess data
             tStart = obj.Time(1);
-            tStep = obj.Time(2)-obj.Time(1);
+            if height(obj)==1
+                tStep = 1;
+            else
+                tStep = obj.Time(2)-obj.Time(1);
+            end
             idcEvents = options.IdcEvents;
             if islogical(idcEvents)
                 idcEvents = find(idcEvents);
@@ -998,6 +1036,25 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             if options.Balance~="none"
                 [cats, idcBalance] = spiky.utils.balance(cats, Count=options.Balance);
                 obj = subsref(obj, substruct("()", {':', idcBalance, ':'}));
+            end
+            if options.Type=="neuron"
+                m = obj.getGroupMean(cats); % nT x nCats x nNeurons x nSamples
+                c = groupcounts(cats)'; % 1 x nCats
+                ssTotal = sum(obj.Data.^2, [1 2], "omitmissing"); % 1 x 1 x nNeurons x nSamples
+                ssExplained = sum(m.Data.^2.*c, [1 2], "omitmissing"); % 1 x 1 x nNeurons x nSamples
+                ve = shiftdim(ssExplained./ssTotal, 2); % nNeurons x nSamples
+                eta = spiky.stat.NeuronStat(obj.Neuron, ve, Type="varExplained");
+                if nargout>1 || options.CalcP % Calculate F-statistic for each neuron
+                    nGroups = numel(c);
+                    dff = nGroups-1; % degrees of freedom for the between-group variance
+                    dfe = width(obj)-nGroups; % degrees of freedom for the error variance
+                    msExplained = ssExplained./dff; % mean square explained
+                    msError = (ssTotal-ssExplained)./dfe; % mean square error
+                    f = shiftdim(msExplained./msError, 2); % nNeurons x nSamples
+                    f = spiky.stat.NeuronStat(obj.Neuron, f, Type="fStat");
+                    eta.P = 1-fcdf(f.Data, dff, dfe); % p-value from F-statistic
+                end
+                return
             end
             nT = height(obj);
             nTrials = width(obj);
@@ -1101,9 +1158,18 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
         end
 
         function tuning = tuning(obj, pos, binEdges)
+            %TUNING Calculate tuning curve of the firing rate
+            %   tuning = tuning(obj, pos, binEdges1, binEdges2, ...)
+            %
+            %   obj: triggered firing rate object
+            %   pos: position of the events, nEvents x nDims
+            %   binEdges1, binEdges2, ...: bin edges for each dimension
+
             arguments
                 obj spiky.trig.TrigFr
                 pos double
+            end
+            arguments (Repeating)
                 binEdges double
             end
 
@@ -1111,13 +1177,13 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 error("The number of positions must be the same as the number of events")
             end
             nDims = width(pos);
-            if width(binEdges)~=nDims
+            if length(binEdges)~=nDims
                 error("The number of bin edges must be the same as the number of dimensions")
             end
             if nDims==1
-                tuning = spiky.stat.Tuning(obj(1, :, :), pos, binEdges);
+                tuning = spiky.stat.Tuning(obj(1, :, :), pos, binEdges{1});
             elseif nDims==2
-                tuning = spiky.stat.Tuning2(obj(1, :, :), pos, binEdges(:, 1), binEdges(:, 2));
+                tuning = spiky.stat.Tuning2(obj(1, :, :), pos, binEdges{1}, binEdges{2});
             else
                 error("Only 1D and 2D tuning curves are supported")
             end
@@ -1474,6 +1540,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             %       KFold: number of folds for cross-validation, default is 5
             %       Holdout: fraction of data to hold out for testing, default is 0.2, 
             %           if equal to 1/KFold, it will use KFold cross-validation
+            %       IdcTrain: logical indices of events allowed to be used for training, default is all events
             %       GroupingVariables: observations with the same combination of group labels are in the same fold.
             %       Shuffle: whether to shuffle the labels before training, default is false
             %       RidgeFraction: fraction of total variance to use as ridge regularization for 
@@ -1481,17 +1548,20 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             %       Coding: coding scheme for "svm" decoder, can be "onevsall" or "onevsone", default is "onevsall"
             %       Distribution: distribution for "lasso" decoder, can be "normal", "binomial", "poisson", 
             %           "gamma", or "inverse gaussian", default is "normal"
+            %       ModelSpec: model specification for "glm" decoder, default is "linear"
             %       Labmda: regularization parameter for "lasso" decoder, default is 1e-6
             %       FitPosterior: whether to fit posterior probabilities for "svm" decoder, default is false
             arguments
                 obj spiky.trig.TrigFr
                 name (1, 1) categorical
                 labels % nTrials x 1 categorical or spiky.stat.Labels
-                options.Type (1, 1) string {mustBeMember(options.Type, ["mean", "svm", "subspaces", "lasso"])} = "mean"
+                options.Type (1, 1) string {mustBeMember(options.Type, ...
+                    ["mean", "svm", "subspaces", "lasso", "glm"])} = "mean"
                 options.IdcEvents = []
                 options.SubSet = []
                 options.KFold (1, 1) double = 5
                 options.Holdout (1, 1) double = 0.2
+                options.IdcTrain logical = []
                 options.GroupingVariables = []
                 options.NDims double = []
                 options.ExtraBalanceLabels (:, 1) categorical = categorical.empty
@@ -1501,8 +1571,10 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 options.FitPosterior logical = false
                 options.Distribution string {mustBeMember(options.Distribution, ...
                     ["normal", "binomial", "poisson", "gamma", "inverse gaussian"])} = "normal"
+                options.ModelSpec = "linear"
                 options.Lambda double = 1e-6
                 options.Reseed logical = false
+                options.BuildTestModels logical = false
             end
             if ~options.Reseed
                 rng(0); % for reproducibility
@@ -1548,38 +1620,43 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             end
             nT = height(obj);
             nEvents = width(obj);
-            if iscategorical(labels) || isnumeric(labels) || islogical(lables)
+            if iscategorical(labels) || isnumeric(labels) || islogical(labels)
                 labels = categorical(labels);
                 labels = removecats(labels);
                 cats = categories(labels, OutputType="categorical");
                 nCats = numel(cats);
                 labels1 = labels;
             elseif isa(labels, "spiky.stat.Labels")
-                cats = categorical(labels.VarName);
-                nCats = numel(cats);
-                labels1 = spiky.utils.flagsdecode(labels.Data, labels.Class);
-                labels = double(labels.Data);
+                if options.Type=="lasso"
+                    cats = categorical(labels.VarName);
+                    nCats = numel(cats);
+                    labels1 = spiky.utils.flagsdecode(labels.Data, labels.Class);
+                    labels = double(labels.Data);
+                else
+                    cats = labels.Class;
+                    nCats = numel(cats);
+                    labels1 = labels{:, 1};
+                    for ii = 2:width(labels.Data)
+                        labels1 = labels1.*labels{:, ii};
+                    end
+                end
             else
                 error("Labels must be categorical or spiky.stat.Labels")
             end
-            if options.KFold==1 || options.Holdout==0
-                testIdc = false(1, nEvents);
-            elseif options.Holdout==1/options.KFold
-                cv = cvpartition(labels1, KFold=options.KFold, ...
-                    GroupingVariables=options.GroupingVariables);
-                testIdc = cv.test("all")';
+            if isempty(options.IdcTrain)
+                testIdc = partition(labels1, options);
             else
-                if isempty(options.GroupingVariables)
-                    cv = cvpartition(labels1, Holdout=options.Holdout);
-                else
-                    cv = cvpartition(numel(labels1), KFold=round(1/options.Holdout), ...
-                        GroupingVariables=options.GroupingVariables);
+                options1 = options;
+                if ~isempty(options.GroupingVariables)
+                    options1.GroupingVariables = options.GroupingVariables(options.IdcTrain, :);
                 end
-                testIdc = false(options.KFold, nEvents);
-                for ii = 1:options.KFold
-                    testIdc(ii, :) = cv.test(1)';
-                    cv = repartition(cv);
-                end
+                idc1 = partition(labels1(options.IdcTrain), options1);
+                idc1(idc1>0) = 0; % remove test labels from training set
+                % idc2 = partition(labels1(~options.IdcTrain), options);
+                % idc2(idc2<0) = 0; % remove training labels from test set
+                testIdc = zeros(height(idc1), numel(labels1), "int8");
+                testIdc(:, options.IdcTrain) = idc1;
+                testIdc(:, ~options.IdcTrain) = 1; % all non-training events are test events
             end
             nPartitions = height(testIdc);
             groupTime = options.Type~="subspaces";
@@ -1590,93 +1667,148 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             whiten = cell(nT, nGroups);
             weights = cell(size(mdls));
             t = obj.Time;
-            n = numel(data);
-            optionsFit = statset(UseParallel=true);
-            pb = spiky.plot.ProgressBar(n*nPartitions, "Building "+options.Type+" decoders "+string(name));
-            for ii = 1:n
-                % [idxT, idxG] = ind2sub([nT, nGroups], ii);
-                XAll = data{ii}; % nNeurons x nTrialsAll
-                mdls1 = cell(nPartitions, 1);
-                whiten1 = cell(nPartitions, 1);
-                parfor jj = 1:nPartitions
-                    idcP = ~testIdc(jj, :) & ~isnan(XAll(1, :));
-                    X = XAll(:, idcP, :); % nNeurons x nTrials
-                    y = labels(idcP, :); % nTrials x 1
-                    nNeurons = height(X);
-                    if ~isempty(extraLabels)
-                        y2 = extraLabels(idcP);
-                        [~, idcBal] = spiky.utils.balance(y.*y2, Count="max");
-                        X = X(:, idcBal, :);
-                        y = y(idcBal, :);
+            [mdls, whiten] = fitDecoder(name, data, labels, testIdc, extraLabels, options);
+            if options.BuildTestModels
+                mdlsTest = fitDecoder(name, data, labels, -testIdc, extraLabels, options);
+            else
+                mdlsTest = cell(size(mdls));
+            end
+            if isa(mdls{1}, "spiky.stat.Coords")
+                mdls = spiky.stat.Subspaces(obj.Time, mdls, groupedFr.Groups, groupedFr.GroupIndices, ...
+                    {testIdc}, name, whiten, Type=options.Type, X=data, Y={labels}, DataTest=mdlsTest);
+            else
+                mdls = spiky.stat.Decoder(obj.Time, mdls, data, {labels}, ...
+                    groupedFr.Groups, groupedFr.GroupIndices, ...
+                    {testIdc}, name, whiten, Type=options.Type, DataTest=mdlsTest);
+            end
+
+            function idc = partition(l, ops)
+                if ~isempty(ops.GroupingVariables)
+                    ops.GroupingVariables = removecats(ops.GroupingVariables);
+                end
+                if ops.KFold==1 || ops.Holdout==0
+                    idc = false(size(l));
+                elseif ops.Holdout==1/ops.KFold
+                    cv = cvpartition(l, KFold=ops.KFold, ...
+                        GroupingVariables=ops.GroupingVariables);
+                    idc = cv.test("all")';
+                else
+                    if isempty(ops.GroupingVariables)
+                        cv = cvpartition(l, Holdout=ops.Holdout);
+                    else
+                        cv = cvpartition(numel(l), KFold=round(1/ops.Holdout), ...
+                            GroupingVariables=ops.GroupingVariables);
                     end
-                    nTrials = width(X);
-                    if options.Shuffle
-                        y = y(randperm(height(y)), :);
+                    idc = false(ops.KFold, numel(l));
+                    for ii = 1:ops.KFold
+                        idc(ii, :) = cv.test(1)';
+                        cv = repartition(cv);
                     end
-                    switch options.Type
-                        case "mean"
-                            mu = mean(X, 2); % nNeurons x 1 overall mean
-                            Xc = X-mu; % nNeurons x nTrials centered data
-                            [m, ~, counts] = groupsummary(Xc', y, "mean");
-                            m = m'; % nNeurons x nCats mean response for each category
-                            mdls1{jj} = spiky.stat.Coords(mu, m, mu, cats, counts);
-                            [~, idc] = ismember(y, cats);
-                            res = Xc-m(:, idc); % nNeurons x nTrials residuals
-                            w = res*res'/(nTrials-nCats); % nNeurons x nNeurons covariance of residuals
-                            w = w + options.RidgeFraction*trace(w)/size(w, 1)*eye(size(w)); 
-                                % add ridge regularization
-                            whiten1{jj} = chol(w, "lower"); % nNeurons x nNeurons whitening matrix
-                        case "svm"
-                            if ~isempty(options.NDims)
+                end
+                idc = int8(idc)*2-1; % convert to -1 for training, 1 for testing
+            end
+
+            function [mdls, whiten] = fitDecoder(name, data, labels, testIdc, extraLabels, options)
+                [nT, nGroups] = size(data);
+                nPartitions = height(testIdc);
+                n = numel(data);
+                optionsFit = statset(UseParallel=true);
+                pb = spiky.plot.ProgressBar(n*nPartitions, "Building "+options.Type+" decoders "+string(name));
+                for ii = 1:n
+                    % [idxT, idxG] = ind2sub([nT, nGroups], ii);
+                    XAll = data{ii}; % nNeurons x nTrialsAll
+                    mdls1 = cell(nPartitions, 1);
+                    whiten1 = cell(nPartitions, 1);
+                    parfor jj = 1:nPartitions
+                        idcP = testIdc(jj, :)==-1 & ~isnan(XAll(1, :));
+                        idcPTest = testIdc(jj, :)==1 & ~isnan(XAll(1, :));
+                        X = XAll(:, idcP, :); % nNeurons x nTrials
+                        y = labels(idcP, :); % nTrials x 1
+                        nNeurons = height(X);
+                        if ~isempty(extraLabels)
+                            y2 = extraLabels(idcP);
+                            [~, idcBal] = spiky.utils.balance(y.*y2, Count="min");
+                            X = X(:, idcBal, :);
+                            y = y(idcBal, :);
+                        end
+                        nTrials = width(X);
+                        if options.Shuffle
+                            y = y(randperm(height(y)), :);
+                        end
+                        switch options.Type
+                            case "mean"
                                 mu = mean(X, 2); % nNeurons x 1 overall mean
                                 Xc = X-mu; % nNeurons x nTrials centered data
                                 [m, ~, counts] = groupsummary(Xc', y, "mean");
-                                [~, idc] = ismember(y, cats);
                                 m = m'; % nNeurons x nCats mean response for each category
-                                R = Xc-m(:, idc); % nNeurons x nTrials residuals
-                                Sw = R*R'; % nNeurons x nNeurons within-class covariance
-                                mW = m./sqrt(counts'); % nNeurons x nCats mean response weighted by class counts
-                                Sb = mW*mW'; % nNeurons x nNeurons between-class covariance
-                                alpha = 0.1*trace(Sw)/size(Sw, 1); % regularization parameter
-                                [V, D] = eig(Sb, Sw+alpha*eye(size(Sw)), "vector"); % generalized eigenvalue decomposition
-                                [~, order] = sort(diag(D), "descend");
-                                nDims = min(options.NDims, numel(cats)-1);
-                                V = V(:, order(1:nDims)); % nNeurons x nDims projection matrix
-                                W = spiky.stat.Coords(mu, V);
-                                whiten1{jj} = W; % store the projection
-                                X = W.project(X, Individual=true); % nDims x nTrials project the data to the low-dimensional space
-                            end
-                            mdls1{jj} = fitcecoc(X, y, Learner="svm", ObservationsIn="columns", ...
-                                Coding=options.Coding, ...
-                                FitPosterior=options.FitPosterior, Options=optionsFit, ...
-                                Prior="uniform", ClassNames=cats).compact();
-                        case "subspaces"
-                            % fr1 = spiky.trig.TrigFr(t(1), t(2)-t(1), permute(X, [3 2 1]));
-                            % mdl = fr1.dpca(y)
-                        case "lasso"
-                            beta = zeros(nNeurons, nCats);
-                            beta0 = zeros(nNeurons, 1);
-                            for kk = 1:nNeurons
-                                [b, fitInfo] = lassoglm(y, X(kk, :)', options.Distribution, ...
-                                    Lambda=options.Lambda, Standardize=false);
-                                beta(kk, :) = b;
-                                beta0(kk) = fitInfo.Intercept;
-                            end
-                            mdls1{jj} = spiky.stat.Coords(beta0, beta, mean(X, 2), cats);
-                            % store the mean response in the DimNames
-                        otherwise
-                            error("Unsupported decoder type: "+options.Type)
+                                mdls1{jj} = spiky.stat.Coords(mu, m, mu, cats, counts);
+                                [~, idc] = ismember(y, cats);
+                                res = Xc-m(:, idc); % nNeurons x nTrials residuals
+                                w = res*res'/(nTrials-nCats); % nNeurons x nNeurons covariance of residuals
+                                w = w + options.RidgeFraction*trace(w)/size(w, 1)*eye(size(w)); 
+                                    % add ridge regularization
+                                whiten1{jj} = chol(w, "lower"); % nNeurons x nNeurons whitening matrix
+                            case "svm"
+                                if ~isempty(options.NDims)
+                                    mu = mean(X, 2); % nNeurons x 1 overall mean
+                                    Xc = X-mu; % nNeurons x nTrials centered data
+                                    [m, ~, counts] = groupsummary(Xc', y, "mean");
+                                    [~, idc] = ismember(y, cats);
+                                    m = m'; % nNeurons x nCats mean response for each category
+                                    R = Xc-m(:, idc); % nNeurons x nTrials residuals
+                                    Sw = R*R'; % nNeurons x nNeurons within-class covariance
+                                    mW = m./sqrt(counts'); % nNeurons x nCats mean response weighted by class counts
+                                    Sb = mW*mW'; % nNeurons x nNeurons between-class covariance
+                                    alpha = 0.1*trace(Sw)/size(Sw, 1); % regularization parameter
+                                    [V, D] = eig(Sb, Sw+alpha*eye(size(Sw)), "vector"); % generalized eigenvalue decomposition
+                                    [~, order] = sort(diag(D), "descend");
+                                    nDims = min(options.NDims, numel(cats)-1);
+                                    V = V(:, order(1:nDims)); % nNeurons x nDims projection matrix
+                                    W = spiky.stat.Coords(mu, V);
+                                    whiten1{jj} = W; % store the projection
+                                    X = W.project(X, Individual=true); % nDims x nTrials project the data to the low-dimensional space
+                                end
+                                mdls1{jj} = fitcecoc(X, y, Learner="svm", ObservationsIn="columns", ...
+                                    Coding=options.Coding, ...
+                                    FitPosterior=options.FitPosterior, Options=optionsFit, ...
+                                    Prior="uniform", ClassNames=cats).compact();
+                            case "subspaces"
+                                if numel(t)>1
+                                    step = t(2)-t(1);
+                                else
+                                    step = 0;
+                                end
+                                fr1 = spiky.trig.TrigFr(t(1), step, permute(X, [3 2 1]));
+                                mdl = fr1.dpca(table(y, VariableNames=string(name)));
+                                mdls1{jj} = mdl{1};
+                            case "lasso"
+                                beta = zeros(nNeurons, nCats);
+                                beta0 = zeros(nNeurons, 1);
+                                for kk = 1:nNeurons
+                                    [b, fitInfo] = lassoglm(y, X(kk, :)', options.Distribution, ...
+                                        Lambda=options.Lambda, Standardize=false);
+                                    beta(kk, :) = b;
+                                    beta0(kk) = fitInfo.Intercept;
+                                end
+                                mdls1{jj} = spiky.stat.Coords(beta0, beta, mean(X, 2), cats);
+                                % store the mean response in the DimNames
+                            case "glm"
+                                mdls1{jj} = cell(nNeurons, 1);
+                                for kk = 1:nNeurons
+                                    mdls1{jj}{kk} = fitglm(y.Data, X(kk, :)', options.ModelSpec, ...
+                                        Distribution=options.Distribution);
+                                end
+                            otherwise
+                                error("Unsupported decoder type: "+options.Type)
+                        end
+                        pb.step
                     end
-                    pb.step
+                    mdls{ii} = mdls1;
+                    whiten{ii} = whiten1;
                 end
-                mdls{ii} = mdls1;
-                whiten{ii} = whiten1;
+                mdls = permute(reshape(vertcat(mdls{:}), nPartitions, nT, nGroups), [2 3 1]);
+                whiten = permute(reshape(vertcat(whiten{:}), nPartitions, nT, nGroups), [2 3 1]);
             end
-            mdls = permute(reshape(vertcat(mdls{:}), nPartitions, nT, nGroups), [2 3 1]);
-            whiten = permute(reshape(vertcat(whiten{:}), nPartitions, nT, nGroups), [2 3 1]);
-            mdls = spiky.stat.Decoder(obj.Time, mdls, data, {labels}, ...
-                groupedFr.Groups, groupedFr.GroupIndices, ...
-                {testIdc}, name, whiten, Type=options.Type);
         end
 
         function mdls = fitcecoc(obj, labels, options)
@@ -2609,7 +2741,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             end
 
             %% Group by brain region (neurons)
-            [groupNames, ~, idcGroups] = unique(obj.Neuron.Region);
+            [groupNames, ~, idcGroups] = unique(obj.Neuron.Data.Region);
             groupIndices = full(sparse(idcGroups, 1:height(idcGroups), true));
             nGroups = numel(groupNames);
 
