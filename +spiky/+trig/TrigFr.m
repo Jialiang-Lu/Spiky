@@ -534,7 +534,6 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
 
         function [h, hError] = plotFr(obj, cats, lineSpec, plotOps, options)
             %PLOTFR Plot firing rate
-            % 
             %   h = plotFr(obj, cats, lineSpec, ...)
             %
             %   obj: triggered firing rate object
@@ -561,10 +560,13 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 options.Grouping string {mustBeMember(options.Grouping, ["Cats", "Events", "Neurons"])} = "Cats"
                 options.IdcEvents = []
                 options.SubSet = unique(cats)
+                options.Region categorical = unique(obj.Neuron.Region)
                 options.FaceAlpha double = 0
                 options.Parent matlab.graphics.axis.Axes = gca
             end
 
+            idcRegion = find(ismember(obj.Neuron.Region, options.Region));
+            obj = subsref(obj, substruct("()", {':', ':', idcRegion}));
             n = obj.NEvents;
             if ~isempty(options.IdcEvents)
                 obj = subsref(obj, substruct("()", {':', options.IdcEvents, ':', ':'}));
@@ -627,7 +629,24 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             end
         end
 
-        function [h, hMean] = plotFr3(obj, cats, lineSpec, plotOps, options)
+        function [h, hMean, hEnd] = plotFr3(obj, cats, lineSpec, plotOps, options)
+            %PLOTFR3 Plot firing rate trajectory in 3D
+            %   [h, hMean] = plotFr3(obj, cats, lineSpec, ...)
+            %
+            %   obj: TrigFr object
+            %   cats: Categories for grouping
+            %   lineSpec: Line specification
+            %   Name-value arguments:
+            %       PlotMean: Whether to plot the mean
+            %       MeanOnly: Whether to plot only the mean
+            %       IdcNeurons: Indices of neurons to include
+            %       IdcEvents: Indices of events to include
+            %       SubSet: Subset of categories to include
+            %       Subsample: Subsample parameters [nEventsInSub nSub], where the first number is 
+            %           the number of events in each subsample and the second number is the number 
+            %           of subsamples.
+            %       Region: Regions to include
+            %       Parent: Parent axes
 
             arguments
                 obj spiky.trig.TrigFr
@@ -636,6 +655,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 plotOps.?matlab.graphics.chart.primitive.Line
                 options.PlotMean logical = true
                 options.MeanOnly logical = false
+                options.TimeRange double = [-Inf Inf]
                 options.IdcNeurons double = [1 2]
                 options.IdcEvents = []
                 options.SubSet = categorical.empty
@@ -644,6 +664,8 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 options.Parent matlab.graphics.axis.Axes = gca
             end
             assert(size(obj.Data, 4)==1, "Data with more than 3 dimensions is not supported")
+            idcT = obj.Time>= options.TimeRange(1) & obj.Time<= options.TimeRange(2);
+            obj = subsref(obj, substruct("()", {idcT, ':', ':'}));
             t = obj.Time;
             idcRegion = find(ismember(obj.Neuron.Region, options.Region));
             idcRegion = idcRegion(options.IdcNeurons);
@@ -676,12 +698,11 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 plotOps.LineWidth = 0.5;
             end
             plotOps1 = plotOps;
+            np = options.Parent.NextPlot;
             if ~options.MeanOnly
                 for ii = 1:nCats
                     if ii>1
                         hold(options.Parent, "on");
-                    else
-                        hold(options.Parent, "off");
                     end
                     data1 = data(idcGroups==ii, :, :);
                     if ~isempty(options.Subsample)
@@ -701,11 +722,17 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             h2 = gobjects(nCats, 1);
             if options.PlotMean || options.MeanOnly
                 plotOps.LineWidth = plotOps.LineWidth*8;
+                hold(options.Parent, "on");
                 for ii = 1:nCats
                     plotOps.Color = c(ii, :);
                     plotArgs = namedargs2cell(plotOps);
                     h2(ii) = plot3(options.Parent, m(ii, :, 1), m(ii, :, 2), t', lineSpec, plotArgs{:});
                 end
+                h3 = gobjects(nCats, 2);
+                h3(:, 1) = scatter3(options.Parent, m(:, 1, 1), m(:, 1, 2), t(1), ...
+                    plotOps.LineWidth*20, c, MarkerFaceColor=options.Parent.Color)';
+                h3(:, 2) = scatter3(options.Parent, m(:, end, 1), m(:, end, 2), t(end), ...
+                    plotOps.LineWidth*20, c, MarkerFaceColor="flat");
             end
             if nCats>1
                 if options.PlotMean || options.MeanOnly
@@ -717,11 +744,15 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             xticks([])
             yticks([])
             zlabel("Time (s)");
+            options.Parent.NextPlot = np;
             if nargout>0
                 h = h1;
             end
             if nargout>1
                 hMean = h2;
+            end
+            if nargout>2
+                hEnd = h3;
             end
         end
 

@@ -222,9 +222,9 @@ classdef Events < spiky.core.ArrayBase
                 % Use faster method for sorted events
                 [idcStart, counts] = spiky.mex.findInIntervals(ts, intervals, options.RightClose);
                 if sum(counts)>0
-                    idcIntervals = repelem((1:n)', counts);
-                    acc = repelem(cumsum([0; counts(1:end-1)]), counts);
-                    idc = (0:sum(counts)-1)'-acc+repelem(idcStart, counts);
+                    idcIntervals = repelem((1:n)', counts, 1);
+                    acc = repelem(cumsum([0; counts(1:end-1)]), counts, 1);
+                    idc = (0:sum(counts)-1)'-acc+repelem(idcStart, counts, 1);
                 else
                     idc = [];
                     idcIntervals = [];

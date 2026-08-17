@@ -9,12 +9,12 @@ classdef SceneGraph < spiky.core.IntervalsTable
     %       Predicate: SceneNode representing the predicate
     %       Object: SceneNode representing the object
     %       DirectObject: SceneNode representing the direct object
+    %       NActors: number of actors at the same time
 
     properties
         Entities table % Table of entities with columns: Name, Type (Humanoid, Object)
         Attributes table % Table of attributes with columns: Name, Type (Color etc.)
-        Predicates table % Table of predicates with columns: Name, Type (Attribute, HumanHuman, 
-            % HumanObject, ObjectObject)
+        Predicates table % Table of predicates with columns: Name, Type (Attribute, SingleVerb, DoubleVerb)
     end
 
     properties (Dependent)
@@ -28,7 +28,7 @@ classdef SceneGraph < spiky.core.IntervalsTable
 
     methods
         function obj = SceneGraph(intervals, trialStart, trialEnd, subject, predicate, object, ...
-            directObject)
+            directObject, options)
             %SCENEGRAPH Constructor for the SceneGraph class
             % 
             %   intervals: time intervals for the scene graph
@@ -38,6 +38,8 @@ classdef SceneGraph < spiky.core.IntervalsTable
             %   predicate: SceneNode representing the predicate
             %   object: SceneNode representing the object
             %   directObject: SceneNode representing the direct object
+            %   Name-value arguments:
+            %       NActors: number of actors at the same time
             
             arguments
                 intervals (:, 2) double = double.empty
@@ -47,6 +49,7 @@ classdef SceneGraph < spiky.core.IntervalsTable
                 predicate (:, 1) spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(intervals))
                 object (:, 1) spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(intervals))
                 directObject (:, 1) spiky.scene.SceneNode = spiky.scene.SceneNode.uniform(height(intervals))
+                options.NActors (:, 1) double = NaN(height(intervals), 1)
             end
 
             if isempty(predicate)
@@ -71,8 +74,8 @@ classdef SceneGraph < spiky.core.IntervalsTable
                 end
             end
             obj.Time = intervals;
-            obj.Data = table(trialStart, trialEnd, subject, predicate, object, directObject, ...
-                VariableNames=["TrialStart", "TrialEnd", "Subject", "Predicate", "Object", "DirectObject"]);
+            obj.Data = table(trialStart, trialEnd, subject, predicate, object, directObject, options.NActors, ...
+                VariableNames=["TrialStart", "TrialEnd", "Subject", "Predicate", "Object", "DirectObject", "NActors"]);
             obj.Entities = unique([subject.Data(~ismissing(subject), ["Name" "Type"]);
                 object.Data(~ismissing(predicate)&~ismissing(object), ["Name" "Type"]);
                 directObject.Data(~ismissing(directObject), ["Name" "Type"])], "rows");
@@ -97,7 +100,7 @@ classdef SceneGraph < spiky.core.IntervalsTable
             %ISVERB if the rows represent verbs in the scene graph
             b = ~ismissing(obj.Data.Subject) & ...
                 ~ismissing(obj.Data.Predicate) & ...
-                obj.Data.Predicate.Type=="Verb";
+                contains(string(obj.Data.Predicate.Type), "Verb");
         end
 
         function b = get.IsDirectVerb(obj)
@@ -194,19 +197,52 @@ classdef SceneGraph < spiky.core.IntervalsTable
             idc = obj.IsVerb & ~ismember(obj.Data.Predicate.Name, options.Exclude);
             obj.Data = obj.Data(idc, :);
             obj.Time = obj.Time(idc, :);
-            obj.Data.SubjectLeft = obj.Data.Subject.Pos(:, 1)<obj.Data.Object.Pos(:, 1);
-            obj.Data.Left = obj.Data.Subject;
-            obj.Data.Left.Data(~obj.Data.SubjectLeft, :) = ...
-                obj.Data.Object.Data(~obj.Data.SubjectLeft, :);
-            obj.Data.Right = obj.Data.Object;
-            obj.Data.Right.Data(obj.Data.SubjectLeft, :) = ...
-                obj.Data.Subject.Data(obj.Data.SubjectLeft, :);
-            roles = categorical(strings(height(obj.Data), 2), ["Subject" "Object"]);
-            roles(:, 1) = "Subject";
-            roles(:, 2) = "Object";
-            roles(~obj.Data.SubjectLeft, :) = fliplr(roles(~obj.Data.SubjectLeft, :));
-            obj.Data.LeftRole = roles(:, 1);
-            obj.Data.RightRole = roles(:, 2);
+            if any(obj.Data.Predicate.Type=="DoubleVerb")
+                idc = obj.Data.Predicate.Type=="DoubleVerb";
+                obj.Data.SubjectLeft = obj.Data.Subject.Pos(:, 1)<obj.Data.Object.Pos(:, 1);
+                obj.Data.SubjectRight = obj.Data.Subject.Pos(:, 1)>obj.Data.Object.Pos(:, 1);
+                obj.Data.Left = spiky.scene.SceneNode.uniform(height(obj.Data));
+                obj.Data.Right = obj.Data.Left;
+                obj.Data.Left.Data(obj.Data.SubjectLeft, :) = ...
+                    obj.Data.Subject.Data(obj.Data.SubjectLeft, :);
+                obj.Data.Right.Data(obj.Data.SubjectLeft, :) = ...
+                    obj.Data.Object.Data(obj.Data.SubjectLeft, :);
+                obj.Data.Right.Data(obj.Data.SubjectRight, :) = ...
+                    obj.Data.Subject.Data(obj.Data.SubjectRight, :);
+                obj.Data.Left.Data(obj.Data.SubjectRight, :) = ...
+                    obj.Data.Object.Data(obj.Data.SubjectRight, :);
+                roles = categorical(strings(height(obj.Data), 2), ["Subject" "Object"]);
+                roles(idc, 1) = "Subject";
+                roles(idc, 2) = "Object";
+                roles(obj.Data.SubjectRight, :) = fliplr(roles(obj.Data.SubjectRight, :));
+                obj.Data.LeftRole = roles(:, 1);
+                obj.Data.RightRole = roles(:, 2);
+            end
+        end
+
+        function it = getSingleActions(obj, options)
+            %GETSINGLEACTIONS Get the single actions (single verbs) in the scene graph
+            %   it = getSingleActions(obj)
+            arguments
+                obj spiky.scene.SceneGraph
+                options.Exclude string = ["Idle" "Walk"]
+            end
+            idc = find(obj.Data.Predicate.Type=="SingleVerb" & ~ismember(obj.Data.Predicate.Name, options.Exclude));
+            t = obj.Time(idc, :);
+            data = obj.Data(idc, :);
+            [trials, idcInTrials, idcTrials] = unique(data.TrialStart);
+            joinFun = @(str) join(sort(str), "|");
+            subjectNames = groupsummary(string(data.Subject.Name), idcTrials, joinFun);
+            verbNames = groupsummary(string(data.Predicate.Name), idcTrials, joinFun);
+            sentences = string(data.Subject.Name)+" "+string(data.Predicate.Name);
+            sentences = groupsummary(sentences, idcTrials, joinFun);
+            tbl = table;
+            tbl.Trial = trials;
+            tbl.Subject = subjectNames;
+            tbl.Verb = verbNames;
+            tbl.Sentence = sentences;
+            tbl.NActors = data.NActors(idcInTrials);
+            it = spiky.core.IntervalsTable(t(idcInTrials, :), tbl);
         end
 
         function out = interpById(obj, ids, t, options)

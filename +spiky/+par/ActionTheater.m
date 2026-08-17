@@ -160,13 +160,18 @@ classdef ActionTheater < spiky.par.Paradigm
                 tiDirectObjectName(isDirectObject) = actionAdjTargets(ti.DirectObjectName(isDirectObject)+1);
                 ti.DirectObjectName = tiDirectObjectName;
                 %% Action
+                isIdle = ti.PredicateType=="SingleAction" & ti.PredicateName==-2;
                 isSingleAction = ti.PredicateType=="SingleAction";
                 isDoubleAction = ti.PredicateType=="Action";
                 isActionAdj = ti.PredicateType=="ActionAdj";
                 isIndirectAction = ti.PredicateType=="IndirectAction";
                 tiAction = tmp;
-                % tiAction(isSingleAction) = singleActions(ti.PredicateName(isSingleAction)+1);
-                tiAction(isSingleAction) = singleActions(1);
+                if any(isIdle)
+                    tiAction(isIdle) = "Idle";
+                    tiAction(isSingleAction & ~isIdle) = singleActions(ti.PredicateName(isSingleAction & ~isIdle)+1);
+                else
+                    tiAction(isSingleAction) = singleActions(1);
+                end
                 tiAction(isDoubleAction) = doubleActions(ti.PredicateName(isDoubleAction)+1);
                 tiAction(isActionAdj) = actionAdjs(ti.PredicateName(isActionAdj)+1);
                 tiAction(isIndirectAction) = indirectActions(ti.PredicateName(isIndirectAction)+1);
@@ -240,11 +245,11 @@ classdef ActionTheater < spiky.par.Paradigm
             nodesWalk = spiky.scene.SceneNode(per, trWalk.Name, ...
                 "Humanoid", trWalk.Id, posWalk, rotWalk, projWalk);
             nodesWalkVerb = spiky.scene.SceneNode(per, "Walk", ...
-                "Verb", 0, posWalk, rotWalk, projWalk);
+                "SingleVerb", 0, posWalk, rotWalk, projWalk);
             [~, ~, idcEnd] = itvTrials.haveEvents(per(:, 2), Sorted=false);
             graphWalk = spiky.scene.SceneGraph(per, obj.Data.Trials.Number(idcEnd), ...
-                obj.Data.Trials.Number(idcEnd), nodesWalk, nodesWalkVerb);
-            %% Idle
+                obj.Data.Trials.Number(idcEnd), nodesWalk, nodesWalkVerb, NActors=obj.Data.Trials.Move_Type(idcEnd));
+            %% SingleAction
             if isVersion1
                 isIdle = ~ismissing(ti.Actor) & ti.Action=="Idle" & ti.Role=="Source";
                 nIdle = sum(isIdle);
@@ -253,21 +258,21 @@ classdef ActionTheater < spiky.par.Paradigm
                 per = trials{idcIdleTrial, ["Start" "End"]};
                 nodesSubject = spiky.scene.SceneNode(per, tiIdle.Actor, "Humanoid", ...
                     tiIdle.Id, tiIdle.Pos, tiIdle.Rot, tiIdle.Proj);
-                nodesVerb = spiky.scene.SceneNode(per, "Idle", "Verb", 0, ...
+                nodesVerb = spiky.scene.SceneNode(per, "Idle", "SingleVerb", 0, ...
                     tiIdle.Pos, tiIdle.Rot, tiIdle.Proj);
             else
-                isIdle = ti.PredicateName=="Idle" & ti.IsStart;
-                tiIdle = ti(isIdle, :);
-                [~, idcIdleTrial] = ismember(ti.Number(isIdle), trials.Number);
-                per = trials{idcIdleTrial, ["Start" "End"]};
-                nodesSubject = spiky.scene.SceneNode(per, tiIdle.SubjectName, "Humanoid", ...
-                    tiIdle.SubjectId, tiIdle.SubjectPos, tiIdle.SubjectRot, tiIdle.SubjectProj);
-                nodesVerb = spiky.scene.SceneNode(per, "Idle", "Verb", 0, ...
-                    tiIdle.SubjectPos, tiIdle.SubjectRot, tiIdle.SubjectProj);
+                isSingleAction = ti.PredicateType=="SingleAction" & ti.IsStart;
+                tiSingle = ti(isSingleAction, :);
+                [~, idcSingleActionTrial] = ismember(ti.Number(isSingleAction), trials.Number);
+                per = trials{idcSingleActionTrial, ["Start" "End"]};
+                nodesSubject = spiky.scene.SceneNode(per, tiSingle.SubjectName, "Humanoid", ...
+                    tiSingle.SubjectId, tiSingle.SubjectPos, tiSingle.SubjectRot, tiSingle.SubjectProj);
+                nodesVerb = spiky.scene.SceneNode(per, tiSingle.PredicateName, "SingleVerb", 0, ...
+                    tiSingle.SubjectPos, tiSingle.SubjectRot, tiSingle.SubjectProj);
             end
             [~, ~, idcStart] = itvTrials.haveEvents(per(:, 1));
-            graphIdle = spiky.scene.SceneGraph(per, obj.Data.Trials.Number(idcStart), ...
-                obj.Data.Trials.Number(idcStart), nodesSubject, nodesVerb);
+            graphSingle = spiky.scene.SceneGraph(per, obj.Data.Trials.Number(idcStart), ...
+                obj.Data.Trials.Number(idcStart), nodesSubject, nodesVerb, NActors=obj.Data.Trials.Start_Type(idcStart));
             %% Action
             if isVersion1
                 idcSource = find(ti.Role=="Source" & isDoubleAction);
@@ -286,7 +291,7 @@ classdef ActionTheater < spiky.par.Paradigm
                     ti.Id(idcSource), ti.Pos(idcSource, :), ti.Rot(idcSource, :), ti.Proj(idcSource, :));
                 nodesObject = spiky.scene.SceneNode(per, ti.Actor(idcTarget), "Humanoid", ...
                     ti.Id(idcTarget), ti.Pos(idcTarget, :), ti.Rot(idcTarget, :), ti.Proj(idcTarget, :));
-                nodesVerb = spiky.scene.SceneNode(per, tiActions.Action, "Verb", ...
+                nodesVerb = spiky.scene.SceneNode(per, tiActions.Action, "DoubleVerb", ...
                     tiActions.Id, tiActions.Pos, tiActions.Rot, tiActions.Proj);
                 nodesIndirect = spiky.scene.SceneNode.uniform(height(per));
             else
@@ -301,7 +306,7 @@ classdef ActionTheater < spiky.par.Paradigm
                     tiAction.SubjectId, tiAction.SubjectPos, tiAction.SubjectRot, tiAction.SubjectProj);
                 nodesObject = spiky.scene.SceneNode(per, tiAction.ObjectName, ...
                     tiAction.ObjectType, tiAction.ObjectId, tiAction.ObjectPos, tiAction.ObjectRot, tiAction.ObjectProj);
-                nodesVerb = spiky.scene.SceneNode(per, tiAction.PredicateName, "Verb", ...
+                nodesVerb = spiky.scene.SceneNode(per, tiAction.PredicateName, "DoubleVerb", ...
                     tiAction.Id, tiAction.PredicatePos, tiAction.PredicateRot, tiAction.PredicateProj);
                 isIndirectAction = tiAction.PredicateType=="IndirectAction" & tiAction.IsStart;
                 nodesIndirect = spiky.scene.SceneNode.uniform(height(per));
@@ -314,7 +319,8 @@ classdef ActionTheater < spiky.par.Paradigm
             end
             [~, ~, idcStart] = itvTrials.haveEvents(per(:, 1));
             graphAction = spiky.scene.SceneGraph(per, obj.Data.Trials.Number(idcStart), ...
-                obj.Data.Trials.Number(idcStart), nodesSubject, nodesVerb, nodesObject, nodesIndirect);
+                obj.Data.Trials.Number(idcStart), nodesSubject, nodesVerb, nodesObject, nodesIndirect, ...
+                NActors=obj.Data.Trials.Start_Type(idcStart));
             %% ActionAdj
             if isVersion1 || isVersion2
                 graphActionAdj = spiky.scene.SceneGraph;
@@ -338,10 +344,13 @@ classdef ActionTheater < spiky.par.Paradigm
             end
             %% Combine graphs and store in the object
             obj.Data.TrialInfo = ti;
-            obj.Data.Graph = [graphVis; graphWalk; graphAction; graphIdle; graphActionAdj];
+            obj.Data.Graph = [graphVis; graphWalk; graphAction; graphSingle; graphActionAdj];
             obj.Data.Graph = obj.Data.Graph.sort();
             %% Fixations
             fix = minos.Eye.FixationTargets;
+            if isempty(fix)
+                return
+            end
             fix = fix(fix.Start>=obj.Data.Intervals.Time(1) & fix.End<=obj.Data.Intervals.Time(end) & ...
                 fix.Trial>=obj.Data.Trials.Number(1) & fix.Trial<=obj.Data.Trials.Number(end), :);
             fix.Data.IsFace = ~ismissing(fix.Name) & fix.MinAngle<8 & ismember(fix.Part, ...

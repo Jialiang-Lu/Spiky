@@ -78,8 +78,8 @@ classdef EyeData
             arguments
                 fdir (1, 1) string {mustBeFolder}
                 func = []
-                fiveDot spiky.minos.Paradigm = spiky.minos.Paradigm
-                transform spiky.minos.Transform = spiky.minos.Transform
+                fiveDot spiky.minos.Paradigm = spiky.minos.Paradigm.empty
+                transform spiky.minos.Transform = spiky.minos.Transform.empty
                 fov double = 60
             end
             %% Load eye data
@@ -328,7 +328,7 @@ classdef EyeData
                 blinks = spiky.core.Intervals;
                 fixationTargets = table(Size=[0 9], VariableTypes=["int32" "int32" "categorical" ...
                     "spiky.minos.BodyPart" "single" "single" "single" "single" "single"], ...
-                    VaraibleNames=["Trial" "Id" "Name" "Part" ...
+                    VariableNames=["Trial" "Id" "Name" "Part" ...
                     "Gaze" "Proj" "TargetPos" "TargetProj" "MinAngle"]);
             end
             %% Create EyeData object

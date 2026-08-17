@@ -39,13 +39,19 @@ classdef MinosInfo
             syncEvents = spiky.ephys.RecEvents(double(sync1.Data.timestamp)./1e7, ...
                 sync1.Data.timestamp, spiky.ephys.ChannelType.Stim, ...
                 int16(1), "Sync", true, "");
-            events = info.EventGroups(1).Events.Sync;
-            if isempty(events)
-                events = info.EventGroups(1).Events;
+            if isempty(info.EventGroups)
+                events = syncEvents;
+                [sync, eventsSync] = events.syncWith(syncEvents, "minos", 0.03, ...
+                    allowStep=false, Plot=false);
+            else
+                events = info.EventGroups(1).Events.Sync;
+                if isempty(events)
+                    events = info.EventGroups(1).Events;
+                end
+                events = events(events.Rising, :);
+                [sync, eventsSync] = events.syncWith(syncEvents, "probe1 to minos", 0.03, ...
+                    allowStep=false, Plot=options.Plot);
             end
-            events = events(events.Rising, :);
-            [sync, eventsSync] = events.syncWith(syncEvents, "probe1 to minos", 0.03, ...
-                allowStep=false, Plot=options.Plot);
             idcStart = find(startsWith(log.Data.Value, "Start Paradigm"));
             idcStop = find(startsWith(log.Data.Value, "Pause Paradigm"));
             if length(idcStart)~=length(idcStop)
@@ -59,10 +65,15 @@ classdef MinosInfo
             fiPars = fiPars([fiPars.IsDir] & [fiPars.Name]~="Assets");
             parNamesSpace = [fiPars.Name]';
             parNames = strrep(parNamesSpace, " ", "");
-            photodiode = info.EventGroups.Adc.Events.Photodiode;
-            [~, idc] = photodiode.findContinuous(options.MinPhotodiodeGap);
-            idc = unique(cell2mat(cellfun(@(x) x([1 end])', idc, UniformOutput=false)));
-            tPhotodiode = photodiode(idc, :).Time;
+            if isempty(info.EventGroups)
+                photodiode = [];
+                tPhotodiode = [];
+            else
+                photodiode = info.EventGroups.Adc.Events.Photodiode;
+                [~, idc] = photodiode.findContinuous(options.MinPhotodiodeGap);
+                idc = unique(cell2mat(cellfun(@(x) x([1 end])', idc, UniformOutput=false)));
+                tPhotodiode = photodiode(idc, :).Time;
+            end
             for ii = length(parNames):-1:1
                 intervals = spiky.core.Intervals(parIntervals(...
                     parIntervalsNames==parNames(ii), :));
@@ -84,12 +95,14 @@ classdef MinosInfo
             obj.Sync = spiky.ephys.EventGroup("Stim", ...
                 spiky.ephys.ChannelType.Stim, {eventsSync}, ...
                 double(log.Data{[1 end], 1})', sync);
-            obj.getScreenCapture(photodiode(idc, :));
+            if ~isempty(photodiode)
+                obj.getScreenCapture(photodiode(idc, :));
+            end
             tr = obj.getTransform();
             if isfield(obj.Paradigms, "FiveDot")
                 fiveDot = obj.Paradigms.FiveDot;
             else
-                fiveDot = [];
+                fiveDot = spiky.minos.Paradigm.empty;
             end
             %%
             obj.Eye = spiky.minos.EyeData.load(fdir, sync.Inv, fiveDot, tr, ...

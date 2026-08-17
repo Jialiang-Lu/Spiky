@@ -83,6 +83,16 @@ classdef Subspaces < spiky.stat.Decoder
             obj.Data = data1;
         end
 
+        function obj = concat(obj, obj2)
+            %CONCAT Concatenate two subspaces
+            arguments
+                obj spiky.stat.Subspaces
+                obj2 spiky.stat.Subspaces
+            end
+            assert(isequal(size(obj.Data), size(obj2.Data)))
+            obj.Data = cellfun(@horzcat, obj.Data, obj2.Data, UniformOutput=false);
+        end
+
         function obj = addBasis(obj, data, options)
             %ADDBASIS Add basis to the subspaces
             %
@@ -407,8 +417,10 @@ classdef Subspaces < spiky.stat.Decoder
                 if ii>1
                     hold(options.Parent, "on");
                 end
-                h1(ii) = scatter(options.Parent, data(:, ii, 1), data(:, ii, 2), sz(1), cs(ii, :), ...
-                    "filled", "DisplayName", string(basisNames(ii)), plotArgs{:});
+                if sz(1)>0
+                    h1(ii) = scatter(options.Parent, data(:, ii, 1), data(:, ii, 2), sz(1), cs(ii, :), ...
+                        "filled", "DisplayName", string(basisNames(ii)), plotArgs{:});
+                end
             end
             if numel(sz)==2
                 m = mean(data, 1);

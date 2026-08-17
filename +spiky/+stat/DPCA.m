@@ -90,10 +90,10 @@ classdef DPCA < spiky.stat.Subspaces
             %   idcDim: indices of the dPCA components to include in the subspace
             arguments
                 obj spiky.stat.DPCA
-                name string
+                name string = setdiff(obj.MargNames, "Time")
                 idcDim (1, :) double = 1:2
             end
-            assert(ismember(name, obj.MargNames), ...
+            assert(all(ismember(name, obj.MargNames)), ...
                 "Specified name must be present in MargNames.");
             data = cellfun(@(coords) coords(:, ismember(coords.BasisNames, name)), obj.Decoder, ...
                 UniformOutput=false);

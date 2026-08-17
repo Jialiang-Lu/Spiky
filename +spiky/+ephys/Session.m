@@ -164,16 +164,22 @@ classdef Session < spiky.core.ArrayBase
             end
 
             %% Load Raw
-            rawData = spiky.ephys.RawData(obj.getFdir("Raw"));
-            eventGroups = rawData.getEvents(options.ChannelConfig.Dig, plot=options.Plot);
-            channelGroups = rawData.getChannels(options.BrainRegions, options.Probe, ...
-                options.ChannelConfig.Adc);
-            [nSamples, nSamplesLfp, fpthDat] = rawData.resampleRaw(obj.getFpth("dat"), obj.getFpth("lfp"), ...
-                options.Probe, options.FsLfp, options.ResampleDat, options.ResampleLfp, [eventGroups(1:end-1).Sync]);
-            info = spiky.ephys.SessionInfo(obj, sum([channelGroups.NChannels]), 30000, options.FsLfp, ...
-                nSamples, nSamplesLfp, nSamples/30000, "int16", fpthDat, ...
-                obj.getFpth("lfp"), channelGroups, eventGroups, options);
-            info.createNsXml();
+            fdirRaw = obj.getFdir("Raw");
+            if ~exist(fdirRaw, "dir")
+                info = spiky.ephys.SessionInfo(obj, 0, 30000, options.FsLfp, 0, 0, 0, "int16", "", ...
+                    "", spiky.ephys.ChannelGroup.empty, spiky.ephys.EventGroup.empty, options);
+            else
+                rawData = spiky.ephys.RawData(obj.getFdir("Raw"));
+                eventGroups = rawData.getEvents(options.ChannelConfig.Dig, plot=options.Plot);
+                channelGroups = rawData.getChannels(options.BrainRegions, options.Probe, ...
+                    options.ChannelConfig.Adc);
+                [nSamples, nSamplesLfp, fpthDat] = rawData.resampleRaw(obj.getFpth("dat"), obj.getFpth("lfp"), ...
+                    options.Probe, options.FsLfp, options.ResampleDat, options.ResampleLfp, [eventGroups(1:end-1).Sync]);
+                info = spiky.ephys.SessionInfo(obj, sum([channelGroups.NChannels]), 30000, options.FsLfp, ...
+                    nSamples, nSamplesLfp, nSamples/30000, "int16", fpthDat, ...
+                    obj.getFpth("lfp"), channelGroups, eventGroups, options);
+                info.createNsXml();
+            end
             obj.saveMetaData(info);
         end
 
