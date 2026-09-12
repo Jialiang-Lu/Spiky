@@ -24,10 +24,10 @@ classdef TrialEventDrawer < spiky.app.EventDrawer
                 hCheckbox = []
             end
             obj@spiky.app.EventDrawer(app, hCheckbox);
-            trials = {app.Minos.Paradigms.Trials}';
+            trials = struct2cell(structfun(@(x) x.Trials, app.Minos.Paradigms, UniformOutput=false));
             for ii = 1:length(trials)
                 idc = find(endsWith(trials{ii}.Data.Properties.VariableNames, "_Type"));
-                tbl = trials{ii}{:, idc-1};
+                tbl = trials{ii}.Data(:, idc-1);
                 t = tbl{:, :}';
                 v = repmat(categorical(string(tbl.Properties.VariableNames)), height(tbl), 1)';
                 t = t(:);

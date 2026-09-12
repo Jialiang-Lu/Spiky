@@ -64,7 +64,7 @@ classdef FixationTargetDrawer < spiky.app.Drawer
             if idx==obj.LastIdx
                 return
             end
-            target = obj.App.Minos.Eye.FixationTargets{idx, :};
+            target = obj.App.Minos.Eye.FixationTargets.Data(idx, :);
             if ismissing(target.Name) || target.MinAngle>8
                 obj.clear();
                 return
@@ -79,7 +79,7 @@ classdef FixationTargetDrawer < spiky.app.Drawer
             obj.HPlot(3).XData = [proj(1), targetProj(1)];
             obj.HPlot(3).YData = [proj(2), targetProj(2)];
             obj.HPlot(4).Position = [targetProj(1), targetProj(2), 0];
-            obj.HPlot(4).String = "\leftarrow "+string(target.Name)+" "+string(target.Part);
+            obj.HPlot(4).String = "⟵ "+string(target.Name)+" "+string(target.Part);
         end
 
         function clear(obj)

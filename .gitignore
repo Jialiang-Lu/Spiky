@@ -26,4 +26,7 @@ codegen/
 
 # Octave session info
 octave-workspace
+
+# Misc
 +spiky/+config/Config.yaml
+*.bkp

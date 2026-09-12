@@ -1562,7 +1562,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             %   mdls = buildDecoder(obj, name, labels, options)
             %
             %   obj: triggered firing rate object
-            %   name: name of the decoder condition
+            %   name: name(s) of the decoder condition
             %   labels: labels of events for decoder training
             %   Name-value arguments:
             %       Type: type of decoder to build, can be "mean" or "svm"
@@ -1581,17 +1581,19 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             %           "gamma", or "inverse gaussian", default is "normal"
             %       ModelSpec: model specification for "glm" decoder, default is "linear"
             %       Labmda: regularization parameter for "lasso" decoder, default is 1e-6
+            %       Gamma: regularization parameter for "lda" decoder, 1 means diagonal covariance, 
+            %           0 means full covariance, default is 0.1
             %       FitPosterior: whether to fit posterior probabilities for "svm" decoder, default is false
             arguments
                 obj spiky.trig.TrigFr
-                name (1, 1) categorical
+                name (:, 1) categorical
                 labels % nTrials x 1 categorical or spiky.stat.Labels
                 options.Type (1, 1) string {mustBeMember(options.Type, ...
-                    ["mean", "svm", "subspaces", "lasso", "glm"])} = "mean"
+                    ["mean", "svm", "lda", "subspaces", "lasso", "glm"])} = "mean"
                 options.IdcEvents = []
                 options.SubSet = []
                 options.KFold (1, 1) double = 5
-                options.Holdout (1, 1) double = 0.2
+                options.Holdout (1, 1) double = NaN
                 options.IdcTrain logical = []
                 options.GroupingVariables = []
                 options.NDims double = []
@@ -1604,8 +1606,12 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                     ["normal", "binomial", "poisson", "gamma", "inverse gaussian"])} = "normal"
                 options.ModelSpec = "linear"
                 options.Lambda double = 1e-6
+                options.Gamma double {mustBeBetween(options.Gamma, 0, 1)} = 0.1
                 options.Reseed logical = false
                 options.BuildTestModels logical = false
+            end
+            if isnan(options.Holdout)
+                options.Holdout = 1/options.KFold;
             end
             if ~options.Reseed
                 rng(0); % for reproducibility
@@ -1618,7 +1624,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 idcEvents = 1:width(obj);
             end
             obj = subsref(obj, substruct("()", {':', idcEvents, ':'}));
-            if numel(labels)>width(obj)
+            if height(labels)>width(obj)
                 labels = labels(idcEvents, :);
             end
             if ~isempty(options.GroupingVariables) && numel(options.GroupingVariables)>width(obj)
@@ -1671,6 +1677,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                         labels1 = labels1.*labels{:, ii};
                     end
                 end
+            elseif istable(labels)
             else
                 error("Labels must be categorical or spiky.stat.Labels")
             end
@@ -1803,6 +1810,8 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                                     Coding=options.Coding, ...
                                     FitPosterior=options.FitPosterior, Options=optionsFit, ...
                                     Prior="uniform", ClassNames=cats).compact();
+                            case "lda"
+                                mdls1{jj} = fitcdiscr(X', y, Gamma=options.Gamma, Prior="uniform").compact();
                             case "subspaces"
                                 if numel(t)>1
                                     step = t(2)-t(1);
@@ -2593,6 +2602,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             %   dpca = dpca(obj, vars, Name=Value, ...)
             %
             %   obj: triggered firing rate object
+            %   vars: table of event labels (categorical)
             %   Name-value arguments:
             %       NComponents: number of dPCA components to compute (default: 10
             %       CombinedParams: cell array defining combined marginalizations
@@ -2618,7 +2628,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             end
             arguments
                 options.IdcEvents = []
-                options.NComponents (1, 1) double {mustBeInteger, mustBePositive} = 16
+                options.NComponents (1, 1) double {mustBePositive} = 16
                 options.CombinedParams cell = {}
                 options.Lambda (1, 1) double {mustBeNonnegative} = 1e-6
                 options.Order (1, 1) logical = true
@@ -2631,11 +2641,16 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
                 options.NumRep (1, 1) double {mustBeInteger, mustBeNonnegative} = 3
                 options.ExplainedVarianceSignalOnly (1, 1) logical = false
                 options.KFold double = 1
-                options.Holdout double = 0.1
+                options.Holdout double = []
+                options.StratVars = []
+                options.GroupingVars = []
                 options.Plot (1, 1) logical = false
             end
 
             %% Parse label name/value pairs
+            if isempty(options.Holdout)
+                options.Holdout = 1/options.KFold;
+            end
             if ~isempty(options.IdcEvents)
                 obj = subsref(obj, substruct("()", {':', options.IdcEvents, ':'}));
                 vars = vars(options.IdcEvents, :);
@@ -2660,11 +2675,22 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
 
             %% Cross-validation
             if options.KFold>1
+                if isempty(options.StratVars)
+                    options.StratVars = labels{1};
+                else
+                    options.StratVars = options.StratVars(isValid);
+                end
+                stratify = isempty(options.GroupingVars);
+                if ~isempty(options.GroupingVars)
+                    options.GroupingVars = options.GroupingVars(isValid);
+                end
                 if options.Holdout==1/options.KFold
-                    cv = cvpartition(labels{1}, KFold=options.KFold);
+                    cv = cvpartition(options.StratVars, KFold=options.KFold, Stratify=stratify, ...
+                        GroupingVariables=options.GroupingVars);
                     testIdc = cv.test("all")';
                 else
-                    cv = cvpartition(labels{1}, Holdout=options.Holdout);
+                    cv = cvpartition(options.StratVars, Holdout=options.Holdout, Stratify=stratify, ...
+                        GroupingVariables=options.GroupingVars);
                     testIdc = false(options.KFold, nEvents);
                     for ii = 1:options.KFold
                         testIdc(ii, :) = cv.test(1)';
@@ -2731,7 +2757,7 @@ classdef TrigFr < spiky.trig.Trig & spiky.core.Spikes
             % firingRatesAverage: N x condDims... x T
             firingRatesAverage = mean(firingRates, ndims(firingRates), "omitnan");
             % fireRatesAverageAll: N x 1... x T
-            firingRatesAverageAll = mean(firingRatesAverage, 2:ndims(firingRatesAverage)-1, ...
+            firingRatesAverageAll = mean(firingRatesAverage, 2:ndims(firingRates)-2, ...
                 "omitnan");
             % Fill missing combinations with overall mean
             missingIdc = cell(1, nLabels);

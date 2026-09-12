@@ -166,7 +166,7 @@ classdef ActionTheater < spiky.par.Paradigm
                 isActionAdj = ti.PredicateType=="ActionAdj";
                 isIndirectAction = ti.PredicateType=="IndirectAction";
                 tiAction = tmp;
-                if any(isIdle)
+                if any(ti.PredicateName(isSingleAction)>=0)
                     tiAction(isIdle) = "Idle";
                     tiAction(isSingleAction & ~isIdle) = singleActions(ti.PredicateName(isSingleAction & ~isIdle)+1);
                 else
@@ -425,6 +425,10 @@ classdef ActionTheater < spiky.par.Paradigm
             fix.Data.VerbRole = fix.ActionRole;
             fix.VerbRole(ismember(fix.Action, "Idle")) = "IdleSubject";
             fix.Data.OtherActionRole = categorical(string(fix.Action)+string(fix.OtherRole));
+            prevVerb = categorical(NaN(nFix, 1));
+            prevVerb(2:end) = fix.Verb(1:end-1);
+            prevVerb(~hasPrevFix) = missing;
+            fix.Data.PrevVerb = prevVerb;
             %% Find fixated actionadj
             graphActionAdj = obj.Data.Graph(obj.Data.Graph.IsActionAdj, :).interpById(fix.Id, fix.Start+0.02);
             graphActionAdjTarget = obj.Data.Graph(obj.Data.Graph.IsAttribute & ...
@@ -559,6 +563,7 @@ classdef ActionTheater < spiky.par.Paradigm
         end
 
         function et = getActionView(obj, window)
+            %GETACTIONVIEW Get the flattened scene graph and fixation target at each time point during action
             arguments
                 obj spiky.par.ActionTheater
                 window (1, :) double = -0.3:0.1:1.8
@@ -592,6 +597,84 @@ classdef ActionTheater < spiky.par.Paradigm
             tbl.FixRole = categorical(NaN(n, 1));
             tbl.FixRole(tbl.FixId==tbl.SubjectId) = "Subject";
             tbl.FixRole(tbl.FixId==tbl.ObjectId) = "Object";
+            et = spiky.core.EventsTable(t, tbl);
+        end
+
+        function et = getActionViewFlat(obj, tWindow)
+            %GETACTIONVIEWFLAT Get the flattened scene graph and fixation target at each time point during actions,
+            %   accounted for multiple actions in the same trial
+            arguments
+                obj spiky.par.ActionTheater
+                tWindow (1, :) double = -0.3:0.1:1.5
+            end
+            graphAction = obj.Data.Graph.getAllActions(Exclude=["Idle" "Walk"]);
+            % tWait = obj.Data.Vars.WaitTime.get();
+            % tAction = obj.Data.Vars.ActionTime.get();
+            % tWindow = -tWait:res:tAction;
+            fix = obj.Data.FixSeq;
+            nPoints = numel(tWindow);
+            nTrials = height(graphAction);
+            n = nPoints*nTrials;
+            idcInTrial = repelem((1:nTrials)', nPoints, 1);
+            t = graphAction.Start+tWindow;
+            t = t';
+            t = t(:);
+            tbl = table();
+            tbl.Trial = graphAction.Trial(idcInTrial);
+            tbl.TrialTime = repmat(tWindow', nTrials, 1);
+            tbl.Actions = graphAction.Actions(idcInTrial);
+            tbl.Action = graphAction.Action(idcInTrial);
+            tbl.Subjects = graphAction.Subjects(idcInTrial);
+            tbl.Subject = graphAction.Subject(idcInTrial);
+            tbl.SubjectIds = graphAction.SubjectIds(idcInTrial);
+            tbl.Objects = graphAction.Objects(idcInTrial);
+            tbl.Object = graphAction.Object(idcInTrial);
+            tbl.ObjectIds = graphAction.ObjectIds(idcInTrial);
+            tbl.Sentence = graphAction.Sentence(idcInTrial);
+            tbl.NActors = graphAction.NActors(idcInTrial);
+            [~, idcInFix, idcFix] = fix.haveEvents(t);
+            isValid = arrayfun(@(id, c1, c2) ismember(id, c1{1}) || ismember(id, c2{1}), ...
+                fix.Id(idcFix), tbl.SubjectIds(idcInFix), tbl.ObjectIds(idcInFix));
+            idcInFix = idcInFix(isValid);
+            idcFix = idcFix(isValid);
+            tbl.FixName = categorical(NaN(n, 1));
+            tbl.FixName(idcInFix) = fix.Name(idcFix);
+            tbl.OtherName = categorical(NaN(n, 1));
+            tbl.OtherName(idcInFix) = fix.OtherName(idcFix);
+            tbl.FixId = zeros(n, 1, "int32");
+            tbl.FixId(idcInFix) = fix.Id(idcFix);
+            tbl.OtherId = zeros(n, 1, "int32");
+            tbl.OtherId(idcInFix) = fix.OtherId(idcFix);
+            tbl.FixRole = categorical(NaN(n, 1));
+            tbl.OtherRole = categorical(NaN(n, 1));
+            fun = @(id, c) ismember(id, c{1});
+            tbl.FixRole(arrayfun(fun, tbl.FixId, tbl.SubjectIds) & tbl.TrialTime>=0) = "Subject";
+            tbl.FixRole(arrayfun(fun, tbl.FixId, tbl.ObjectIds) & tbl.TrialTime>=0) = "Object";
+            tbl.FixRole(tbl.FixId==0) = missing;
+            tbl.OtherRole(arrayfun(fun, tbl.OtherId, tbl.SubjectIds) & tbl.TrialTime>=0) = "Subject";
+            tbl.OtherRole(arrayfun(fun, tbl.OtherId, tbl.ObjectIds) & tbl.TrialTime>=0) = "Object";
+            tbl.OtherRole(tbl.OtherId==0) = missing;
+            tbl.FixVerb = categorical(NaN(n, 1));
+            tbl.OtherVerb = categorical(NaN(n, 1));
+            % tbl.FixVerb(tbl.FixId~=0 & tbl.TrialTime<0) = "Idle";
+            % tbl.OtherVerb(tbl.OtherId~=0 & tbl.TrialTime<0) = "Idle";
+            fun = @(id, ids, verbs) verbs{1}(id==ids{1});
+            isFixSubject = tbl.FixRole=="Subject";
+            if any(isFixSubject)
+                tbl.FixVerb(isFixSubject) = arrayfun(fun, tbl.FixId(isFixSubject), tbl.SubjectIds(isFixSubject), tbl.Actions(isFixSubject));
+            end
+            isFixObject = tbl.FixRole=="Object";
+            if any(isFixObject)
+                tbl.FixVerb(isFixObject) = arrayfun(fun, tbl.FixId(isFixObject), tbl.ObjectIds(isFixObject), tbl.Actions(isFixObject));
+            end
+            isOtherSubject = tbl.OtherRole=="Subject";
+            if any(isOtherSubject)
+                tbl.OtherVerb(isOtherSubject) = arrayfun(fun, tbl.OtherId(isOtherSubject), tbl.SubjectIds(isOtherSubject), tbl.Actions(isOtherSubject));
+            end
+            isOtherObject = tbl.OtherRole=="Object";
+            if any(isOtherObject)
+                tbl.OtherVerb(isOtherObject) = arrayfun(fun, tbl.OtherId(isOtherObject), tbl.ObjectIds(isOtherObject), tbl.Actions(isOtherObject));
+            end
             et = spiky.core.EventsTable(t, tbl);
         end
 

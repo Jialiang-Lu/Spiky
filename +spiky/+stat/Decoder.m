@@ -561,10 +561,13 @@ classdef Decoder < spiky.stat.GroupedStat
             %   obj: Decoder object
             %   Name-value arguments:
             %       Metric: metric to calculate
-            %           "varExplained": variance explained by the decoder model (default)
+            %           "prediction": predicted values from the decoder model (default)
+            %           "varExplained": variance explained by the decoder model
             %           "procrustes": variance explained under procrustes alignment
             %           "accuracy": classification accuracy of the decoder model
             %           "confusion": confusion matrix of the decoder model
+            %       X: input data to use for calculating statistics (default: obj.X)
+            %       Y: target data to use for calculating statistics (default: obj.Y)
             %       Model: external model to use for calculating statistics instead of the decoder 
             %           models in obj.Data (default: [])
             %       Whiten: whether to whiten the data by the Mahalanobis weights in obj.Whiten when 
@@ -591,8 +594,10 @@ classdef Decoder < spiky.stat.GroupedStat
             arguments
                 obj spiky.stat.Decoder
                 options.Metric (1, 1) string {mustBeMember(options.Metric, ...
-                    ["varExplained" "procrustes" "accuracy" "confusion" "proj" "angle" "vaf" ...
-                    "deviance" "gain"])} = "varExplained"
+                    ["prediction" "varExplained" "procrustes" "accuracy" "confusion" "proj" "angle" "vaf" ...
+                    "deviance" "gain"])} = "prediction"
+                options.X = []
+                options.Y = []
                 options.Model = []
                 options.Whiten string {mustBeMember(options.Whiten, ["none", "train", "test"])} = "train"
                 options.CrossTime logical = false
@@ -615,7 +620,7 @@ classdef Decoder < spiky.stat.GroupedStat
                     assert(obj.Type=="mean")
                     chance = 0;
                 case "accuracy"
-                    assert(obj.Type=="svm")
+                    assert(ismember(obj.Type, ["svm" "lda"]))
                     chance = 1/numel(obj.Data{1}.ClassNames);
                     options.Whiten = "train";
                 case "proj"
@@ -626,7 +631,7 @@ classdef Decoder < spiky.stat.GroupedStat
             nPartitions = size(obj.Data, 3);
             nConditions = size(obj.Data, 4);
             isCompareMdl = ismember(options.Metric, ["proj" "angle" "vaf" "gain"]);
-            isCellMode = ismember(options.Metric, ["confusion" "proj" "deviance"]);
+            isCellMode = ismember(options.Metric, ["prediction" "confusion" "proj" "deviance"]);
             isCellMerge = ismember(options.Metric, ["confusion"]);
             if options.CrossTime && options.CrossCondition
                 assert(size(obj.Data, 4)==2)
@@ -652,6 +657,9 @@ classdef Decoder < spiky.stat.GroupedStat
             end
             shuf = cell(nT, nGroups, nPartitions, nTrain);
             shufExtra = cell(nT, nGroups, nPartitions, nTrain);
+            if options.Metric=="prediction"
+                scores = cell(nT, nGroups, nPartitions, nTrain);
+            end
             if options.Metric=="procrustes"
                 transforms = cell(nT, nGroups, nPartitions, nTrain);
                 d = cell(nT, nGroups, nPartitions, nTrain);
@@ -689,8 +697,17 @@ classdef Decoder < spiky.stat.GroupedStat
                     end
                 end
             end
-            X = obj.X; % nT x nGroups x 1 x nConditions cell of nNeurons x nTrials
-            y = obj.Y; % nConditions x (nT) cell of nTrials x 1 categorical
+            X = options.X; % nT x nGroups x 1 x nConditions cell of nNeurons x nTrials
+            y = options.Y; % nConditions x (nT) cell of nTrials x 1 categorical
+            if isempty(X)
+                useTrainingData = true;
+                X = obj.X;
+            else
+                useTrainingData = false;
+            end
+            if isempty(y)
+                y = obj.Y;
+            end
             isTimeVarying = width(y)>1;
             if ~isempty(options.Model)
                 if isa(options.Model, "spiky.stat.Decoder")
@@ -734,6 +751,9 @@ classdef Decoder < spiky.stat.GroupedStat
                 if isCellMode
                     stat1 = cell(1, nTest);
                 end
+                if ismember(options.Metric, ["prediction"])
+                    scores1 = cell(1, nTest);
+                end
                 if ismember(options.Metric, ["procrustes"])
                     transform1 = cell(1, nTest);
                     d1 = NaN(1, nTest);
@@ -764,8 +784,13 @@ classdef Decoder < spiky.stat.GroupedStat
                         idxC = jj; % use condition jj for testing
                     end
                     if ~isempty(X{1})
-                        idcPTest = partitions{idxC, idxTY}(idxP, :)==1 & ~isnan(X{idxT, idxG, 1, idxC}(1, :));
-                            % indices of trials in test partition
+                        if useTrainingData
+                            idcPTest = partitions{idxC, idxTY}(idxP, :)==1 & ~isnan(X{idxT, idxG, 1, idxC}(1, :));
+                                % indices of trials in test partition
+                        else
+                            idcPTest = ~isnan(X{idxT, idxG, 1, idxC}(1, :));
+                                % indices of trials in test partition
+                        end
                         XAll = X{idxT, idxG, 1, idxC}; % nNeurons x nTrials for all trials in this condition
                         yAll = y{idxC, idxTY}; % nTrials x 1 categorical (or nTrials x nCats flags) for all trials in this condition
                         XTest = X{idxT, idxG, 1, idxC}(:, idcPTest); % nNeurons x nTrials
@@ -834,12 +859,39 @@ classdef Decoder < spiky.stat.GroupedStat
                                         NDims=options.NDims);
                                 end
                             end
+                        case "prediction"
+                            if ~isempty(W)
+                                XTest = W.project(XTest, Individual=true);
+                            end
+                            if isa(mdl, "classreg.learning.classif.CompactClassificationECOC") || ...
+                                isa(mdl, "classreg.learning.classif.CompactClassificationDiscriminant")
+                                XTest = XTest';
+                            end
+                            nTrials = numel(idcPTest);
+                            nCats = numel(mdl.ClassNames);
+                            yPred = categorical(strings(nTrials, 1), categories(mdl.ClassNames));
+                            sPred = NaN(numel(idcPTest), nCats);
+                            if isa(mdl, "classreg.learning.classif.CompactClassificationDiscriminant")
+                                [yPred(idcPTest), sPred(idcPTest, :)] = mdl.predict(XTest);
+                            elseif isa(mdl, "classreg.learning.classif.CompactClassificationECOC")
+                                if strcmp(mdl.ScoreType, "probability")
+                                    [yPred(idcPTest), ~, ~, sPred(idcPTest, :)] = mdl.predict(XTest);
+                                else
+                                    yPred(idcPTest) = mdl.predict(XTest);
+                                    sPred = [];
+                                end
+                            else
+                                yPred(idcPTest) = mdl.predict(XTest);
+                                sPred = [];
+                            end
+                            stat1{jj} = yPred;
+                            scores1{jj} = sPred;
                         case "accuracy"
                             if ~isempty(W)
                                 XTest = W.project(XTest, Individual=true);
                             end
                             if isa(mdl, "classreg.learning.classif.CompactClassificationECOC") || ...
-                                isa(mdl, "classreg.learning.classif.ClassificationECOC")
+                                isa(mdl, "classreg.learning.classif.CompactClassificationDiscriminant")
                                 XTest = XTest';
                             end
                             yPred = mdl.predict(XTest);
@@ -863,8 +915,7 @@ classdef Decoder < spiky.stat.GroupedStat
                             end
                             stat1(jj) = mean(stat); % overall accuracy
                         case "confusion"
-                            if isa(mdl, "classreg.learning.classif.CompactClassificationECOC") || ...
-                                isa(mdl, "classreg.learning.classif.ClassificationECOC")
+                            if isa(mdl, "classreg.learning.classif.CompactClassificationECOC")
                                 XTest = XTest';
                             end
                             yPred = mdl.predict(XTest);
@@ -926,6 +977,9 @@ classdef Decoder < spiky.stat.GroupedStat
                 else
                     stats{ii} = stat1;
                 end
+                if ismember(options.Metric, ["prediction"])
+                    scores{ii} = scores1;
+                end
                 if ismember(options.Metric, ["procrustes"])
                     transforms{ii} = transform1;
                     d{ii} = d1;
@@ -968,6 +1022,27 @@ classdef Decoder < spiky.stat.GroupedStat
                 stats.Chance = mean(shuf, "all", "omitmissing");
             end
             switch options.Metric
+                case "prediction"
+                    scores = reshape(vertcat(scores{:}), nT, nGroups, nPartitions, nTrain, nTest);
+                    if ~isempty(scores{1}) % posterior available
+                        statsData = num2cell(stats.Data, 3);
+                        scores = num2cell(scores, 3);
+                        for ii = 1:numel(scores)
+                            s = cat(3, scores{ii}{:}); % nTrials x nCats x nPartitions posterior probabilities
+                            s = mean(s, 3, "omitmissing");
+                            [~, idcMax] = max(s, [], 2);
+                            cats = categories(statsData{ii}{1}, OutputType="categorical");
+                            d = categorical(strings(size(idcMax)));
+                            isValid = ~isnan(idcMax);
+                            d(isValid) = cats(idcMax(isValid));
+                            statsData{ii} = d;
+                            scores{ii} = s;
+                        end
+                        scores = spiky.stat.GroupedStat(obj.Time, scores, obj.Groups, obj.GroupIndices, ...
+                            partitions, conditions, Metric="prediction");
+                        stats.Data = statsData;
+                        varargout{2} = scores;
+                    end
                 case "accuracy"
                     if options.CalcP
                         m = mean(stats.Data, 3, "omitmissing");

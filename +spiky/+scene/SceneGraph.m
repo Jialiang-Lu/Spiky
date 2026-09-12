@@ -220,27 +220,42 @@ classdef SceneGraph < spiky.core.IntervalsTable
             end
         end
 
-        function it = getSingleActions(obj, options)
-            %GETSINGLEACTIONS Get the single actions (single verbs) in the scene graph
-            %   it = getSingleActions(obj)
+        function it = getAllActions(obj, options)
+            %GETALLACTIONS Get all actions in the scene graph in each trial
+            %   it = getAllActions(obj)
             arguments
                 obj spiky.scene.SceneGraph
                 options.Exclude string = ["Idle" "Walk"]
             end
-            idc = find(obj.Data.Predicate.Type=="SingleVerb" & ~ismember(obj.Data.Predicate.Name, options.Exclude));
+            idc = find(obj.IsVerb & ~ismember(obj.Data.Predicate.Name, options.Exclude));
             t = obj.Time(idc, :);
             data = obj.Data(idc, :);
             [trials, idcInTrials, idcTrials] = unique(data.TrialStart);
             joinFun = @(str) join(sort(str), "|");
+            joinIdFun = @(ids) {ids};
+            subjects = groupsummary(data.Subject.Name, idcTrials, joinIdFun);
             subjectNames = groupsummary(string(data.Subject.Name), idcTrials, joinFun);
-            verbNames = groupsummary(string(data.Predicate.Name), idcTrials, joinFun);
+            subjectIds = groupsummary(data.Subject.Id, idcTrials, joinIdFun);
+            objects = groupsummary(data.Object.Name, idcTrials, joinIdFun);
+            objectNames = groupsummary(string(data.Object.Name), idcTrials, joinFun);
+            objectIds = groupsummary(data.Object.Id, idcTrials, joinIdFun);
+            actions = groupsummary(data.Predicate.Name, idcTrials, joinIdFun);
+            actionNames = groupsummary(string(data.Predicate.Name), idcTrials, joinFun);
             sentences = string(data.Subject.Name)+" "+string(data.Predicate.Name);
+            idcHasObject = ~ismissing(data.Object.Name);
+            sentences(idcHasObject) = sentences(idcHasObject)+" "+string(data.Object.Name(idcHasObject));
             sentences = groupsummary(sentences, idcTrials, joinFun);
             tbl = table;
             tbl.Trial = trials;
-            tbl.Subject = subjectNames;
-            tbl.Verb = verbNames;
-            tbl.Sentence = sentences;
+            tbl.Subjects = subjects;
+            tbl.Subject = categorical(subjectNames);
+            tbl.SubjectIds = subjectIds;
+            tbl.Objects = objects;
+            tbl.Object = categorical(objectNames);
+            tbl.ObjectIds = objectIds;
+            tbl.Actions = actions;
+            tbl.Action = categorical(actionNames);
+            tbl.Sentence = categorical(sentences);
             tbl.NActors = data.NActors(idcInTrials);
             it = spiky.core.IntervalsTable(t(idcInTrials, :), tbl);
         end

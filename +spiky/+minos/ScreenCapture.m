@@ -59,7 +59,6 @@ classdef ScreenCapture < handle
             %
             %   frame: image at the given time
             %   t: time in seconds
-
             arguments
                 obj
                 t double = NaN
@@ -84,6 +83,24 @@ classdef ScreenCapture < handle
                 end
             end
             obj.Frame = frame;
+        end
+
+        function frame = getNextFrame(obj, t)
+            %GETNEXTFRAME Get the next frame after the given time without seek
+            arguments
+                obj
+                t double
+            end
+            assert(obj.IsOpen);
+            % assert(t>=obj.CurrentTime);
+            if ~obj.Reader.hasFrame()
+                frame = obj.Frame;
+                obj.IsValidTime = false;
+                return
+            end
+            while obj.Reader.hasFrame() && obj.CurrentTime<=t
+                frame = readFrame(obj.Reader);
+            end
         end
 
         function writeSrt(obj, t, s, filePath, options)

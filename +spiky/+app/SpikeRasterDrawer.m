@@ -46,9 +46,7 @@ classdef SpikeRasterDrawer < spiky.app.Drawer
             %
             %   h: handle to the plot object
             obj.Trig = obj.App.Spikes.trig(0, [0 obj.App.Info.Duration]);
-            cats = vertcat(obj.App.Spikes.Neuron);
-            cats = cats.Region;
-            obj.Cats = categorical(cats);
+            obj.Cats = obj.App.Spikes.Neuron.Region;
             [obj.T, obj.R, obj.Edges] = obj.Trig.getRaster(obj.Cats, "neuron");
             [obj.T, idc] = sort(obj.T);
             obj.R = obj.R(idc);
@@ -60,7 +58,7 @@ classdef SpikeRasterDrawer < spiky.app.Drawer
             set(obj.HAxes, YDir="reverse");
             h2 = yline(obj.HAxes, obj.Edges, "y", LineWidth=0.5);
             centers = (obj.Edges(1:end-1)+obj.Edges(2:end))/2;
-            regions = unique(obj.Cats, "stable");
+            regions = categories(obj.Cats, OutputType="string");
             h3 = text(obj.HAxes, -1*ones(length(regions), 1), centers, string(regions), ...
                 HorizontalAlignment="left", VerticalAlignment="middle", ...
                 FontSize=12, Color="w", BackgroundColor=obj.App.UIFigure.Color);
@@ -94,7 +92,7 @@ classdef SpikeRasterDrawer < spiky.app.Drawer
             regions = unique(cats, "stable");
             h3 = text(obj.HAxes, -1*ones(length(regions), 1), centers, string(regions), ...
                 HorizontalAlignment="left", VerticalAlignment="middle", ...
-                FontSize=12, Color="w", BackgroundColor=obj.App.UIFigure.Color);
+                FontSize=12, Color="w", BackgroundColor=obj.App.BaseGridLayout.BackgroundColor);
             obj.HPlot = [obj.HPlot(1); h2; h3];
             obj.onTimeUpdate(obj.App.CurrentTime);
         end

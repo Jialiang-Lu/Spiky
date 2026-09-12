@@ -269,12 +269,14 @@ classdef Intervals < spiky.core.ArrayBase
             intervals = interval.subtract(obj);
         end
 
-        function [intervals, idc, idcIntervals] = haveIntervals(obj, intervals)
+        function [intervals, idc, idcIntervals] = haveIntervals(obj, intervals, options)
             %HAVEINTERVALS Find intervals within intervals
-            %   [intervals, idc, idcIntervals] = haveIntervals(obj, intervals)
+            %   [intervals, idc, idcIntervals] = haveIntervals(obj, intervals, ...)
             %
             %   obj: intervals
             %   intervals: intervals object
+            %   Name-value arguments:
+            %       AllowPartial: whether to allow partial overlap (default: false)
             %
             %   intervals: intervals within obj
             %   idc: indices of intervals within obj
@@ -282,6 +284,7 @@ classdef Intervals < spiky.core.ArrayBase
             arguments
                 obj spiky.core.Intervals
                 intervals %double or spiky.core.Intervals
+                options.AllowPartial logical = false
             end
             if isnumeric(intervals)
                 assert(width(intervals)==2, "Intervals must have two columns.");
@@ -292,10 +295,18 @@ classdef Intervals < spiky.core.ArrayBase
                 error("Wrong input type %s.", class(intervals))
             end
             [~, idc1, idcP1] = obj.haveEvents(prd(:, 1));
-            [~, idc2, idcP2] = obj.haveEvents(prd(idc1, 2));
-            idc2 = idc2(idcP2==idcP1(idc2));
-            idc = idc1(idc2);
-            idcIntervals = idcP1(idc2);
+            if options.AllowPartial
+                [~, idc2, idcP2] = obj.haveEvents(prd(:, 2));
+                idc3 = [idc1; idc2];
+                idcP3 = [idcP1; idcP2];
+                [idc, idcUnique] = unique(idc3, "sorted");
+                idcIntervals = idcP3(idcUnique);
+            else
+                [~, idc2, idcP2] = obj.haveEvents(prd(idc1, 2));
+                idc2 = idc2(idcP2==idcP1(idc2));
+                idc = idc1(idc2);
+                idcIntervals = idcP1(idc2);
+            end
             intervals = subsref(intervals, substruct("()", {idc, ':'}));
         end
 

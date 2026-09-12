@@ -98,7 +98,8 @@ classdef DPCA < spiky.stat.Subspaces
             data = cellfun(@(coords) coords(:, ismember(coords.BasisNames, name)), obj.Decoder, ...
                 UniformOutput=false);
             data = cellfun(@(d) d(:, idcDim), data, UniformOutput=false);
-            ss = spiky.stat.Subspaces(0, data, obj.Groups, obj.GroupIndices);
+            ss = spiky.stat.Subspaces(0, data, obj.Groups, obj.GroupIndices, obj.Partitions, ...
+                obj.Conditions);
         end
 
         function ss = pca(obj, name, nDims)
@@ -123,7 +124,8 @@ classdef DPCA < spiky.stat.Subspaces
                     "Number of dimensions requested exceeds the number of components");
                 data{ii} = obj.Decoder{ii}(:, idcMarg).pca(nDims);
             end
-            ss = spiky.stat.Subspaces(0, data, obj.Groups, obj.GroupIndices);
+            ss = spiky.stat.Subspaces(0, data, obj.Groups, obj.GroupIndices, obj.Partitions, ...
+                obj.Conditions);
         end
 
         function plotSummary(obj, trigFr, vars, options)
