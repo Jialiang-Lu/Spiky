@@ -15,6 +15,9 @@ classdef GroupedStat < spiky.core.EventsTable
         Chance double % chance level for the statistic
         Shuffle % shuffled data, same size as Data
         P double % p values, same size as Data
+        X % cell array of data, nT x nGroups x 1 x nConditions cell of nNeurons x nTrials
+        Y % cell array of labels, nConditions x 1 cell of nTrials x 1 categorical,
+          %     or nConditions x nT cell if different labels for each time point
     end
 
     properties (Dependent)
@@ -34,7 +37,7 @@ classdef GroupedStat < spiky.core.EventsTable
             arguments (Output)
                 dataNames (:, 1) string
             end
-            dataNames = ["Data", "Shuffle", "P"];
+            dataNames = ["Data" "X" "Shuffle" "P"]';
         end
 
         function dimLabelNames = getDimLabelNames()
@@ -48,7 +51,7 @@ classdef GroupedStat < spiky.core.EventsTable
                 dimLabelNames (:, 1) cell
             end
             dimLabelNames = {"Time", ["Groups"; "GroupIndices"], string.empty, ...
-                ["Conditions"; "Partitions"]};
+                ["Conditions"; "Partitions"; "Y"]};
         end
 
         function h = plots(objs, plotOps, options)
@@ -127,6 +130,8 @@ classdef GroupedStat < spiky.core.EventsTable
                 options.Chance double = NaN
                 options.Shuffle = cell(size(data))
                 options.P double = NaN(size(data))
+                options.X = cell(size(data))
+                options.Y = cell(size(data, 4), 1)
             end
             if isempty(time) && isempty(data) && isempty(groups)
                 return
@@ -159,6 +164,8 @@ classdef GroupedStat < spiky.core.EventsTable
             obj.Chance = options.Chance;
             obj.Shuffle = options.Shuffle;
             obj.P = options.P;
+            obj.X = options.X;
+            obj.Y = options.Y;
         end
 
         function n = get.NGroups(obj)
@@ -484,6 +491,108 @@ classdef GroupedStat < spiky.core.EventsTable
             end
             if nargout>2 && plotContour
                 hCont = hCont1;
+            end
+        end
+
+        function [hMean, hLine, hScatter] = scatterProj(obj, plotOps, options)
+            %SCATTERPROJ Plot the projection data as scatter plots
+            %   [hMean, hLine, hScatter] = SCATTERPROJ(obj, ...)
+            %
+            %   obj: GroupedStat object with metric "proj"
+            %   Name-value arguments:
+            %       ...: options passed to scatter()
+            %       Parent: parent figure for the plot
+            %       ConnectMean: whether to connect the mean points with lines
+            %       Size: size of the scatter points, can be a scalar or a vector of two elements for 
+            %           mean and sample points
+            arguments
+                obj spiky.stat.GroupedStat
+                plotOps.?matlab.graphics.chart.primitive.Scatter
+                options.Parent matlab.ui.Figure = gcf
+                options.ConnectMean logical = true
+                options.Size (1, :) double = 50
+            end
+            assert(obj.Metric=="proj", "plotProj can only be used for GroupedStat with metric 'proj'.")
+            assert(height(obj)==1, "plotProj can only be used for GroupedStat with one time point.")
+            assert(obj.NGroups==1, "plotProj can only be used for GroupedStat with one group.")
+            plotSamples = ~isscalar(options.Size);
+            projs = permute(obj.Data, [4 5 3 1 2]); % nTrain x nTest cell of 1 x nTrials x nDims x nPartitions TrigFr
+            [nTrain, nTest] = size(projs);
+            nPartitions = size(projs{1}, 4);
+            labels = obj.Y; % nTrain x 1 cell of nTrials x 1 categorical
+            if nTest>1
+                assert(nTrain==nTest, "The number of train and test conditions must be the same for plotProj.")
+                labels = repmat(labels', nTrain, 1);
+            end
+            cats = categories(labels{1}, OutputType="string");
+            nCats = numel(cats);
+            if options.ConnectMean
+                m1 = permute(projs{1}.mean(4, "omitmissing").getGroupMean(labels{1}).Data, [2 3 1]); % nCats x nDims
+                order = spiky.utils.circlesort(m1(:, 1:2));
+                catOrder = cats(order);
+            else
+                catOrder = [];
+            end
+            conditions = string(obj.Conditions);
+            plotArgs = namedargs2cell(plotOps);
+            %% Plot
+            clf(options.Parent);
+            tiledlayout(options.Parent, nTest, nTrain, TileIndexing="columnmajor");
+            hMean1 = gobjects(nTrain, nTest);
+            hLine1 = gobjects(nTrain, nTest);
+            hScatter1 = gobjects(nTrain, nTest, nPartitions);
+            hax = gobjects(nTrain, nTest);
+            for ii = 1:nTrain
+                for jj = 1:nTest
+                    hax(ii, jj) = nexttile(jj+(ii-1)*nTest);
+                    hold on
+                    proj1 = projs{ii, jj}; % 1 x nTrials x nDims x nPartitions TrigFr
+                    labels1 = labels{ii, jj};
+                    m1 = proj1.mean(4, "omitmissing"); % 1 x nTrials x nDims
+                    cs = colororder;
+                    [~, hMean1(ii, jj), hLine1(ii, jj)] = m1.plotScatter(labels1, options.Size(1), ...
+                        cs, "filled", plotArgs{:}, ConnectMean=catOrder, MeanOnly=true);
+                    if plotSamples
+                        proj2 = proj1.getGroupMean(labels1); % 1 x nCats x nDims x nPartitions
+                        for kk = 1:nPartitions
+                            proj2k = proj2(:, :, :, kk); % 1 x nCats x nDims
+                            hScatter1(ii, jj, kk) = proj2k.plotScatter(cats, options.Size(2), cs, ...
+                                "filled", plotArgs{:}, PlotMean=false);
+                        end
+                    end
+                    title(sprintf("%s ⇒ %s", conditions(jj), conditions(ii)), FontSize=11)
+                    xlabel("dPC 1", FontSize=12)
+                    ylabel("dPC 2", FontSize=12)
+                    uistack(hMean1(ii, jj), "top")
+                    % if ii==nTrain && jj==1
+                    %     legend(hMean1(ii, jj), cats, Location="best", FontSize=12)
+                    % end
+                end
+            end
+            if nTest>1
+                % Align the axes directions
+                hRef = hMean1(1, 1);
+                dRef = [hRef.XData(:) hRef.YData(:)]; % nCats x 2
+                for ii = 1:nTest
+                    d = [hMean1(ii, ii).XData(:) hMean1(ii, ii).YData(:)];
+                    s = sign(dot(d, dRef));
+                    if s(1)<0
+                        set(hax(ii, :), XDir="reverse");
+                    end
+                    if s(2)<0
+                        set(hax(ii, :), YDir="reverse");
+                    end
+                spiky.plot.unilim("xy", hax(ii, :));
+                end
+            end
+            if nargout>0
+                hMean = hMean1;
+            end
+            if nargout>1
+                hLine = hLine1;
+            end
+            if nargout>2
+                hScatter = hScatter1;
             end
         end
 

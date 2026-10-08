@@ -23,7 +23,7 @@ classdef ActionTheater < spiky.par.Paradigm
             ti = obj.Data.TrialInfo;
             ti = ti(ismember(ti.Number, trials.Number), :);
             t1 = ti.Time(1);
-            fGetVar = @(x) categorical(extractBefore(x.get(t1)', " "));
+            fGetVar = @(x) categorical(erase(extractBefore(x.get(t1)', " "), digitsPattern+textBoundary));
             adjs = fGetVar(obj.Data.Vars.Adjs);
             actors = fGetVar(obj.Data.Vars.Actors);
             targets = fGetVar(obj.Data.Vars.Targets);
@@ -399,6 +399,24 @@ classdef ActionTheater < spiky.par.Paradigm
             [hasPrevSeq, idcPrevSeq] = ismember(idcSeq-1, idcSeq(idcFirst));
             prevSeqName(hasPrevSeq) = fix.Name(idcFirst(idcPrevSeq(hasPrevSeq)));
             fix.Data.PrevSeqName = prevSeqName;
+            %% Find relative position of non-fixated
+            hasOtherFix = find(fix.OtherId~=0);
+            nOtherFix = numel(hasOtherFix);
+            [~, idcThisInTr] = ismember(fix.Id(hasOtherFix), tr.Id);
+            [~, idcOtherInTr] = ismember(fix.OtherId(hasOtherFix), tr.Id);
+            parts = fix.Part(hasOtherFix);
+            projThis = zeros(nOtherFix, 3, "single");
+            projOther = zeros(nOtherFix, 3, "single");
+            t1 = fix.Start(hasOtherFix)+0.02;
+            tr1 = tr(idcThisInTr);
+            tr2 = tr(idcOtherInTr);
+            parfor ii = 1:nOtherFix
+                projThis(ii, :) = tr1(ii).getProj(parts(ii), t1(ii));
+                projOther(ii, :) = tr2(ii).getProj(parts(ii), t1(ii));
+            end
+            projRel = projOther-projThis;
+            fix.Data.OtherProjRel = NaN(nFix, 3, "single");
+            fix.Data.OtherProjRel(hasOtherFix, :) = projRel;
             %% Find fixation role
             graphVerb = obj.Data.Graph(obj.Data.Graph.IsVerb, :);
             [~, idcFixVerb, idcVerbFix] = graphVerb.haveEvents((fix.Start+fix.End)/2);
@@ -600,18 +618,29 @@ classdef ActionTheater < spiky.par.Paradigm
             et = spiky.core.EventsTable(t, tbl);
         end
 
-        function et = getActionViewFlat(obj, tWindow)
+        function et = getIdleViewFlat(obj, tWindow)
+            %GETIDLEVIEWFLAT Get the flattened scene graph and fixation target at each time point during idle actions
+            arguments
+                obj spiky.par.ActionTheater
+                tWindow (1, :) double = -0.3:0.1:1.5
+            end
+            et = obj.getActionViewFlat(tWindow, Exclude="Walk");
+            et = et(ismember(et.Action, ["Idle" "Idle|Idle"]) | et.TrialTime<0, :);
+        end
+
+        function et = getActionViewFlat(obj, tWindow, options)
             %GETACTIONVIEWFLAT Get the flattened scene graph and fixation target at each time point during actions,
             %   accounted for multiple actions in the same trial
             arguments
                 obj spiky.par.ActionTheater
                 tWindow (1, :) double = -0.3:0.1:1.5
+                options.Exclude (1, :) string = ["Idle" "Walk"]
             end
-            graphAction = obj.Data.Graph.getAllActions(Exclude=["Idle" "Walk"]);
+            graphAction = obj.Data.Graph.getAllActions(Exclude=options.Exclude);
             % tWait = obj.Data.Vars.WaitTime.get();
             % tAction = obj.Data.Vars.ActionTime.get();
             % tWindow = -tWait:res:tAction;
-            fix = obj.Data.FixSeq;
+            fix = obj.Data.Fix;
             nPoints = numel(tWindow);
             nTrials = height(graphAction);
             n = nPoints*nTrials;
@@ -637,6 +666,8 @@ classdef ActionTheater < spiky.par.Paradigm
                 fix.Id(idcFix), tbl.SubjectIds(idcInFix), tbl.ObjectIds(idcInFix));
             idcInFix = idcInFix(isValid);
             idcFix = idcFix(isValid);
+            tbl.FixTime = nan(n, 1);
+            tbl.FixTime(idcInFix) = t(idcInFix)-fix.Start(idcFix);
             tbl.FixName = categorical(NaN(n, 1));
             tbl.FixName(idcInFix) = fix.Name(idcFix);
             tbl.OtherName = categorical(NaN(n, 1));
@@ -676,6 +707,35 @@ classdef ActionTheater < spiky.par.Paradigm
                 tbl.OtherVerb(isOtherObject) = arrayfun(fun, tbl.OtherId(isOtherObject), tbl.ObjectIds(isOtherObject), tbl.Actions(isOtherObject));
             end
             et = spiky.core.EventsTable(t, tbl);
+        end
+
+        function writeCaptions(obj, minos)
+            %% Transitions
+            trans = obj.Data.Graph.getTransitions();
+            capTrans = strings(height(trans), 1);
+            capTrans(trans.IsAdd) = compose("%s enter", trans.Change(trans.IsAdd));
+            capTrans(~trans.IsAdd) = compose("%s leave", trans.Change(~trans.IsAdd));
+            capTrans = groupsummary(capTrans, trans.Trial, @(s) join(s, ", "));
+            [~, idcTrans] = unique(trans.Trial, "stable");
+            tTrans = trans.Time(idcTrans, 1);
+            tTrans = tTrans+[-0.1 0.5];
+            %% Actions
+            graphAction = obj.Data.Graph.getActions();
+            capAction = compose("%s %s", string(graphAction.Subject.Name), lower(string(graphAction.Predicate.Name)));
+            hasObject = ~ismissing(graphAction.Object.Name);
+            capAction(hasObject) = capAction(hasObject)+...
+                compose(" %s", string(graphAction.Object.Name(hasObject)));
+            capAction = groupsummary(capAction, graphAction.TrialStart, @(s) join(s, ", "));
+            [~, idcAction] = unique(graphAction.TrialStart, "stable");
+            tAction = graphAction.Time(idcAction, 1);
+            tAction = tAction+[0.2 1.5];
+            %% Combine and write to minos
+            tCap = [tTrans; tAction];
+            [tCap, idcSort] = sortrows(tCap);
+            cap = [capTrans; capAction];
+            cap = cap(idcSort);
+            sc = minos.getScreenCapture();
+            sc.writeSrt(tCap, cap);
         end
 
         function labels = getLabels(obj, t)

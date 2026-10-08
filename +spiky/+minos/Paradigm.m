@@ -44,6 +44,7 @@ classdef Paradigm < spiky.core.Array
                 @(s) all(~ismember(s, ...
                 ["ParadigmStart", "ParadigmStop"])), "Event");
             numbers = unique(trials.Data.Number, "stable");
+            numbers = numbers(ismember(numbers, trialInfo.Data.Number));
             isValidInfo = ismember(trialInfo.Data.Number, numbers);
             trialInfo = trialInfo(isValidInfo, :);
             singleInfo = numel(trialInfo.Data.Number)==numel(unique(trialInfo.Data.Number));
@@ -51,13 +52,8 @@ classdef Paradigm < spiky.core.Array
             idcInfo = length(trialInfo.Data.Number)-idcInfo+1;
             n = length(numbers);
             varNames = reshape([eventNames'; eventNames'+"_Type"], [], 1);
-            if singleInfo
-                data = [trialInfo.Data(idcInfo, :) array2table(NaN(n, ...
-                    length(varNames)), "VariableNames", varNames)];
-            else
-                data = [trialInfo.Data(idcInfo, ["Timestamp" "Number"]) array2table(NaN(n, ...
-                    length(varNames)), "VariableNames", varNames)];
-            end
+            data = [trialInfo.Data(idcInfo, :) array2table(NaN(n, ...
+                length(varNames)), "VariableNames", varNames)];
             info = spiky.core.EventsTable(func(double(trialInfo.Timestamp)/1e7), trialInfo.Data);
             t = func(double(trials.Data.Timestamp)/1e7);
             nEvents = length(eventNames);

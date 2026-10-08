@@ -42,11 +42,12 @@ classdef Confusion < spiky.stat.Decoder
                 weights cell = cell(size(data))
                 options.Type (1, 1) string = "mean"
                 options.DataTest = cell(size(data))
+                options.Proj spiky.stat.Subspaces = spiky.stat.Subspaces(time, data, groups, groupIndices, partitions, conditions)
                 options.Cats (:, 1) categorical = categorical(NaN(size(data, 6), 1))
             end
             obj@spiky.stat.Decoder(time, data, cell(size(data, 4), 1), cell(size(data, 4), 1), ...
                 groups, groupIndices, partitions, conditions)
-            obj.Whiten = weights;
+            obj.Proj = weights;
             obj.Type_ = options.Type;
             obj.DataTest = options.DataTest;
             obj.Cats = options.Cats;

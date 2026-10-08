@@ -5,20 +5,24 @@ classdef Coords < spiky.core.Array
     % Bases (NDims x NBases matrix)
 
     properties
-        Origin (:, 1) double
-        BasisNames (:, 1)
-        BasisWeights (:, 1) double
+        Origin (:, 1) double % Origin of the coordinate system in the N-D space
+        BasisNames (:, 1) % Names of the basis vectors, typically a categorical vector
+        BasisWeights (:, 1) double % Weights of the basis vectors
     end
 
     properties (Dependent)
-        DimNames (:, 1)
-        NDims double
-        NBases double
-        Bases (:, :)
+        DimNames (:, 1) % Names of the dimensions, typically a vector of neurons
+        NDims double % Number of dimensions in the coordinate system
+        NBases double % Number of basis vectors in the coordinate system
+        Bases (:, :) double % Basis vectors of the coordinate system, each column is a basis vector
+        OutputDims (:, 1) double % Indices of the dimensions to be used for output, all if empty
+        NDimsOutput double % Number of output dimensions, equal to length(OutputDims) if 
+            % OutputDims is not empty, otherwise equal to NBases
     end
 
     properties (Hidden)
         Dims_ (:, 1)
+        OutputDims_ (:, 1) double = []
     end
 
     methods (Static)
@@ -40,7 +44,7 @@ classdef Coords < spiky.core.Array
             %   objs = align(objs)
             arguments
                 objs cell % cell array of Coords objects to align
-                dim double {mustBeInteger, mustBePositive} % dimension along which to align
+                dim double {mustBeInteger, mustBePositive} = 1 % dimension along which to align
             end
             % n = numel(objs);
             % for ii = 2:n
@@ -65,8 +69,10 @@ classdef Coords < spiky.core.Array
             for ii = 1:numel(idc)
                 idx = idc(ii);
                 idxRef = idcRef(ii);
-                s = sign(dot(objs{idxRef}.Bases, objs{idx}.Bases));
-                objs{idx}.Bases = objs{idx}.Bases.*s; % Flip the bases
+                outputDimsRef = objs{idxRef}.OutputDims;
+                outputDims = objs{idx}.OutputDims;
+                s = sign(dot(objs{idxRef}.Bases(:, outputDimsRef), objs{idx}.Bases(:, outputDims))); % 1 x NDimsOutput
+                objs{idx}.Bases(:, outputDims) = objs{idx}.Bases(:, outputDims).*s; % Flip the bases
             end
         end
 
@@ -139,6 +145,13 @@ classdef Coords < spiky.core.Array
             obj.BasisWeights = basisWeights;
         end
 
+        function obj = concat(obj, obj2)
+            w = width(obj.Data);
+            outputDims = [obj.OutputDims; obj2.OutputDims+w];
+            obj = [obj obj2];
+            obj.OutputDims = outputDims;
+        end
+
         function [data, proj] = project(obj, data, idcBases, options)
             %PROJECT Project the data onto the coordinate system
             %
@@ -155,18 +168,25 @@ classdef Coords < spiky.core.Array
             arguments
                 obj spiky.stat.Coords
                 data double
-                idcBases double = 1:obj.NBases
+                idcBases double = []
                 options.Individual logical = false
             end
             assert(height(data)==obj.NDims, ...
                 "The number of rows in data must be the same as the number of dimensions in the coordinate system")
-            B = obj.Bases(:, idcBases);
+            B = obj.Bases;
             if options.Individual
                 data = B'*(data-obj.Origin);
                 proj = B*data+obj.Origin;
             else
-                data = (B'*B)\(B'*(data-obj.Origin));
+                % data = (B'*B)\(B'*(data-obj.Origin));
+                data = B\(data-obj.Origin); % new: faster and more stable than the previous line
                 proj = B*data+obj.Origin;
+            end
+            if ~isempty(obj.OutputDims)
+                data = data(obj.OutputDims, :);
+            end
+            if ~isempty(idcBases)
+                data = data(idcBases, :);
             end
         end
 
@@ -324,6 +344,24 @@ classdef Coords < spiky.core.Array
 
         function obj = set.Bases(obj, b)
             obj.Data = b;
+        end
+
+        function outputDims = get.OutputDims(obj)
+            if isempty(obj.OutputDims_)
+                outputDims = (1:obj.NBases)';
+            else
+                outputDims = obj.OutputDims_;
+            end
+        end
+
+        function obj = set.OutputDims(obj, outputDims)
+            assert(isempty(outputDims) || all(ismember(outputDims, 1:obj.NBases)), ...
+                "OutputDims must be empty or a subset of the basis indices (1 to NBases)");
+            obj.OutputDims_ = outputDims;
+        end
+
+        function n = get.NDimsOutput(obj)
+            n = numel(obj.OutputDims);
         end
     end
 end

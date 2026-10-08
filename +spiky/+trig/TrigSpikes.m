@@ -41,14 +41,14 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             fr = cellfun(@(x) numel(x)./diff(obj.Window), obj.Data);
         end
 
-        function fr = getFr(obj, window, cats, options)
+        function fr = getFr(obj, window, labels, options)
             %GETFR Get firing rate in a window
             %
             %   fr = getFr(obj, window)
             %
             %   obj: triggered spikes object
             %   window: window for the analysis
-            %   cats: categories for the events
+            %   labels: categories for the events
             %   options: additional arguments
             %       Normalize: normalize the firing rate
             %
@@ -57,7 +57,7 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             arguments
                 obj spiky.trig.TrigSpikes
                 window double = []
-                cats (:, 1) categorical = categorical.empty
+                labels (:, 1) categorical = categorical.empty
                 options.Normalize logical = false
             end
             if isempty(obj.Data)
@@ -67,29 +67,29 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             if isempty(window)
                 window = obj.Window;
             end
-            if isempty(cats)
-                cats = obj.Events;
-                nCats = numel(cats);
-                events = cats;
-            elseif isscalar(cats)
-                cats = zeros(height(obj.Data), 1);
+            if isempty(labels)
+                labels = obj.Events;
+                nCats = numel(labels);
+                events = labels;
+            elseif isscalar(labels)
+                labels = zeros(height(obj.Data), 1);
                 nCats = 1;
                 events = 0;
             else
-                events = categories(cats);
+                events = categories(labels);
                 nCats = numel(events);
             end
-            if numel(cats)~=height(obj.Data)
+            if numel(labels)~=height(obj.Data)
                 error("Number of categories must match the number of events");
             end
             w = diff(window);
             % fr1 = cellfun(@(x) sum(x>=window(1) & x<window(2))/w, obj.Data);
-            % fr2 = groupsummary(fr1, cats, @mean, IncludeEmptyGroups=true);
+            % fr2 = groupsummary(fr1, labels, @mean, IncludeEmptyGroups=true);
             fr2 = zeros(nCats, width(obj));
             data = obj.Data;
             parfor ii = 1:nCats
-                fr1 = cellfun(@(x) sum(x>=window(1) & x<window(2))/w, data(cats==events(ii), :));
-                % fr2(ii, :) = mean(fr1(cats==events(ii), :), 1);
+                fr1 = cellfun(@(x) sum(x>=window(1) & x<window(2))/w, data(labels==events(ii), :));
+                % fr2(ii, :) = mean(fr1(labels==events(ii), :), 1);
                 fr2(ii, :) = mean(fr1, 1);
             end
             if options.Normalize
@@ -157,7 +157,7 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             %   obj: triggered spikes object
             %   sz: size of the markers
             %   c: color of the markers
-            %   cats: categories for the events or neurons (if rowDim is "neuron")
+            %   labels: labels for the events or neurons (if rowDim is "neuron")
             %   rowDim: dimension to plot, can be "neuron" or "event"
             %   Name-Value pairs:
             %       IdcEvents: indices of events to plot
@@ -174,16 +174,13 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
                 c = "k"
                 plotOps.?matlab.graphics.chart.primitive.Scatter
                 options.RowDim {mustBeMember(options.RowDim, ["neuron", "event"])} = "event"
-                options.Cats categorical = categorical.empty
+                options.Labels (:, 1) categorical = categorical.empty
                 options.IdcEvents = []
                 options.SubSet = []
-                options.Parent matlab.graphics.axis.Axes = matlab.graphics.axis.Axes.empty
+                options.Parent matlab.graphics.axis.Axes = gca
             end
-            cats = options.Cats;
+            labels = options.Labels;
             rowDim = options.RowDim;
-            if isempty(options.Parent)
-                options.Parent = gca;
-            end
             n = obj.NEvents;
             idcEvents = options.IdcEvents;
             if isempty(idcEvents)
@@ -193,21 +190,20 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
                 idcEvents = find(idcEvents);
             end
             obj.Data = obj.Data(idcEvents, :);
-            if ~isempty(cats) && rowDim=="event"
-                cats = cats(:);
-                if numel(cats)==n
-                    cats = cats(idcEvents);
-                elseif numel(cats)~=numel(idcEvents)
-                    error("Wrong size of categories")
+            if ~isempty(labels) && rowDim=="event"
+                if numel(labels)==n
+                    labels = labels(idcEvents);
+                elseif numel(labels)~=numel(idcEvents)
+                    error("Wrong size of labels")
                 end
                 if ~isempty(options.SubSet)
-                    idcEvents = ismember(cats, options.SubSet);
+                    idcEvents = ismember(labels, options.SubSet);
                     obj.Data = obj.Data(idcEvents, :);
-                    cats = cats(idcEvents);
+                    labels = labels(idcEvents);
                 end
             end
             plotArgs = namedargs2cell(plotOps);
-            [t, r, edges, catNames] = obj.getRaster(cats, rowDim);
+            [t, r, edges, catNames] = obj.getRaster(labels, rowDim);
             n = edges(end)-0.5;
             centers = (edges(1:end-1)+edges(2:end))./2;
             h1 = scatter(options.Parent, t, r, sz, c, "filled", plotArgs{:});
@@ -215,8 +211,8 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             ylim(options.Parent, [0.5 n+0.5]);
             set(options.Parent, "YDir", "reverse");
             xlabel(options.Parent, "Time (s)");
-            if ~isempty(cats)
-                cats = removecats(cats);
+            if ~isempty(labels)
+                labels = removecats(labels);
                 yticks(options.Parent, centers);
                 yticklabels(options.Parent, catNames);
                 options.Parent.YAxis.FontSize = 10;
@@ -232,10 +228,10 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
             end
         end
 
-        function [t, r, edges, cats] = getRaster(obj, cats, rowDim)
+        function [t, r, edges, labels] = getRaster(obj, labels, rowDim)
             arguments
                 obj spiky.trig.TrigSpikes
-                cats categorical = categorical.empty
+                labels categorical = categorical.empty
                 rowDim {mustBeMember(rowDim, ["neuron", "event"])} = "event"
             end
 
@@ -244,13 +240,13 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
                     if height(obj)>1
                         error("Only one event supported if multiple neurons");
                     end
-                    if isempty(cats)
-                        cats = ones(width(obj.Data), 1);
+                    if isempty(labels)
+                        labels = ones(width(obj.Data), 1);
                     else
-                        cats = cats(:);
+                        labels = labels(:);
                     end
-                    [cats, idc] = sort(cats);
-                    n = numel(cats);
+                    [labels, idc] = sort(labels);
+                    n = numel(labels);
                     t = cell2mat(obj.Data(1, idc)');
                     nSpikes = cellfun(@length, obj.Data(1, idc)');
                     r = zeros(numel(t), 1);
@@ -258,13 +254,13 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
                     if width(obj)>1
                         error("Only one neuron supported if multiple events");
                     end
-                    if isempty(cats)
-                        cats = ones(height(obj.Data), 1);
+                    if isempty(labels)
+                        labels = ones(height(obj.Data), 1);
                     else
-                        cats = cats(:);
+                        labels = labels(:);
                     end
-                    [cats, idc] = sort(cats);
-                    n = numel(cats);
+                    [labels, idc] = sort(labels);
+                    n = numel(labels);
                     t = cell2mat(obj.Data(idc, 1));
                     nSpikes = cellfun(@length, obj.Data(idc, 1));
                     r = zeros(numel(t), 1);
@@ -277,9 +273,9 @@ classdef TrigSpikes < spiky.trig.Trig & spiky.core.Spikes
                 r(count+(1:nSpikes(ii))) = ii;
                 count = count+nSpikes(ii);
             end
-            counts = groupcounts(cats);
-            cats = unique(cats);
-            cats = cats(1:numel(counts));
+            counts = groupcounts(labels);
+            labels = unique(labels);
+            labels = labels(1:numel(counts));
             edges = [0; cumsum(counts)]+0.5;
         end
 

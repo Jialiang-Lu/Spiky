@@ -37,11 +37,11 @@ classdef NeuronStat < spiky.core.Array
     end
 
     methods
-        function obj = NeuronStat(neuron, data, options)
+        function obj = NeuronStat(data, neuron, options)
             %NEURONSTAT Constructor for NeuronStat class.
             arguments
-                neuron (:, 1) spiky.core.Neuron = spiky.core.Neuron
                 data = []
+                neuron (:, 1) spiky.core.Neuron = spiky.core.Neuron.zeros(height(data))
                 options.Type (1, 1) string = ""
                 options.Neuron (:, 1) spiky.core.Neuron = spiky.core.Neuron.zeros(height(data))
                 options.Conditions (:, 1) = categorical(NaN(width(data), 1))

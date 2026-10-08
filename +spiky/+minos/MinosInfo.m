@@ -164,6 +164,11 @@ classdef MinosInfo
             t = obj.Sync.Sync.Inv(double(data.Timestamp)/1e7);
             [objs, ~, idcObj] = unique(data.Data(:, ["Id" "NameIndex"]), "rows", "stable");
             nObjs = height(objs);
+            if nObjs==0
+                tr = spiky.minos.Transform;
+                obj.Session.saveMetaData(tr);
+                return
+            end
             pb = spiky.plot.ProgressBar(nObjs, "Calculating transforms");
             names = strings(nObjs, 1);
             ids = zeros(nObjs, 1, "int32");

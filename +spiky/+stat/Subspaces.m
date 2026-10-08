@@ -90,7 +90,7 @@ classdef Subspaces < spiky.stat.Decoder
                 obj2 spiky.stat.Subspaces
             end
             assert(isequal(size(obj.Data), size(obj2.Data)))
-            obj.Data = cellfun(@horzcat, obj.Data, obj2.Data, UniformOutput=false);
+            obj.Data = cellfun(@(coords1, coords2) coords1.concat(coords2), obj.Data, obj2.Data, UniformOutput=false);
         end
 
         function obj = addBasis(obj, data, options)
@@ -173,14 +173,13 @@ classdef Subspaces < spiky.stat.Decoder
             arguments
                 obj spiky.stat.Subspaces
                 data spiky.trig.TrigFr
-                idcDim double = 1:obj.Data{1}.NBases
+                idcDim double = []
                 options.Individual logical = false
             end
             groupedFr = data.group(GroupTime=true); % nT x nGroups of 1 x nEvents x nNeurons
             [nT, nGroups] = size(groupedFr);
             nEvents = width(groupedFr{1});
             [~, ~, nPartitions, nConditions] = size(obj);
-            nBases = obj.Data{1}.NBases;
             if height(obj)==1
                 idcT = ones(nT, 1);
             elseif height(obj)==nT
@@ -195,6 +194,7 @@ classdef Subspaces < spiky.stat.Decoder
                 coords = obj.Data{idcT(idxT), idxG, idxS, idxC};
                 v = permute(groupedFr{idxT, idxG}, [3 2 1]); % nNeurons x nEvents
                 v = coords.project(v, idcDim, Individual=options.Individual); % nBases x nEvents
+                nBases = height(v);
                 proj{idxT, 1, idxG, idxS, idxC} = permute(v, [3 2 1]); % 1 x nEvents x nBases
             end
             proj = cell2mat(proj); % nT x nEvents x (nBases x nGroups) x nPartitions x nConditions

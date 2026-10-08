@@ -109,7 +109,7 @@ classdef ScreenCapture < handle
             %   writeSrt(obj, t, s, filePath, ...)
             %
             %   obj: ScreenCapture object
-            %   t: column vector of timestamps in seconds
+            %   t: column vector of timestamps in seconds, or a Nx2 matrix of start and end times in seconds
             %   s: column vector of caption strings
             %   filePath: path to save the .srt file
             %   Name-value arguments:
@@ -122,7 +122,7 @@ classdef ScreenCapture < handle
 
             arguments
                 obj spiky.minos.ScreenCapture
-                t (:, 1) double {mustBeFinite, mustBeNonnegative}
+                t (:, :) double {mustBeFinite, mustBeNonnegative}
                 s (:, 1) string
                 filePath string = extractBefore(obj.Path, "."+alphanumericsPattern+lineBoundary)+".srt"
                 options.DefaultDurationSeconds double {mustBePositive} = 1
@@ -144,10 +144,14 @@ classdef ScreenCapture < handle
             end
 
             %% Compute end times
-            t = obj.Sync.Sync.Fit(t);
-            startSeconds = t;
-            endSeconds = [t(2:end) - options.GapSeconds; t(end) + options.DefaultDurationSeconds];
-            endSeconds = max(endSeconds, startSeconds + options.MinDurationSeconds);
+            startSeconds = obj.Sync.Sync.Fit(t(:, 1));
+            if width(t)==2
+                endSeconds =  obj.Sync.Sync.Fit(t(:, 2));
+                endSeconds(1:end-1) = min(endSeconds(1:end-1), startSeconds(2:end) - options.GapSeconds);
+            else
+                endSeconds = [t(2:end) - options.GapSeconds; t(end) + options.DefaultDurationSeconds];
+                endSeconds = max(endSeconds, startSeconds + options.MinDurationSeconds);
+            end
 
             %% Open file (UTF-8)
             [fid, msg] = fopen(filePath, "w", "n", "UTF-8");

@@ -169,10 +169,10 @@ classdef EyeData
                 rightGazeFitted(:, 1) = rightFitX(rightGaze(:, 1:2));
                 rightGazeFitted(:, 2) = rightFitY(rightGaze(:, 1:2));
                 figure
-                scatter(pos(:, 1), pos(:, 2), 60, "g", "*")
+                scatter(pos(:, 1), pos(:, 2), 60, "*")
                 hold on
-                scatter(leftGazeFitted(:, 1), leftGazeFitted(:, 2), 60, "r", "o")
-                scatter(rightGazeFitted(:, 1), rightGazeFitted(:, 2), 60, "y", "o")
+                scatter(leftGazeFitted(:, 1), leftGazeFitted(:, 2), 60, "o")
+                scatter(rightGazeFitted(:, 1), rightGazeFitted(:, 2), 60, "o")
                 legend(["Dot positions" "Left gaze" "Right gaze"], Location="best")
                 title("Five Dot Calibration")
                 xlabel("Azimuth")
@@ -315,7 +315,7 @@ classdef EyeData
                         "Names" "OtherId" "OtherName" "Part" ...
                         "Gaze" "Proj" "TargetPos" "TargetProj" "MinAngle"]);
                 else
-                    fixationTargets = table(Size=[0 9], VariableTypes=["int32" "int32" "categorical" ...
+                    fixationTargets = table(Size=[0 13], VariableTypes=["int32" "int32" "categorical" ...
                         "cell" "cell" "int32" "categorical" ...
                         "spiky.minos.BodyPart" "single" "single" "single" "single" "single"], ...
                         VariableNames=["Trial" "Id" "Name" "Ids" ...
